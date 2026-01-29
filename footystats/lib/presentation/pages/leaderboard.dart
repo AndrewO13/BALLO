@@ -328,7 +328,6 @@ class _LeaderboardBar extends StatelessWidget {
           height: avatarSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
           ),
           child: ClipOval(
             child: Image.asset(
@@ -360,16 +359,16 @@ class _LeaderboardBar extends StatelessWidget {
             onPressed: () {},
             icon: const Icon(
               Icons.stars_rounded,
-              color: Color(0xFF0A8F4A),
+              color: Color(0xff00391b),
               size: 18,
             ),
             label: Text(
               points.toString(),
-              style: const TextStyle(color: Color(0xFF0A8F4A)),
+              style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
             ),
             style: FilledButton.styleFrom(
               minimumSize: const Size(81, 32),
-              side: const BorderSide(color: Color(0xFF0A8F4A), width: 2),
+              side: const BorderSide(color: Color(0xff006a37), width: 2),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'fixture.dart';
 
 enum MatchesFilter { league, season, gw1, allTeams }
 
@@ -91,125 +92,143 @@ class _MatchesPageState extends State<MatchesPage> {
     required String statusText,
     required MatchStatus status,
     bool hasVideo = false,
+    String? date,
+    String? league,
+    String? venue,
   }) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Date is shown by the parent date-group container.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Home team
-              Row(
-                children: [
-                  Text(homeName, style: textTheme.bodySmall),
-                  const SizedBox(width: 8),
-                  ClipOval(
-                    child: Image.asset(
-                      homeLogo,
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, st) =>
-                          const SizedBox(width: 28, height: 28),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 16),
-
-              // Center area: score pill with status text centered below it.
-              Builder(
-                builder: (context) {
-                  if (status == MatchStatus.upcoming) {
-                    // For upcoming matches show the scheduled time centered
-                    // in the middle area. No status row below.
-                    return SizedBox(
-                      width: 96,
-                      height: 48,
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 6.0),
-                          child: Text(statusText, style: textTheme.titleMedium),
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: hasVideo && status == MatchStatus.fullTime
-                              ? Border.all(
-                                  color: Colors.greenAccent.shade400,
-                                  width: 2,
-                                )
-                              : null,
-                        ),
-                        child: Text(
-                          scoreText ?? '',
-                          style: textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const FixturePage(),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 8.0),
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Date is shown by the parent date-group container.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Home team - expanded to push from left, aligned right
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(homeName, style: textTheme.bodySmall),
+                        const SizedBox(width: 8),
+                        ClipOval(
+                          child: Image.asset(
+                            homeLogo,
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, st) =>
+                                const SizedBox(width: 28, height: 28),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (status == MatchStatus.ongoing ||
-                              status == MatchStatus.halfTime) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(right: 6.0),
-                              child: DodecagonIndicator(size: 12.0),
-                            ),
-                          ],
-                          Text(statusText, style: textTheme.labelSmall),
-                        ],
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(width: 16),
-
-              // Away team
-              Row(
-                children: [
-                  ClipOval(
-                    child: Image.asset(
-                      awayLogo,
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, st) =>
-                          const SizedBox(width: 28, height: 28),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(awayName, style: textTheme.bodySmall),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-        ],
+                ),
+                const SizedBox(width: 16),
+
+                // Center area: score pill with status text centered below it.
+                Builder(
+                  builder: (context) {
+                    if (status == MatchStatus.upcoming) {
+                      // For upcoming matches show the scheduled time centered
+                      // in the middle area. No status row below.
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: Text(statusText, style: textTheme.titleMedium),
+                      );
+                    }
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: hasVideo && status == MatchStatus.fullTime
+                                ? Border.all(
+                                    color: Colors.greenAccent.shade400,
+                                    width: 2,
+                                  )
+                                : null,
+                          ),
+                          child: Text(
+                            scoreText ?? '',
+                            style: textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (status == MatchStatus.ongoing ||
+                                status == MatchStatus.halfTime) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6.0),
+                                child: DodecagonIndicator(size: 12.0),
+                              ),
+                            ],
+                            Text(statusText, style: textTheme.labelSmall),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(width: 16),
+
+                // Away team - expanded to push from right, aligned left
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipOval(
+                          child: Image.asset(
+                            awayLogo,
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, st) =>
+                                const SizedBox(width: 28, height: 28),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(awayName, style: textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
       ),
     );
   }
@@ -241,6 +260,36 @@ class _MatchesPageState extends State<MatchesPage> {
           ...matches,
         ],
       ),
+    );
+  }
+
+  Widget _buildMatchCardWithDate(
+    BuildContext context, {
+    required String date,
+    required String homeName,
+    required String homeLogo,
+    required String awayName,
+    required String awayLogo,
+    String? scoreText,
+    required String statusText,
+    required MatchStatus status,
+    bool hasVideo = false,
+    String? league,
+    String? venue,
+  }) {
+    return _buildMatchCard(
+      context,
+      homeName: homeName,
+      homeLogo: homeLogo,
+      awayName: awayName,
+      awayLogo: awayLogo,
+      scoreText: scoreText,
+      statusText: statusText,
+      status: status,
+      hasVideo: hasVideo,
+      date: date,
+      league: league,
+      venue: venue,
     );
   }
 
@@ -307,8 +356,9 @@ class _MatchesPageState extends State<MatchesPage> {
 
           // Sample fixtures demonstrating different states grouped by date
           _buildDateGroup(context, 'Tue 2 Dec', [
-            _buildMatchCard(
+            _buildMatchCardWithDate(
               context,
+              date: 'Tue 2 Dec',
               homeName: 'Galacticos',
               homeLogo: 'lib/assets/team logos/Galacticos.png',
               awayName: 'The Shield',
@@ -316,10 +366,13 @@ class _MatchesPageState extends State<MatchesPage> {
               scoreText: null,
               statusText: '17:30',
               status: MatchStatus.upcoming,
+              league: 'Bugujju league',
+              venue: 'Budo Ground',
             ),
             const SizedBox(height: 2),
-            _buildMatchCard(
+            _buildMatchCardWithDate(
               context,
+              date: 'Tue 2 Dec',
               homeName: 'La Famille FC',
               homeLogo: 'lib/assets/team logos/La Famille.png',
               awayName: 'End Career FC',
@@ -327,14 +380,17 @@ class _MatchesPageState extends State<MatchesPage> {
               scoreText: '1 - 2',
               statusText: 'HT',
               status: MatchStatus.halfTime,
+              league: 'Bugujju league',
+              venue: 'Budo Ground',
             ),
           ]),
 
           const SizedBox(height: 2),
 
           _buildDateGroup(context, 'Wed 3 Dec', [
-            _buildMatchCard(
+            _buildMatchCardWithDate(
               context,
+              date: 'Wed 3 Dec',
               homeName: 'The Shield',
               homeLogo: 'lib/assets/team logos/The Shield.png',
               awayName: 'End Career FC',
@@ -343,14 +399,17 @@ class _MatchesPageState extends State<MatchesPage> {
               statusText: 'FT',
               status: MatchStatus.fullTime,
               hasVideo: true,
+              league: 'Bugujju league',
+              venue: 'Budo Ground',
             ),
           ]),
 
           const SizedBox(height: 2),
 
           _buildDateGroup(context, 'Thu 4 Dec', [
-            _buildMatchCard(
+            _buildMatchCardWithDate(
               context,
+              date: 'Thu 4 Dec',
               homeName: 'End Career FC',
               homeLogo: 'lib/assets/team logos/End Career FC.png',
               awayName: 'La Famille FC',
@@ -358,6 +417,8 @@ class _MatchesPageState extends State<MatchesPage> {
               scoreText: '3 - 0',
               statusText: '07:22',
               status: MatchStatus.ongoing,
+              league: 'Bugujju league',
+              venue: 'Budo Ground',
             ),
           ]),
         ],
