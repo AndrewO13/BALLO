@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/constants/app_assets.dart';
 // TODO: Uncomment when adding video support
 // import 'package:video_player/video_player.dart';
 // import 'package:visibility_detector/visibility_detector.dart';
@@ -8,35 +9,8 @@ class ExplorePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Column(
-        children: [
-          Material(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            child: TabBar(
-              labelColor: Theme.of(context).colorScheme.onSurface,
-              indicatorColor: Theme.of(context).colorScheme.primary,
-              indicatorWeight: 3,
-              tabs: const [
-                Tab(text: 'For you'),
-                Tab(text: 'League'),
-                Tab(text: 'Following'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _ExploreTabContent(title: 'For you'),
-                _ExploreTabContent(title: 'League'),
-                _ExploreTabContent(title: 'Following'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    // Single explore feed page (no tabs)
+    return const _ExploreTabContent(title: 'For you');
   }
 }
 
@@ -53,12 +27,12 @@ class _ExploreTabContent extends StatelessWidget {
       (index) => {
         'team1': {
           'name': 'SHI',
-          'logo': 'lib/assets/team logos/The Shield.png',
+          'logo': AppAssets.theShieldLogo,
           'score': 2,
         },
         'team2': {
           'name': 'LAF',
-          'logo': 'lib/assets/team logos/La Famille.png',
+          'logo': AppAssets.laFamilleLogo,
           'score': 0,
         },
         'league': 'The Budo League',
@@ -93,7 +67,6 @@ class _ExploreTabContent extends StatelessWidget {
               posterName: match['posterName'] as String,
               posterAvatar: match['posterAvatar'] as String?,
             ),
-            const SizedBox(height: 16),
           ],
         );
       },
@@ -119,7 +92,7 @@ class _MatchInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
+      margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -242,7 +215,7 @@ class _VideoPlayerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
       height: MediaQuery.of(context).size.height * 0.5,
       decoration: BoxDecoration(color: Colors.black),
       child: ClipRRect(
@@ -251,7 +224,7 @@ class _VideoPlayerSection extends StatelessWidget {
           children: [
             // Placeholder image or video thumbnail
             Image.asset(
-              thumbnailUrl ?? 'lib/assets/highlight_placeholder.JPG',
+              thumbnailUrl ?? AppAssets.highlightPlaceholder,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return Container(
@@ -316,7 +289,7 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,

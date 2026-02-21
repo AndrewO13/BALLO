@@ -1,29 +1,64 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/widgets/progress_ring.dart';
+import '../../data/repositories/user_profile_repository.dart';
+import '../../domain/models/user_profile.dart';
 import '../widgets/home/challenge_widget.dart';
 import '../widgets/home/gameweek_header.dart';
 import '../widgets/home/match_card.dart';
 import '../widgets/home/team_chip.dart';
 import '../widgets/home/performance_chart.dart';
+import 'fixture.dart';
 import 'matches.dart';
+import 'create_team_league_page.dart';
+import '../providers/matches_provider.dart';
 import 'leaderboard.dart';
 import 'explore.dart';
 import 'profile.dart';
 import 'settings.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   int _selectedIndex = 0;
   String? _selectedTeam;
+  final CarouselController _matchCarouselController = CarouselController();
+  final CarouselController _highlightsCarouselController = CarouselController();
+  final UserProfileRepository _profileRepository = UserProfileRepository();
+
+  UserProfile? _profile;
+  bool _isLoadingProfile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await _profileRepository.getCurrentProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _isLoadingProfile = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingProfile = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +69,11 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: _selectedIndex == 1
           ? FloatingActionButton(
               onPressed: () {
-                // TODO: implement add-match action
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CreateTeamOrLeaguePage(),
+                  ),
+                );
               },
               tooltip: 'Add',
               child: const Icon(Icons.add),
@@ -160,6 +199,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHomeContent(BuildContext context) {
+    final displayName = _isLoadingProfile
+        ? 'Gareth'
+        : (_profile?.playerName ?? _profile?.username ?? 'Gareth');
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
@@ -167,7 +210,7 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "What's up Gareth!",
+              "What's up $displayName!",
               style: Theme.of(context).textTheme.displaySmall,
             ),
             const SizedBox(height: 6),
@@ -302,18 +345,74 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 16),
-            // TODO: Replace with proper carousel when CarouselView is available
-            SizedBox(
-              height: MediaQuery.of(context).size.height / 4,
-              child: PageView.builder(
-                itemCount: MatchInfo.values.length,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: MatchCard(matchInfo: MatchInfo.values[index]),
-                  );
-                },
-              ),
+            Consumer(
+              builder: (context, ref, _) {
+                final asyncMatches = ref.watch(homeThisWeekMatchesProvider);
+                return asyncMatches.when(
+                  data: (matches) {
+                    if (matches.isEmpty) {
+                      return ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height / 4,
+                        ),
+                        child: Center(
+                          child: Text(
+                            'No matches this week',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      );
+                    }
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height / 4,
+                      ),
+                      child: CarouselView.weighted(
+                        controller: _matchCarouselController,
+                        itemSnapping: true,
+                        flexWeights: const <int>[1, 4, 1],
+                        children: matches.map((match) {
+                          return MatchCard(
+                            match: match,
+                            leagueName: match.leagueName,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      FixturePage(matchId: match.id),
+                                ),
+                              );
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  },
+                  loading: () => ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height / 4,
+                    ),
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (err, _) => ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height / 4,
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Could not load matches',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 10),
             Padding(
@@ -342,55 +441,54 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              height: 204,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: 6,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        width: 115.43,
-                        height: 204,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: Image.asset(
-                                AppAssets.highlightPlaceholder,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHigh,
-                                  );
-                                },
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 204),
+              child: CarouselView.weighted(
+                controller: _highlightsCarouselController,
+                itemSnapping: true,
+                consumeMaxWeight: false,
+                flexWeights: const <int>[3, 3, 2, 1],
+                children: List<Widget>.generate(6, (index) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 115.43,
+                      height: 204,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Image.asset(
+                              AppAssets.highlightPlaceholder,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHigh,
+                                );
+                              },
+                            ),
+                          ),
+                          Center(
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 28,
                               ),
                             ),
-                            Center(
-                              child: Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.play_arrow,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   );
-                },
+                }).toList(),
               ),
             ),
             const SizedBox(height: 16),

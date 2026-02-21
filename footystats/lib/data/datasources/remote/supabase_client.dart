@@ -1,17 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Supabase client singleton
-class SupabaseClient {
-  static SupabaseClient? _instance;
-  static SupabaseClient get instance {
-    _instance ??= SupabaseClient._();
-    return _instance!;
-  }
+/// Simple wrapper around the package Supabase client to avoid name clashes and
+/// centralize initialization.
+class AppSupabase {
+  AppSupabase._();
 
-  SupabaseClient._();
-
-  /// Initialize Supabase with your project credentials
-  /// Call this in main.dart before runApp()
+  /// Initialize Supabase with your project credentials.
+  ///
+  /// Call this in `main.dart` before `runApp()`.
   static Future<void> initialize({
     required String url,
     required String anonKey,
@@ -22,6 +18,6 @@ class SupabaseClient {
     );
   }
 
-  /// Get the Supabase client instance
-  SupabaseClient get client => Supabase.instance.client;
+  /// Exposes the underlying Supabase client from the package.
+  static SupabaseClient get client => Supabase.instance.client;
 }

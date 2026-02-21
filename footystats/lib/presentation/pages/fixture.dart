@@ -1,14 +1,72 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../core/constants/app_assets.dart';
+import '../../domain/models/match_model.dart';
+import '../providers/matches_provider.dart';
 
-class FixturePage extends StatelessWidget {
-  const FixturePage({super.key});
+class FixturePage extends ConsumerStatefulWidget {
+  const FixturePage({super.key, required this.matchId});
+  final String matchId;
 
   @override
+  ConsumerState<FixturePage> createState() => _FixturePageState();
+}
+
+class _FixturePageState extends ConsumerState<FixturePage> {
+  @override
   Widget build(BuildContext context) {
+    final asyncMatch = ref.watch(fixtureMatchProvider(widget.matchId));
+    return asyncMatch.when(
+      loading: () => Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (err, _) => Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: Center(child: Text('Could not load match: $err')),
+      ),
+      data: (match) {
+        if (match == null) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            body: const Center(child: Text('Match not found')),
+          );
+        }
+        return _buildFixtureWithMatch(context, match);
+      },
+    );
+  }
+
+  Widget _buildFixtureWithMatch(BuildContext context, MatchModel match) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final clock = ref.watch(matchClockProvider(match.id));
+    final clockLabel = formatMatchClock(clock);
+
+    // Ensure the match clock is running whenever this fixture is viewed while
+    // the match is in an ongoing state (e.g. after navigating back to the page
+    // or if the status was updated from another screen/device). This keeps the
+    // green pill stopwatch in sync with the global match clock.
+    if (match.status == MatchStatus.ongoing && clock == Duration.zero) {
+      ref.read(matchClockProvider(match.id).notifier).start();
+    }
 
     return DefaultTabController(
       length: 4,
@@ -21,7 +79,7 @@ class FixturePage extends StatelessWidget {
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              builder: (context) => const _MatchControlsModal(),
+              builder: (context) => _MatchControlsModal(matchId: match.id),
             );
           },
           elevation: 0,
@@ -37,9 +95,7 @@ class FixturePage extends StatelessWidget {
           actions: [
             IconButton(
               icon: const Icon(Icons.notifications_outlined),
-              onPressed: () {
-                // TODO: Handle notifications
-              },
+              onPressed: () {},
             ),
           ],
         ),
@@ -58,11 +114,7 @@ class FixturePage extends StatelessWidget {
                       ),
                       child: Stack(
                         children: [
-                          Image.asset(
-                            'lib/assets/fixture bg.png',
-                            fit: BoxFit.cover,
-                          ),
-                          // Gradient overlay
+                          Image.asset(AppAssets.fixtureBg, fit: BoxFit.cover),
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -70,20 +122,13 @@ class FixturePage extends StatelessWidget {
                                 end: Alignment.bottomCenter,
                                 stops: const [0.0, 0.36, 0.94],
                                 colors: [
-                                  const Color(
-                                    0xFF2D372F,
-                                  ).withOpacity(0.1), // 0% - 10% opacity
-                                  const Color(
-                                    0xFF2D372F,
-                                  ).withOpacity(0.25), // 36% - 25% opacity
-                                  colorScheme.surface.withOpacity(
-                                    1.0,
-                                  ), // 94% - 100% opacity
+                                  const Color(0xFF2D372F).withOpacity(0.1),
+                                  const Color(0xFF2D372F).withOpacity(0.25),
+                                  colorScheme.surface.withOpacity(1.0),
                                 ],
                               ),
                             ),
                           ),
-                          // Centered match details section
                           Center(
                             child: Container(
                               margin: const EdgeInsets.symmetric(
@@ -98,15 +143,12 @@ class FixturePage extends StatelessWidget {
                               ),
                               child: Column(
                                 children: [
-                                  // Header with expand icon
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
-                                      IconButton(
+                                       IconButton(
                                         icon: const Icon(Icons.open_in_full),
-                                        onPressed: () {
-                                          // TODO: Handle expand
-                                        },
+                                        onPressed: () {},
                                         iconSize: 20,
                                         color: colorScheme.onSurface,
                                         padding: EdgeInsets.zero,
@@ -114,48 +156,30 @@ class FixturePage extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  // Teams and score
                                   Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceEvenly,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     children: [
-                                      // Home team
                                       Expanded(
                                         child: Column(
                                           children: [
                                             ClipOval(
-                                              child: Image.asset(
-                                                'lib/assets/team logos/Lefters.png',
-                                                width: 46.4,
-                                                height: 46.4,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (c, e, st) =>
-                                                    Container(
-                                                      width: 46.4,
-                                                      height: 46.4,
-                                                      color: colorScheme
-                                                          .surfaceContainerHighest,
-                                                      child: Icon(
-                                                        Icons.sports_soccer,
-                                                        size: 32,
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                      ),
-                                                    ),
+                                              child: _FixtureTeamLogo(
+                                                path: match.teamA.logoPath,
+                                                size: 46.4,
                                               ),
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
-                                              'Lefters',
+                                              match.teamA.shortForm,
                                               style: textTheme.bodyLarge,
                                               textAlign: TextAlign.center,
                                             ),
                                           ],
                                         ),
                                       ),
-                                      // Score and status
                                       Padding(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 16.0,
@@ -163,65 +187,68 @@ class FixturePage extends StatelessWidget {
                                         child: Column(
                                           children: [
                                             Text(
-                                              '6 - 1',
+                                              match.status ==
+                                                      MatchStatus.upcoming
+                                                  ? match.timeDisplay
+                                                  : (match.scoreText ?? '–'),
                                               style: textTheme.displayMedium
                                                   ?.copyWith(
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                             ),
                                             const SizedBox(height: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 1,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: colorScheme
-                                                    .secondaryContainer,
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                              ),
-                                              child: Text(
-                                                '96\'',
-                                                style: textTheme.labelSmall
-                                                    ?.copyWith(
-                                                      color: colorScheme
-                                                          .onSecondaryContainer,
+                                            match.status == MatchStatus.upcoming
+                                                ? Text(
+                                                    _formatMatchDate(
+                                                        match.matchDate),
+                                                    style: textTheme.labelSmall
+                                                        ?.copyWith(
+                                                          color: colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                  )
+                                                : Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 1,
                                                     ),
-                                              ),
-                                            ),
+                                                    decoration: BoxDecoration(
+                                                      color: colorScheme
+                                                          .secondaryContainer,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        20,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      match.status ==
+                                                              MatchStatus.ongoing
+                                                          ? clockLabel
+                                                          : match.statusText,
+                                                      style: textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                        color: colorScheme
+                                                            .onSecondaryContainer,
+                                                      ),
+                                                    ),
+                                                  ),
                                           ],
                                         ),
                                       ),
-                                      // Away team
                                       Expanded(
                                         child: Column(
                                           children: [
                                             ClipOval(
-                                              child: Image.asset(
-                                                'lib/assets/team logos/Galacticos.png',
-                                                width: 46.4,
-                                                height: 46.4,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (c, e, st) =>
-                                                    Container(
-                                                      width: 46.4,
-                                                      height: 46.4,
-                                                      color: colorScheme
-                                                          .surfaceContainerHighest,
-                                                      child: Icon(
-                                                        Icons.sports_soccer,
-                                                        size: 32,
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                      ),
-                                                    ),
+                                              child: _FixtureTeamLogo(
+                                                path: match.teamB.logoPath,
+                                                size: 46.4,
                                               ),
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
-                                              'Galacticos',
+                                              match.teamB.shortForm,
                                               style: textTheme.bodyLarge,
                                               textAlign: TextAlign.center,
                                             ),
@@ -231,16 +258,13 @@ class FixturePage extends StatelessWidget {
                                     ],
                                   ),
                                   const SizedBox(height: 16),
-                                  // Divider
                                   Divider(
                                     height: 1,
                                     color: colorScheme.outline,
                                   ),
                                   const SizedBox(height: 12),
-                                  // Recent goals row: left scorer, centered icon, right scorer
                                   Row(
                                     children: [
-                                      // Left team scorer (Lefters)
                                       Expanded(
                                         child: Align(
                                           alignment: Alignment.center,
@@ -250,7 +274,6 @@ class FixturePage extends StatelessWidget {
                                           ),
                                         ),
                                       ),
-                                      // Center goal icon from assets
                                       Container(
                                         width: 20,
                                         height: 20,
@@ -263,13 +286,12 @@ class FixturePage extends StatelessWidget {
                                         ),
                                         child: Center(
                                           child: SvgPicture.asset(
-                                            'lib/assets/match goal.svg',
+                                            AppAssets.matchGoalIcon,
                                             width: 15,
                                             height: 15,
                                           ),
                                         ),
                                       ),
-                                      // Right team scorer (Galacticos)
                                       Expanded(
                                         child: Align(
                                           alignment: Alignment.center,
@@ -342,7 +364,7 @@ class FixturePage extends StatelessWidget {
                             children: [
                               ClipOval(
                                 child: Image.asset(
-                                  'lib/assets/trophies/inter uni league.png',
+                                  AppAssets.interUniLeagueTrophy,
                                   width: 24,
                                   height: 24,
                                   fit: BoxFit.cover,
@@ -423,20 +445,13 @@ class FixturePage extends StatelessWidget {
                               const SizedBox(height: 12),
                               Row(
                                 children: [
-                                  // Lefters odds
+                                  // Team A odds
                                   Expanded(
                                     child: ActionChip(
                                       avatar: ClipOval(
-                                        child: Image.asset(
-                                          'lib/assets/team logos/Lefters.png',
-                                          width: 20,
-                                          height: 20,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (c, e, st) =>
-                                              const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                              ),
+                                        child: _FixtureTeamLogo(
+                                          path: match.teamA.logoPath,
+                                          size: 20,
                                         ),
                                       ),
                                       label: Text(
@@ -476,20 +491,13 @@ class FixturePage extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  // Galacticos odds
+                                  // Team B odds
                                   Expanded(
                                     child: ActionChip(
                                       avatar: ClipOval(
-                                        child: Image.asset(
-                                          'lib/assets/team logos/Galacticos.png',
-                                          width: 20,
-                                          height: 20,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (c, e, st) =>
-                                              const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                              ),
+                                        child: _FixtureTeamLogo(
+                                          path: match.teamB.logoPath,
+                                          size: 20,
                                         ),
                                       ),
                                       label: Text(
@@ -532,27 +540,14 @@ class FixturePage extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              // Lefters wins (row: logo + count)
+                              // Team A wins (row: logo + count)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   ClipOval(
-                                    child: Image.asset(
-                                      'lib/assets/team logos/Lefters.png',
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, st) => Container(
-                                        width: 36,
-                                        height: 36,
-                                        color:
-                                            colorScheme.surfaceContainerHighest,
-                                        child: Icon(
-                                          Icons.sports_soccer,
-                                          size: 20,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
+                                    child: _FixtureTeamLogo(
+                                      path: match.teamA.logoPath,
+                                      size: 36,
                                     ),
                                   ),
                                   const SizedBox(width: 16),
@@ -589,7 +584,7 @@ class FixturePage extends StatelessWidget {
                                 color: colorScheme.outlineVariant,
                               ),
                               const SizedBox(width: 16),
-                              // Galacticos wins (row: count + logo)
+                              // Team B wins (row: count + logo)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -602,22 +597,9 @@ class FixturePage extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 16),
                                   ClipOval(
-                                    child: Image.asset(
-                                      'lib/assets/team logos/Galacticos.png',
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, st) => Container(
-                                        width: 36,
-                                        height: 36,
-                                        color:
-                                            colorScheme.surfaceContainerHighest,
-                                        child: Icon(
-                                          Icons.sports_soccer,
-                                          size: 20,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
+                                    child: _FixtureTeamLogo(
+                                      path: match.teamB.logoPath,
+                                      size: 36,
                                     ),
                                   ),
                                 ],
@@ -647,7 +629,7 @@ class FixturePage extends StatelessWidget {
                                     children: [
                                       ClipOval(
                                         child: Image.asset(
-                                          'lib/assets/team logos/Lefters.png',
+                                          AppAssets.leftersLogo,
                                           width: 20,
                                           height: 20,
                                           fit: BoxFit.cover,
@@ -668,7 +650,7 @@ class FixturePage extends StatelessWidget {
                                       const SizedBox(width: 12),
                                       ClipOval(
                                         child: Image.asset(
-                                          'lib/assets/team logos/Galacticos.png',
+                                          AppAssets.galacticosLogo,
                                           width: 20,
                                           height: 20,
                                           fit: BoxFit.cover,
@@ -698,7 +680,7 @@ class FixturePage extends StatelessWidget {
                                     children: [
                                       ClipOval(
                                         child: Image.asset(
-                                          'lib/assets/team logos/Galacticos.png',
+                                          AppAssets.galacticosLogo,
                                           width: 20,
                                           height: 20,
                                           fit: BoxFit.cover,
@@ -719,7 +701,7 @@ class FixturePage extends StatelessWidget {
                                       const SizedBox(width: 12),
                                       ClipOval(
                                         child: Image.asset(
-                                          'lib/assets/team logos/Lefters.png',
+                                          AppAssets.leftersLogo,
                                           width: 20,
                                           height: 20,
                                           fit: BoxFit.cover,
@@ -749,7 +731,7 @@ class FixturePage extends StatelessWidget {
                                     children: [
                                       ClipOval(
                                         child: Image.asset(
-                                          'lib/assets/team logos/Lefters.png',
+                                          AppAssets.leftersLogo,
                                           width: 20,
                                           height: 20,
                                           fit: BoxFit.cover,
@@ -770,7 +752,7 @@ class FixturePage extends StatelessWidget {
                                       const SizedBox(width: 12),
                                       ClipOval(
                                         child: Image.asset(
-                                          'lib/assets/team logos/Galacticos.png',
+                                          AppAssets.galacticosLogo,
                                           width: 20,
                                           height: 20,
                                           fit: BoxFit.cover,
@@ -841,7 +823,7 @@ class FixturePage extends StatelessWidget {
                                     backgroundColor:
                                         colorScheme.surfaceContainerHighest,
                                     backgroundImage: const AssetImage(
-                                      'lib/assets/player.png',
+                                      AppAssets.playerImage,
                                     ),
                                   ),
                                   Positioned(
@@ -898,7 +880,7 @@ class FixturePage extends StatelessWidget {
                                       children: [
                                         ClipOval(
                                           child: Image.asset(
-                                            'lib/assets/team logos/Lefters.png',
+                                            AppAssets.leftersLogo,
                                             width: 18,
                                             height: 18,
                                             fit: BoxFit.cover,
@@ -1075,6 +1057,59 @@ class FixturePage extends StatelessWidget {
   }
 }
 
+String _formatMatchDate(DateTime d) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return '${weekdays[d.weekday - 1]} ${d.day} ${months[d.month - 1]}';
+}
+
+/// Team logo for fixture (asset path or network URL).
+class _FixtureTeamLogo extends StatelessWidget {
+  const _FixtureTeamLogo({required this.path, this.size = 28});
+
+  final String path;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    return SizedBox(
+      width: size,
+      height: size,
+      child: isNetwork
+          ? Image.network(
+              path,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _placeholder(context),
+            )
+          : Image.asset(
+              path,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _placeholder(context),
+            ),
+    );
+  }
+
+  Widget _placeholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      color: colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.sports_soccer,
+        size: size * 0.6,
+        color: colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
 class _FixtureSliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   _FixtureSliverTabBarDelegate(this.tabBar, this.bottomDivider);
 
@@ -1192,21 +1227,21 @@ class _PreMatchFormSectionState extends State<_PreMatchFormSection> {
                     children: [
                       _buildFormMatchPill(
                         context,
-                        homeLogo: 'lib/assets/team logos/Lefters.png',
+                        homeLogo: AppAssets.leftersLogo,
                         score: '1 - 0',
-                        awayLogo: 'lib/assets/team logos/Galacticos.png',
+                        awayLogo: AppAssets.galacticosLogo,
                       ),
                       _buildFormMatchPill(
                         context,
-                        homeLogo: 'lib/assets/team logos/Lefters.png',
+                        homeLogo: AppAssets.leftersLogo,
                         score: '1 - 0',
-                        awayLogo: 'lib/assets/team logos/Dragons.png',
+                        awayLogo: AppAssets.dragonsLogo,
                       ),
                       _buildFormMatchPill(
                         context,
-                        homeLogo: 'lib/assets/team logos/Lefters.png',
+                        homeLogo: AppAssets.leftersLogo,
                         score: '1 - 3',
-                        awayLogo: 'lib/assets/team logos/The Shield.png',
+                        awayLogo: AppAssets.theShieldLogo,
                       ),
                     ],
                   ),
@@ -1266,21 +1301,21 @@ class _PreMatchFormSectionState extends State<_PreMatchFormSection> {
                     children: [
                       _buildFormMatchPill(
                         context,
-                        homeLogo: 'lib/assets/team logos/Lefters.png',
+                        homeLogo: AppAssets.leftersLogo,
                         score: '1 - 0',
-                        awayLogo: 'lib/assets/team logos/Galacticos.png',
+                        awayLogo: AppAssets.galacticosLogo,
                       ),
                       _buildFormMatchPill(
                         context,
-                        homeLogo: 'lib/assets/team logos/Galacticos.png',
+                        homeLogo: AppAssets.galacticosLogo,
                         score: '1 - 0',
-                        awayLogo: 'lib/assets/team logos/End Career FC.png',
+                        awayLogo: AppAssets.endCareerLogo,
                       ),
                       _buildFormMatchPill(
                         context,
-                        homeLogo: 'lib/assets/team logos/The Shield.png',
+                        homeLogo: AppAssets.theShieldLogo,
                         score: '1 - 0',
-                        awayLogo: 'lib/assets/team logos/Galacticos.png',
+                        awayLogo: AppAssets.galacticosLogo,
                       ),
                     ],
                   ),
@@ -1374,7 +1409,7 @@ class _StandingsSection extends StatelessWidget {
             context,
             position: 1,
             shortName: 'GAL',
-            logoAsset: 'lib/assets/team logos/Galacticos.png',
+            logoAsset: AppAssets.galacticosLogo,
             played: 23,
             goalDiff: 18,
             points: 19,
@@ -1385,7 +1420,7 @@ class _StandingsSection extends StatelessWidget {
             context,
             position: 3,
             shortName: 'LFC',
-            logoAsset: 'lib/assets/team logos/Lefters.png',
+            logoAsset: AppAssets.leftersLogo,
             played: 23,
             goalDiff: 10,
             points: 15,
@@ -1430,7 +1465,7 @@ class _FeaturedPlayersSection extends StatelessWidget {
                 context,
                 name: 'Certi',
                 rating: 9.1,
-                avatarAsset: 'lib/assets/avatars/3d_avatar_18.png',
+                avatarAsset: AppAssets.avatar18,
                 ratingColor: Colors.blueAccent,
               ),
               Text(
@@ -1443,7 +1478,7 @@ class _FeaturedPlayersSection extends StatelessWidget {
                 context,
                 name: 'Gareth',
                 rating: 8.2,
-                avatarAsset: 'lib/assets/avatars/3d_avatar_20.png',
+                avatarAsset: AppAssets.avatar20,
                 ratingColor: Colors.greenAccent,
               ),
             ],
@@ -1719,7 +1754,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       'position': 'Defender',
       'rating': 8.3,
       'hasStar': true,
-      'teamLogo': 'lib/assets/team logos/Lefters.png',
+      'teamLogo': AppAssets.leftersLogo,
       'logoPosition': Alignment.topLeft,
     },
     {
@@ -1727,7 +1762,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       'position': 'Attacker',
       'rating': 7.6,
       'hasStar': false,
-      'teamLogo': 'lib/assets/team logos/Galacticos.png',
+      'teamLogo': AppAssets.galacticosLogo,
       'logoPosition': Alignment.topRight,
     },
     {
@@ -1735,7 +1770,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       'position': 'Attacker',
       'rating': 8.2,
       'hasStar': false,
-      'teamLogo': 'lib/assets/team logos/Lefters.png',
+      'teamLogo': AppAssets.leftersLogo,
       'logoPosition': Alignment.topLeft,
     },
     {
@@ -1743,7 +1778,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       'position': 'Midfielder',
       'rating': 7.4,
       'hasStar': false,
-      'teamLogo': 'lib/assets/team logos/Galacticos.png',
+      'teamLogo': AppAssets.galacticosLogo,
       'logoPosition': Alignment.topRight,
     },
     {
@@ -1751,7 +1786,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       'position': 'Defender',
       'rating': 8.1,
       'hasStar': false,
-      'teamLogo': 'lib/assets/team logos/Lefters.png',
+      'teamLogo': AppAssets.leftersLogo,
       'logoPosition': Alignment.topLeft,
     },
     {
@@ -1759,7 +1794,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       'position': 'Defender',
       'rating': 6.9,
       'hasStar': false,
-      'teamLogo': 'lib/assets/team logos/Galacticos.png',
+      'teamLogo': AppAssets.galacticosLogo,
       'logoPosition': Alignment.topRight,
     },
   ];
@@ -1777,7 +1812,7 @@ Widget _buildTopRatedPlayer(BuildContext context, {required int index}) {
       CircleAvatar(
         radius: 24,
         backgroundColor: colorScheme.surfaceContainerHighest,
-        backgroundImage: const AssetImage('lib/assets/player.png'),
+        backgroundImage: const AssetImage(AppAssets.playerImage),
       ),
       // Team logo positioned at top-left or top-right
       Positioned(
@@ -1961,19 +1996,26 @@ Widget _buildStatRow(
   );
 }
 
-class _MatchControlsModal extends StatefulWidget {
-  const _MatchControlsModal();
+class _MatchControlsModal extends ConsumerStatefulWidget {
+  const _MatchControlsModal({required this.matchId});
+
+  final String matchId;
 
   @override
-  State<_MatchControlsModal> createState() => _MatchControlsModalState();
+  ConsumerState<_MatchControlsModal> createState() =>
+      _MatchControlsModalState();
 }
 
-class _MatchControlsModalState extends State<_MatchControlsModal> {
+class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
   bool _isHalfTime = true;
+  bool _isUpdating = false;
+  bool _hasBeenResumed = false;
+  MatchStatus? _overrideStatus;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final asyncMatch = ref.watch(fixtureMatchProvider(widget.matchId));
 
     return Container(
       decoration: BoxDecoration(
@@ -1993,66 +2035,245 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Match period selector
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 8.0,
+          asyncMatch.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Center(child: CircularProgressIndicator()),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildPeriodButton(
-                    context,
-                    icon: Icons.pause,
-                    label: 'Half-time',
-                    isActive: _isHalfTime,
-                    backgroundColor: colorScheme.secondaryContainer,
-                    foregroundColor: colorScheme.onSecondaryContainer,
-                    onTap: () => setState(() => _isHalfTime = true),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildPeriodButton(
-                    context,
-                    icon: Icons.stop,
-                    label: 'Full-time',
-                    isActive: !_isHalfTime,
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    onTap: () => setState(() => _isHalfTime = false),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Event controls grid
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: IntrinsicHeight(
-              child: Row(
-                children: [
-                  // Left team controls (Lefters)
-                  Expanded(child: _buildEventGrid(context, isLeftTeam: true)),
-                  const SizedBox(width: 12),
-                  VerticalDivider(
-                    width: 1,
-                    thickness: 1,
-                    color: colorScheme.outlineVariant.withOpacity(0.6),
-                  ),
-                  const SizedBox(width: 12),
-                  // Right team controls (Galacticos)
-                  Expanded(child: _buildEventGrid(context, isLeftTeam: false)),
-                ],
+            error: (err, _) => Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Center(
+                child: Text('Could not load match controls'),
               ),
             ),
+            data: (match) {
+              if (match == null) {
+                return const Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Center(child: Text('Match not found')),
+                );
+              }
+              final status = _overrideStatus ?? match.status;
+              return _buildControlsForStatus(context, colorScheme, status);
+            },
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );
+  }
+
+  Widget _buildControlsForStatus(
+    BuildContext context,
+    ColorScheme colorScheme,
+    MatchStatus status,
+  ) {
+    switch (status) {
+      case MatchStatus.upcoming:
+        return _buildPrimaryActionButton(
+          context,
+          label: 'Start match',
+          onTap: _isUpdating
+              ? null
+              : () => _changeStatus(
+                    MatchStatus.ongoing,
+                    resetResumed: true,
+                  ),
+        );
+      case MatchStatus.halfTime:
+        return _buildPrimaryActionButton(
+          context,
+          label: 'Resume match',
+          onTap: _isUpdating
+              ? null
+              : () => _changeStatus(
+                    MatchStatus.ongoing,
+                    markResumed: true,
+                  ),
+        );
+      case MatchStatus.ongoing:
+      case MatchStatus.fullTime:
+        final allDisabled = status == MatchStatus.fullTime || _isUpdating;
+        final disableHalfTime = status == MatchStatus.fullTime || _hasBeenResumed;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Match period selector
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildPeriodButton(
+                      context,
+                      icon: Icons.pause,
+                      label: 'Half-time',
+                      isActive: _isHalfTime,
+                      backgroundColor: colorScheme.secondaryContainer,
+                      foregroundColor: colorScheme.onSecondaryContainer,
+                      onTap: (!allDisabled && !disableHalfTime)
+                          ? () {
+                              setState(() => _isHalfTime = true);
+                              _changeStatus(MatchStatus.halfTime);
+                            }
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildPeriodButton(
+                      context,
+                      icon: Icons.stop,
+                      label: 'Full-time',
+                      isActive: !_isHalfTime,
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      onTap: (!allDisabled && status != MatchStatus.fullTime)
+                          ? () {
+                              setState(() => _isHalfTime = false);
+                              _changeStatus(MatchStatus.fullTime);
+                            }
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Event controls grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildEventGrid(
+                        context,
+                        isLeftTeam: true,
+                        enabled: !allDisabled,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    VerticalDivider(
+                      width: 1,
+                      thickness: 1,
+                      color: colorScheme.outlineVariant.withOpacity(0.6),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildEventGrid(
+                        context,
+                        isLeftTeam: false,
+                        enabled: !allDisabled,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+    }
+  }
+
+  Widget _buildPrimaryActionButton(
+    BuildContext context, {
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      child: Center(
+        child: SizedBox(
+          width: 380,
+          height: 96,
+          child: Material(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(48),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(48),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sports, // whistle icon
+                      color: colorScheme.onPrimaryContainer,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      label,
+                      style: textTheme.headlineSmall?.copyWith(
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changeStatus(
+    MatchStatus newStatus, {
+    bool markResumed = false,
+    bool resetResumed = false,
+  }) async {
+    if (_isUpdating) return;
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      final repo = ref.read(matchesRepositoryProvider);
+      await repo.updateMatchStatus(widget.matchId, newStatus);
+
+      final clock = ref.read(matchClockProvider(widget.matchId).notifier);
+      switch (newStatus) {
+        case MatchStatus.upcoming:
+          clock.reset();
+          break;
+        case MatchStatus.ongoing:
+          if (resetResumed) {
+            clock.reset();
+          }
+          clock.start();
+          break;
+        case MatchStatus.halfTime:
+          clock.pause();
+          break;
+        case MatchStatus.fullTime:
+          clock.pause();
+          break;
+      }
+
+      ref.invalidate(matchesProvider);
+      ref.invalidate(fixtureMatchProvider(widget.matchId));
+
+      setState(() {
+        _overrideStatus = newStatus;
+        if (resetResumed) _hasBeenResumed = false;
+        if (markResumed) _hasBeenResumed = true;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
   }
 
   Widget _buildPeriodButton(
@@ -2062,7 +2283,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
     required bool isActive,
     required Color backgroundColor,
     required Color foregroundColor,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     final textTheme = Theme.of(context).textTheme;
 
@@ -2095,24 +2316,19 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
     );
   }
 
-  Widget _buildEventGrid(BuildContext context, {required bool isLeftTeam}) {
+  Widget _buildEventGrid(
+    BuildContext context, {
+    required bool isLeftTeam,
+    bool enabled = true,
+  }) {
     // Event icons: [Shot, Goal, Yellow Card, Red Card, Corner/Throw-in, Substitution]
     final events = [
-      {'icon': 'lib/assets/match control icons/miss.svg', 'label': 'Shot'},
-      {'icon': 'lib/assets/match control icons/goal.svg', 'label': 'Goal'},
-      {
-        'icon': 'lib/assets/match control icons/yellow card.svg',
-        'label': 'Yellow Card',
-      },
-      {
-        'icon': 'lib/assets/match control icons/red card.svg',
-        'label': 'Red Card',
-      },
-      {'icon': 'lib/assets/match control icons/tackle.svg', 'label': 'Corner'},
-      {
-        'icon': 'lib/assets/match control icons/substitution.svg',
-        'label': 'Substitution',
-      },
+      {'icon': AppAssets.missIcon, 'label': 'Shot'},
+      {'icon': AppAssets.goalIcon, 'label': 'Goal'},
+      {'icon': AppAssets.yellowCardIcon, 'label': 'Yellow Card'},
+      {'icon': AppAssets.redCardIcon, 'label': 'Red Card'},
+      {'icon': AppAssets.tackleControlIcon, 'label': 'Corner'},
+      {'icon': AppAssets.substitutionIcon, 'label': 'Substitution'},
     ];
 
     // 2 columns x 3 rows with fixed-size tiles (84.75 x 72)
@@ -2126,6 +2342,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               context,
               iconPath: events[0]['icon'] as String,
               isLeftTile: true,
+              enabled: enabled,
               onTap: () {
                 // TODO: Handle event logging
                 Navigator.of(context).pop();
@@ -2135,6 +2352,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               context,
               iconPath: events[1]['icon'] as String,
               isLeftTile: false,
+              enabled: enabled,
               onTap: () {
                 // TODO: Handle event logging
                 Navigator.of(context).pop();
@@ -2150,6 +2368,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               context,
               iconPath: events[2]['icon'] as String,
               isLeftTile: true,
+              enabled: enabled,
               onTap: () {
                 // TODO: Handle event logging
                 Navigator.of(context).pop();
@@ -2159,6 +2378,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               context,
               iconPath: events[3]['icon'] as String,
               isLeftTile: false,
+              enabled: enabled,
               onTap: () {
                 // TODO: Handle event logging
                 Navigator.of(context).pop();
@@ -2174,6 +2394,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               context,
               iconPath: events[4]['icon'] as String,
               isLeftTile: true,
+              enabled: enabled,
               onTap: () {
                 // TODO: Handle event logging
                 Navigator.of(context).pop();
@@ -2183,6 +2404,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
               context,
               iconPath: events[5]['icon'] as String,
               isLeftTile: false,
+              enabled: enabled,
               onTap: () {
                 // TODO: Handle event logging
                 Navigator.of(context).pop();
@@ -2198,6 +2420,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
     BuildContext context, {
     required String iconPath,
     required bool isLeftTile,
+    required bool enabled,
     required VoidCallback onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -2209,7 +2432,7 @@ class _MatchControlsModalState extends State<_MatchControlsModal> {
     );
 
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: tileRadius,
       child: SizedBox(
         width: 84.75,

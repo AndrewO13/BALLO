@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fl_chart/fl_chart.dart';
 
+import '../../core/constants/app_assets.dart';
+import '../../data/repositories/user_profile_repository.dart';
+import '../../domain/models/user_profile.dart';
+
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
@@ -15,8 +19,8 @@ class ProfilePage extends StatelessWidget {
             // Profile card as sliver
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: _ProfileCard(),
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: const _ProfileCard(),
               ),
             ),
             // TabBar that sticks to top
@@ -370,7 +374,7 @@ class _TeamSeasonPerformanceSectionState
                     radius: 20,
                     backgroundColor: Colors.transparent,
                     backgroundImage: const AssetImage(
-                      'lib/assets/team logos/Lefters.png',
+                      AppAssets.leftersLogo,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -725,73 +729,25 @@ class _TeamStatsSection extends StatefulWidget {
 }
 
 class _TeamStatsSectionState extends State<_TeamStatsSection> {
-  final ScrollController _scrollController = ScrollController();
-  final List<ScrollController> _rowScrollControllers = [];
+  final Set<int> _expandedIndices = {};
 
-  @override
-  void initState() {
-    super.initState();
-    // Create a scroll controller for each team row
-    _rowScrollControllers.addAll(
-      List.generate(_teamStats.length, (index) {
-        final controller = ScrollController();
-        // Listen to row scroll and sync header and other rows
-        controller.addListener(() {
-          final offset = controller.offset;
-          if (_scrollController.offset != offset) {
-            _scrollController.jumpTo(offset);
-          }
-          for (var otherController in _rowScrollControllers) {
-            if (otherController != controller &&
-                otherController.offset != offset) {
-              otherController.jumpTo(offset);
-            }
-          }
-        });
-        return controller;
-      }),
-    );
-
-    // Listen to header scroll and sync row scrolls
-    _scrollController.addListener(() {
-      final offset = _scrollController.offset;
-      for (var controller in _rowScrollControllers) {
-        if (controller.offset != offset) {
-          controller.jumpTo(offset);
-        }
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    for (var controller in _rowScrollControllers) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  // Stat categories in order
+  // Stat keys in display order
   static const List<Map<String, String>> _statCategories = [
-    {'key': 'matches', 'svg': 'lib/assets/stats table/matches.svg'},
-    {'key': 'goals', 'svg': 'lib/assets/stats table/goals.svg'},
-    {'key': 'assists', 'svg': 'lib/assets/stats table/assists.svg'},
-    {'key': 'tackles', 'svg': 'lib/assets/stats table/tackles.svg'},
-    {'key': 'yellowCards', 'svg': 'lib/assets/stats table/yellow cards.svg'},
-    {'key': 'redCards', 'svg': 'lib/assets/stats table/red cards.svg'},
-    {'key': 'saves', 'svg': 'lib/assets/stats table/saves.svg'},
-    {
-      'key': 'minutesPlayed',
-      'svg': 'lib/assets/stats table/minutes played.svg',
-    },
-    {'key': 'rating', 'svg': 'lib/assets/stats table/rating.svg'},
+    {'key': 'matches', 'label': 'Matches'},
+    {'key': 'goals', 'label': 'Goals'},
+    {'key': 'assists', 'label': 'Assists'},
+    {'key': 'tackles', 'label': 'Tackles'},
+    {'key': 'yellowCards', 'label': 'Yellow cards'},
+    {'key': 'redCards', 'label': 'Red cards'},
+    {'key': 'saves', 'label': 'Saves'},
+    {'key': 'minutesPlayed', 'label': 'Minutes played'},
+    {'key': 'rating', 'label': 'Rating'},
   ];
 
   // Sample team stats data
   final List<Map<String, dynamic>> _teamStats = const [
     {
-      'logo': 'lib/assets/team logos/Lefters.png',
+      'logo': AppAssets.leftersLogo,
       'name': 'Lefters CF',
       'year': '2025',
       'matches': 45,
@@ -805,7 +761,7 @@ class _TeamStatsSectionState extends State<_TeamStatsSection> {
       'rating': 8.5,
     },
     {
-      'logo': 'lib/assets/team logos/The Shield.png',
+      'logo': AppAssets.theShieldLogo,
       'name': 'The Shield',
       'year': '2025',
       'matches': 23,
@@ -819,7 +775,7 @@ class _TeamStatsSectionState extends State<_TeamStatsSection> {
       'rating': 7.8,
     },
     {
-      'logo': 'lib/assets/team logos/Galacticos.png',
+      'logo': AppAssets.galacticosLogo,
       'name': 'Galacticos',
       'year': '2024',
       'matches': 56,
@@ -834,35 +790,17 @@ class _TeamStatsSectionState extends State<_TeamStatsSection> {
     },
   ];
 
-  Widget _buildStatIcon(String svgPath, BuildContext context) {
-    return SizedBox(
-      width: 13,
-      height: 13,
-      child: SvgPicture.asset(svgPath, width: 13, height: 13),
-    );
-  }
-
-  Widget _buildStatValue(dynamic value, BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
+  String _formatValue(dynamic value) {
     // Format rating to 1 decimal place, minutes with comma separator
-    String displayValue;
     if (value is double) {
-      displayValue = value.toStringAsFixed(1);
+      return value.toStringAsFixed(1);
     } else if (value is int && value >= 1000) {
-      displayValue = value.toString().replaceAllMapped(
+      return value.toString().replaceAllMapped(
         RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
         (Match m) => '${m[1]},',
       );
-    } else {
-      displayValue = value.toString();
     }
-
-    return Text(
-      displayValue,
-      style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurface),
-    );
+    return value.toString();
   }
 
   @override
@@ -881,82 +819,53 @@ class _TeamStatsSectionState extends State<_TeamStatsSection> {
         children: [
           // Title
           Text('Team stats', style: textTheme.titleSmall),
-          const SizedBox(height: 16),
-          // Header row with fixed team column and scrollable stats
-          Row(
-            children: [
-              // Fixed team column
-              SizedBox(
-                width: 120,
-                child: Text(
-                  'Team',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              // Scrollable stat icons
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _statCategories.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final category = entry.value;
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 60,
-                            height: 13,
-                            child: Center(
-                              child: _buildStatIcon(category['svg']!, context),
-                            ),
-                          ),
-                          if (index < _statCategories.length - 1)
-                            const SizedBox(width: 8),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 12),
-          // Team rows
           ..._teamStats.asMap().entries.map((entry) {
             final index = entry.key;
             final team = entry.value;
+            final isExpanded = _expandedIndices.contains(index);
 
-            return Column(
-              children: [
-                Row(
-                  children: [
-                    // Fixed team info
-                    SizedBox(
-                      width: 120,
+            return Container(
+              margin: EdgeInsets.only(
+                top: index == 0 ? 0 : 12,
+                bottom: index == _teamStats.length - 1 ? 0 : 0,
+              ),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedIndices.remove(index);
+                        } else {
+                          _expandedIndices.add(index);
+                        }
+                      });
+                    },
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(24)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          // Team logo
                           CircleAvatar(
                             radius: 18,
                             backgroundColor: Colors.transparent,
-                            backgroundImage: AssetImage(team['logo'] as String),
+                            backgroundImage:
+                                AssetImage(team['logo'] as String),
                           ),
                           const SizedBox(width: 12),
-                          // Team name and year
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   team['name'] as String,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurface,
-                                  ),
+                                  style: textTheme.bodyLarge,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -968,57 +877,106 @@ class _TeamStatsSectionState extends State<_TeamStatsSection> {
                               ],
                             ),
                           ),
+                          Icon(
+                            isExpanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            color: colorScheme.onSurface,
+                          ),
                         ],
                       ),
                     ),
-                    // Scrollable stat values
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _rowScrollControllers[index],
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: _statCategories.asMap().entries.map((
-                            catEntry,
-                          ) {
-                            final catIndex = catEntry.key;
-                            final category = catEntry.value;
-                            final value = team[category['key']];
+                  ),
+                  if (isExpanded) ...[
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: colorScheme.outlineVariant,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Season stats',
+                            style: textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 12),
+                          ..._statCategories.map((stat) {
+                            final key = stat['key']!;
+                            final label = stat['label']!;
+                            final value = team[key];
+                            final isRating = key == 'rating';
 
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 60,
-                                  child: Center(
-                                    child: _buildStatValue(value, context),
-                                  ),
-                                ),
-                                if (catIndex < _statCategories.length - 1)
-                                  const SizedBox(width: 8),
-                              ],
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 4.0),
+                              child: _buildStatRow(
+                                context,
+                                label,
+                                value,
+                                highlight: isRating,
+                              ),
                             );
-                          }).toList(),
-                        ),
+                          }),
+                        ],
                       ),
                     ),
                   ],
-                ),
-                // Divider between items (except after the last one)
-                if (index < _teamStats.length - 1) ...[
-                  const SizedBox(height: 12),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: colorScheme.outlineVariant,
-                  ),
-                  const SizedBox(height: 12),
                 ],
-              ],
+              ),
             );
           }),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatRow(
+    BuildContext context,
+    String label,
+    dynamic value, {
+    bool highlight = false,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final displayValue = _formatValue(value);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface,
+            ),
+          ),
+        ),
+        if (highlight)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              displayValue,
+              style: textTheme.labelSmall?.copyWith(
+                color: colorScheme.surface,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        else
+          Text(
+            displayValue,
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface,
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1126,7 +1084,7 @@ class _NextMatchSection extends StatelessWidget {
                         radius: 12,
                         backgroundColor: Colors.transparent,
                         backgroundImage: const AssetImage(
-                          'lib/assets/team logos/Galacticos.png',
+                          AppAssets.galacticosLogo,
                         ),
                       ),
                     ],
@@ -1142,7 +1100,7 @@ class _NextMatchSection extends StatelessWidget {
                         radius: 12,
                         backgroundColor: Colors.transparent,
                         backgroundImage: const AssetImage(
-                          'lib/assets/team logos/Lefters.png',
+                          AppAssets.leftersLogo,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1194,35 +1152,35 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
   final List<Map<String, dynamic>> _matchResults = [
     {
       'gameweek': 'GW6',
-      'opponentLogo': 'lib/assets/team logos/Dragons.png',
+      'opponentLogo': AppAssets.dragonsLogo,
       'opponentShort': 'DRA',
       'score': '2-2',
       'result': 'draw', // 'win', 'loss', 'draw'
     },
     {
       'gameweek': 'GW7',
-      'opponentLogo': 'lib/assets/team logos/Galacticos.png',
+      'opponentLogo': AppAssets.galacticosLogo,
       'opponentShort': 'GAL',
       'score': '1-0',
       'result': 'win',
     },
     {
       'gameweek': 'GW8',
-      'opponentLogo': 'lib/assets/team logos/La Famille.png',
+      'opponentLogo': AppAssets.laFamilleLogo,
       'opponentShort': 'LAF',
       'score': '1-1',
       'result': 'draw',
     },
     {
       'gameweek': 'GW9',
-      'opponentLogo': 'lib/assets/team logos/End Career FC.png',
+      'opponentLogo': AppAssets.endCareerLogo,
       'opponentShort': 'EFC',
       'score': '0-1',
       'result': 'loss',
     },
     {
       'gameweek': 'GW10',
-      'opponentLogo': 'lib/assets/team logos/The Shield.png',
+      'opponentLogo': AppAssets.theShieldLogo,
       'opponentShort': 'SHI',
       'score': '4-1',
       'result': 'win',
@@ -1270,7 +1228,7 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                 _buildTeamChip(
                   context: context,
                   teamName: 'Lefters CF',
-                  logoPath: 'lib/assets/team logos/Lefters.png',
+                  logoPath: AppAssets.leftersLogo,
                   isSelected: _selectedTeam == 'Lefters CF',
                   onSelected: (selected) {
                     setState(() {
@@ -1282,7 +1240,7 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                 _buildTeamChip(
                   context: context,
                   teamName: 'Galacticos',
-                  logoPath: 'lib/assets/team logos/Galacticos.png',
+                  logoPath: AppAssets.galacticosLogo,
                   isSelected: _selectedTeam == 'Galacticos',
                   onSelected: (selected) {
                     setState(() {
@@ -1294,7 +1252,7 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                 _buildTeamChip(
                   context: context,
                   teamName: 'Dragons',
-                  logoPath: 'lib/assets/team logos/Dragons.png',
+                  logoPath: AppAssets.dragonsLogo,
                   isSelected: _selectedTeam == 'Dragons',
                   onSelected: (selected) {
                     setState(() {
@@ -1403,25 +1361,25 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
   // Sample club history data
   final List<Map<String, dynamic>> _clubHistory = const [
     {
-      'logo': 'lib/assets/team logos/End Career FC.png',
+      'logo': AppAssets.endCareerLogo,
       'name': 'End Career FC',
       'yearsActive': '2025 - Now',
       'isCurrent': true,
     },
     {
-      'logo': 'lib/assets/team logos/The Shield.png',
+      'logo': AppAssets.theShieldLogo,
       'name': 'The Shield',
       'yearsActive': '2023 - Now',
       'isCurrent': true,
     },
     {
-      'logo': 'lib/assets/team logos/Galacticos.png',
+      'logo': AppAssets.galacticosLogo,
       'name': 'Galacticos',
       'yearsActive': '2022 - 2023',
       'isCurrent': false,
     },
     {
-      'logo': 'lib/assets/team logos/La Famille.png',
+      'logo': AppAssets.laFamilleLogo,
       'name': 'LaFamille FC',
       'yearsActive': '2020 - 2022',
       'isCurrent': false,
@@ -1558,25 +1516,25 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
   // Sample trophies data
   final List<Map<String, dynamic>> _trophies = const [
     {
-      'logoPath': 'lib/assets/trophies/bugujju league.png',
+      'logoPath': AppAssets.bugujjuLeagueTrophy,
       'name': 'Bugujju league',
       'years': '2025',
       'count': 1,
     },
     {
-      'logoPath': 'lib/assets/trophies/inter uni league.png',
+      'logoPath': AppAssets.interUniLeagueTrophy,
       'name': 'Inter-uni league',
       'years': '2023, 2024',
       'count': 2,
     },
     {
-      'logoPath': 'lib/assets/trophies/budo league.png',
+      'logoPath': AppAssets.budoLeagueTrophy,
       'name': 'The Budo league',
       'years': '2019, 2020, 2023, 2024',
       'count': 4,
     },
     {
-      'logoPath': 'lib/assets/trophies/turf champi.png',
+      'logoPath': AppAssets.turfChampiTrophy,
       'name': 'Turf-champi',
       'years': '2016',
       'count': 1,
@@ -1624,7 +1582,7 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
                 _buildTeamChip(
                   context: context,
                   teamName: 'Lefters CF',
-                  logoPath: 'lib/assets/team logos/Lefters.png',
+                  logoPath: AppAssets.leftersLogo,
                   isSelected: _selectedTeam == 'Lefters CF',
                   onSelected: (selected) {
                     setState(() {
@@ -1636,7 +1594,7 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
                 _buildTeamChip(
                   context: context,
                   teamName: 'Galacticos',
-                  logoPath: 'lib/assets/team logos/Galacticos.png',
+                  logoPath: AppAssets.galacticosLogo,
                   isSelected: _selectedTeam == 'Galacticos',
                   onSelected: (selected) {
                     setState(() {
@@ -1648,7 +1606,7 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
                 _buildTeamChip(
                   context: context,
                   teamName: 'Dragons',
-                  logoPath: 'lib/assets/team logos/Dragons.png',
+                  logoPath: AppAssets.dragonsLogo,
                   isSelected: _selectedTeam == 'Dragons',
                   onSelected: (selected) {
                     setState(() {
@@ -1743,21 +1701,21 @@ class _BadgesSection extends StatelessWidget {
   // Sample badges data
   final List<Map<String, dynamic>> _badges = const [
     {
-      'svgPath': 'lib/assets/badges/Pro.svg',
+      'svgPath': AppAssets.proBadge,
       'points': '+10',
       'name': 'Iron-foot',
       'objective': 'Score 100 goals',
       'progress': 0.5, // 50%
     },
     {
-      'svgPath': 'lib/assets/badges/Master.svg',
+      'svgPath': AppAssets.masterBadge,
       'points': '+10',
       'name': 'Lock-down defender 💪',
       'objective': 'Make 100 tackles',
       'progress': 1.0, // 100%
     },
     {
-      'svgPath': 'lib/assets/badges/Legendary.svg',
+      'svgPath': AppAssets.legendaryBadge,
       'points': '+100',
       'name': 'Footy Master',
       'objective': 'Reach 10K goals',
@@ -2003,39 +1961,46 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 412,
-      height: 356,
-      child: Stack(
-        children: [
-          // Background container with primaryContainer color
-          Container(
-            width: 412,
-            height: 356,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(28),
-            ),
-          ),
-          // Background overlay image with multiply blend mode
-          ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: ColorFiltered(
-              colorFilter: const ColorFilter.mode(
-                Color(0xff81d99a),
-                BlendMode.multiply,
-              ),
-              child: Image.asset(
-                'lib/assets/bg overlay.png',
-                width: 412,
+    return FutureBuilder<UserProfile?>(
+      future: UserProfileRepository().getCurrentProfile(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final playerName = profile?.playerName ?? 'Gareth';
+        final username =
+            profile?.username != null ? '@${profile!.username}' : '@gareth_neville3';
+
+        return SizedBox(
+          height: 356,
+          child: Stack(
+            children: [
+              // Background container with primaryContainer color
+              Container(
+                width: double.infinity,
                 height: 356,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const SizedBox.shrink();
-                },
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(28),
+                ),
               ),
-            ),
-          ),
+              // Background overlay image with multiply blend mode
+              ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xff81d99a),
+                    BlendMode.multiply,
+                  ),
+                  child: Image.asset(
+                    AppAssets.bgOverlay,
+                    width: double.infinity,
+                    height: 356,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
           // Edit button in upper right corner
           Positioned(
             top: 16,
@@ -2066,7 +2031,7 @@ class _ProfileCard extends StatelessWidget {
             right: 0,
             child: Center(
               child: Image.asset(
-                'lib/assets/player.png',
+                AppAssets.playerImage,
                 width: 248,
                 height: 318,
                 fit: BoxFit.contain,
@@ -2077,84 +2042,95 @@ class _ProfileCard extends StatelessWidget {
               ),
             ),
           ),
-          // Gradient overlay fading from bottom to top
-          ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Container(
-              width: 412,
-              height: 356,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [Colors.black.withOpacity(0.2), Colors.transparent],
+              // Gradient overlay fading from bottom to top
+              ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Container(
+                  width: double.infinity,
+                  height: 356,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.2),
+                        Colors.transparent
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          // Text overlay at the bottom
-          Positioned(
-            bottom: 80,
-            left: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Gareth',
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+              // Text overlay at the bottom
+              Positioned(
+                bottom: 80,
+                left: 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      playerName,
+                      style: Theme.of(context)
+                          .textTheme
+                          .displayMedium
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      username,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '@gareth_neville3',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.9),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Action chips at the bottom (horizontally scrollable)
-          Positioned(
-            bottom: 16,
-            left: 16,
-            right: 16,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  _ActionChip(
-                    svgPath: 'lib/assets/position.svg',
-                    label: 'Defender',
-                    context: context,
-                  ),
-                  const SizedBox(width: 8),
-                  _ActionChip(
-                    icon: Icons.groups_outlined,
-                    label: '12K',
-                    context: context,
-                  ),
-                  const SizedBox(width: 8),
-                  _ActionChip(
-                    icon: Icons.bar_chart_outlined,
-                    label: '3',
-                    context: context,
-                  ),
-                  const SizedBox(width: 8),
-                  _ActionChip(
-                    icon: Icons.public_outlined,
-                    label: 'Uganda',
-                    context: context,
-                  ),
-                ],
               ),
-            ),
+              // Action chips at the bottom (horizontally scrollable)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      _ActionChip(
+                        svgPath: AppAssets.positionIcon,
+                        label: 'Defender',
+                        context: context,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActionChip(
+                        icon: Icons.groups_outlined,
+                        label: '12K',
+                        context: context,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActionChip(
+                        icon: Icons.bar_chart_outlined,
+                        label: '3',
+                        context: context,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActionChip(
+                        icon: Icons.public_outlined,
+                        label: 'Uganda',
+                        context: context,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -2205,7 +2181,7 @@ class _VideoPlaceholder extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: Image.asset(
-          'lib/assets/highlight_placeholder.jpg',
+          AppAssets.highlightPlaceholder,
           width: 121.33,
           height: 204,
           fit: BoxFit.cover,

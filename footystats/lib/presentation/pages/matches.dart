@@ -1,19 +1,20 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../domain/models/match_model.dart';
+import '../providers/matches_provider.dart';
 import 'fixture.dart';
 
 enum MatchesFilter { league, season, gw1, allTeams }
 
-enum MatchStatus { upcoming, ongoing, halfTime, fullTime }
-
-class MatchesPage extends StatefulWidget {
+class MatchesPage extends ConsumerStatefulWidget {
   const MatchesPage({super.key});
 
   @override
-  State<MatchesPage> createState() => _MatchesPageState();
+  ConsumerState<MatchesPage> createState() => _MatchesPageState();
 }
 
-class _MatchesPageState extends State<MatchesPage> {
+class _MatchesPageState extends ConsumerState<MatchesPage> {
   // Dropdown entries and selections for the filter menus
   final List<DropdownMenuEntry<String>> _leagueEntries = [
     const DropdownMenuEntry(value: 'Turf Champi', label: 'Turf Champi'),
@@ -41,7 +42,7 @@ class _MatchesPageState extends State<MatchesPage> {
   String? _selectedGW;
   String? _selectedTeam;
 
-  Widget _buildGameweekHeader(BuildContext context) {
+  Widget _buildGameweekHeader(BuildContext context, String? gameweekLabel) {
     return SizedBox(
       height: 48,
       child: Stack(
@@ -72,7 +73,9 @@ class _MatchesPageState extends State<MatchesPage> {
           ),
           Center(
             child: Text(
-              'Gameweek 11',
+              gameweekLabel != null && gameweekLabel.isNotEmpty
+                  ? gameweekLabel
+                  : 'All gameweeks',
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
@@ -95,6 +98,7 @@ class _MatchesPageState extends State<MatchesPage> {
     String? date,
     String? league,
     String? venue,
+    String? matchId,
   }) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
@@ -103,7 +107,7 @@ class _MatchesPageState extends State<MatchesPage> {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => const FixturePage(),
+            builder: (context) => FixturePage(matchId: matchId ?? ''),
           ),
         );
       },
@@ -129,13 +133,9 @@ class _MatchesPageState extends State<MatchesPage> {
                         Text(homeName, style: textTheme.bodySmall),
                         const SizedBox(width: 8),
                         ClipOval(
-                          child: Image.asset(
-                            homeLogo,
-                            width: 28,
-                            height: 28,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, st) =>
-                                const SizedBox(width: 28, height: 28),
+                          child: _TeamLogo(
+                            path: homeLogo,
+                            size: 28,
                           ),
                         ),
                       ],
@@ -209,13 +209,9 @@ class _MatchesPageState extends State<MatchesPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ClipOval(
-                          child: Image.asset(
-                            awayLogo,
-                            width: 28,
-                            height: 28,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, st) =>
-                                const SizedBox(width: 28, height: 28),
+                          child: _TeamLogo(
+                            path: awayLogo,
+                            size: 28,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -263,166 +259,215 @@ class _MatchesPageState extends State<MatchesPage> {
     );
   }
 
-  Widget _buildMatchCardWithDate(
-    BuildContext context, {
-    required String date,
-    required String homeName,
-    required String homeLogo,
-    required String awayName,
-    required String awayLogo,
-    String? scoreText,
-    required String statusText,
-    required MatchStatus status,
-    bool hasVideo = false,
-    String? league,
-    String? venue,
-  }) {
+  Widget _buildMatchCardFromModel(
+    BuildContext context,
+    MatchModel match,
+    String dateLabel,
+  ) {
+    final clock = ref.watch(matchClockProvider(match.id));
+    final ongoingTime = formatMatchClock(clock);
+
+    // If this list item is built while the match is already ongoing (for
+    // example, after starting the match from the detail modal), make sure the
+    // shared match clock is running so the stopwatch stays in sync with the
+    // fixture page.
+    if (match.status == MatchStatus.ongoing && clock == Duration.zero) {
+      ref.read(matchClockProvider(match.id).notifier).start();
+    }
+    final statusLabel =
+        match.status == MatchStatus.ongoing ? ongoingTime : match.statusText;
+
     return _buildMatchCard(
       context,
-      homeName: homeName,
-      homeLogo: homeLogo,
-      awayName: awayName,
-      awayLogo: awayLogo,
-      scoreText: scoreText,
-      statusText: statusText,
-      status: status,
-      hasVideo: hasVideo,
-      date: date,
-      league: league,
-      venue: venue,
+      homeName: match.teamA.shortForm,
+      homeLogo: match.teamA.logoPath,
+      awayName: match.teamB.shortForm,
+      awayLogo: match.teamB.logoPath,
+      scoreText: match.scoreText,
+      statusText: statusLabel,
+      status: match.status,
+      hasVideo: false,
+      date: dateLabel,
+      league: null,
+      venue: null,
+      matchId: match.id,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 56,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(width: 4),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: DropdownMenu<String>(
-                      initialSelection: _selectedLeague,
-                      label: const Text('League'),
-                      dropdownMenuEntries: _leagueEntries,
-                      onSelected: (s) => setState(() => _selectedLeague = s),
+    final asyncMatches = ref.watch(matchesProvider);
+    final grouped = ref.watch(matchesGroupedByDateProvider);
+    final selectedGw = ref.watch(selectedGameweekProvider);
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 64,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: DropdownMenu<String>(
+                        initialSelection: _selectedLeague,
+                        label: const Text('League'),
+                        dropdownMenuEntries: _leagueEntries,
+                        onSelected: (s) => setState(() => _selectedLeague = s),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: DropdownMenu<String>(
-                      initialSelection: _selectedSeason,
-                      label: const Text('Season'),
-                      dropdownMenuEntries: _seasonEntries,
-                      onSelected: (s) => setState(() => _selectedSeason = s),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: DropdownMenu<String>(
+                        initialSelection: _selectedSeason,
+                        label: const Text('Season'),
+                        dropdownMenuEntries: _seasonEntries,
+                        onSelected: (s) => setState(() => _selectedSeason = s),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: DropdownMenu<String>(
-                      initialSelection: _selectedGW,
-                      label: const Text('GW'),
-                      dropdownMenuEntries: _gwEntries,
-                      onSelected: (s) => setState(() => _selectedGW = s),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: DropdownMenu<String>(
+                        initialSelection: _selectedGW,
+                        label: const Text('GW'),
+                        dropdownMenuEntries: _gwEntries,
+                        onSelected: (s) => setState(() => _selectedGW = s),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: DropdownMenu<String>(
-                      initialSelection: _selectedTeam,
-                      label: const Text('Teams'),
-                      dropdownMenuEntries: _teamEntries,
-                      onSelected: (s) => setState(() => _selectedTeam = s),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: DropdownMenu<String>(
+                        initialSelection: _selectedTeam,
+                        label: const Text('Teams'),
+                        dropdownMenuEntries: _teamEntries,
+                        onSelected: (s) => setState(() => _selectedTeam = s),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
+                    const SizedBox(width: 4),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _buildGameweekHeader(context),
-          const SizedBox(height: 2),
-
-          // Sample fixtures demonstrating different states grouped by date
-          _buildDateGroup(context, 'Tue 2 Dec', [
-            _buildMatchCardWithDate(
+            const SizedBox(height: 12),
+            _buildGameweekHeader(
               context,
-              date: 'Tue 2 Dec',
-              homeName: 'Galacticos',
-              homeLogo: 'lib/assets/team logos/Galacticos.png',
-              awayName: 'The Shield',
-              awayLogo: 'lib/assets/team logos/The Shield.png',
-              scoreText: null,
-              statusText: '17:30',
-              status: MatchStatus.upcoming,
-              league: 'Bugujju league',
-              venue: 'Budo Ground',
+              selectedGw != null && selectedGw.isNotEmpty
+                  ? 'Gameweek ${selectedGw.replaceFirst(RegExp(r'^GW'), '')}'
+                  : null,
             ),
             const SizedBox(height: 2),
-            _buildMatchCardWithDate(
-              context,
-              date: 'Tue 2 Dec',
-              homeName: 'La Famille FC',
-              homeLogo: 'lib/assets/team logos/La Famille.png',
-              awayName: 'End Career FC',
-              awayLogo: 'lib/assets/team logos/End Career FC.png',
-              scoreText: '1 - 2',
-              statusText: 'HT',
-              status: MatchStatus.halfTime,
-              league: 'Bugujju league',
-              venue: 'Budo Ground',
+            asyncMatches.when(
+              data: (_) {
+                final dateKeys = grouped.keys.toList()..sort();
+                if (dateKeys.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Center(
+                      child: Text(
+                        'No matches',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final key in dateKeys) ...[
+                      _buildDateGroup(
+                        context,
+                        formatMatchDateKey(key),
+                        grouped[key]!
+                            .map((m) => _buildMatchCardFromModel(
+                                  context,
+                                  m,
+                                  formatMatchDateKey(key),
+                                ))
+                            .expand((w) => [w, const SizedBox(height: 2)])
+                            .toList()
+                          ..removeLast(),
+                      ),
+                      const SizedBox(height: 2),
+                    ],
+                  ],
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (err, _) => Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Could not load matches',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        err.toString(),
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ]),
-
-          const SizedBox(height: 2),
-
-          _buildDateGroup(context, 'Wed 3 Dec', [
-            _buildMatchCardWithDate(
-              context,
-              date: 'Wed 3 Dec',
-              homeName: 'The Shield',
-              homeLogo: 'lib/assets/team logos/The Shield.png',
-              awayName: 'End Career FC',
-              awayLogo: 'lib/assets/team logos/End Career FC.png',
-              scoreText: '6 - 1',
-              statusText: 'FT',
-              status: MatchStatus.fullTime,
-              hasVideo: true,
-              league: 'Bugujju league',
-              venue: 'Budo Ground',
-            ),
-          ]),
-
-          const SizedBox(height: 2),
-
-          _buildDateGroup(context, 'Thu 4 Dec', [
-            _buildMatchCardWithDate(
-              context,
-              date: 'Thu 4 Dec',
-              homeName: 'End Career FC',
-              homeLogo: 'lib/assets/team logos/End Career FC.png',
-              awayName: 'La Famille FC',
-              awayLogo: 'lib/assets/team logos/La Famille.png',
-              scoreText: '3 - 0',
-              statusText: '07:22',
-              status: MatchStatus.ongoing,
-              league: 'Bugujju league',
-              venue: 'Budo Ground',
-            ),
-          ]),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+/// Shows team logo from asset path or network URL.
+class _TeamLogo extends StatelessWidget {
+  const _TeamLogo({required this.path, this.size = 28});
+
+  final String path;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    return SizedBox(
+      width: size,
+      height: size,
+      child: isNetwork
+          ? Image.network(
+              path,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            )
+          : Image.asset(
+              path,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => SizedBox(
+                width: size,
+                height: size,
+                child: Icon(
+                  Icons.sports_soccer,
+                  size: size * 0.6,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
     );
   }
 }

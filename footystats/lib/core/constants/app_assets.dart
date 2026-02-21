@@ -7,6 +7,7 @@ class AppAssets {
   static const String tackleIcon = 'lib/assets/icons/tackle.svg';
   static const String positionIcon = 'lib/assets/icons/position.svg';
   static const String matchGoalIcon = 'lib/assets/icons/match goal.svg';
+  static const String teamCompareIcon = 'lib/assets/icons/team compare.svg';
 
   // Images
   static const String teamBanner = 'lib/assets/images/team banner.JPG';
@@ -18,6 +19,7 @@ class AppAssets {
   static const String bgOverlay = 'lib/assets/images/bg overlay.png';
   static const String appBarBg = 'lib/assets/images/app bar.png';
   static const String navigationBarBg = 'lib/assets/images/Navigation Bar.png';
+  static const String onboardingBg = 'lib/assets/images/onboarding bg.png';
 
   // Team Logos
   static const String teamLogosPath = 'lib/assets/images/team logos/';

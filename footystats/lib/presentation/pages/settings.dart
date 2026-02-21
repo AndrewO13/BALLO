@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'welcome_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -128,9 +131,27 @@ class SettingsPage extends StatelessWidget {
                           child: const Text('Cancel'),
                         ),
                         TextButton(
-                          onPressed: () {
+                          onPressed: () async {
                             Navigator.of(context).pop();
-                            // TODO: Sign out logic
+                            try {
+                              await Supabase.instance.client.auth.signOut();
+                              if (!context.mounted) return;
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => const WelcomePage(),
+                                ),
+                                (route) => false,
+                              );
+                            } catch (error) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Error signing out: ${error.toString()}',
+                                  ),
+                                ),
+                              );
+                            }
                           },
                           child: Text(
                             'Sign Out',

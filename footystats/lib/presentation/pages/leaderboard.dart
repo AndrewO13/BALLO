@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/constants/app_assets.dart';
 
 class LeaderboardPage extends StatelessWidget {
   const LeaderboardPage({super.key});
@@ -44,9 +45,9 @@ class _LeaderboardTabContent extends StatelessWidget {
   Widget build(BuildContext context) {
     // Example avatars, update as needed
     final avatars = [
-      'lib/assets/avatars/3d_avatar_20.png',
-      'lib/assets/avatars/3d_avatar_18.png',
-      'lib/assets/avatars/3d_avatar_13.png',
+      AppAssets.avatar20,
+      AppAssets.avatar18,
+      AppAssets.avatar13,
     ];
     // Example leaderboard data
     final leaderboard = [
@@ -54,7 +55,7 @@ class _LeaderboardTabContent extends StatelessWidget {
         'pos': 1,
         'change': 1,
         'name': 'Andrew Ogwang',
-        'avatar': 'lib/assets/avatars/3d_avatar_18.png',
+        'avatar': AppAssets.avatar18,
         'gw': 19,
         'total': '23.4K',
         'highlight': false,
@@ -63,7 +64,7 @@ class _LeaderboardTabContent extends StatelessWidget {
         'pos': 2,
         'change': -1,
         'name': 'Gareth Neville',
-        'avatar': 'lib/assets/avatars/3d_avatar_20.png',
+        'avatar': AppAssets.avatar20,
         'gw': 18,
         'total': '15',
         'highlight': true,
@@ -72,7 +73,7 @@ class _LeaderboardTabContent extends StatelessWidget {
         'pos': 3,
         'change': 0,
         'name': 'Katende Derrick',
-        'avatar': 'lib/assets/avatars/3d_avatar_13.png',
+        'avatar': AppAssets.avatar13,
         'gw': 18,
         'total': '3',
         'highlight': false,
@@ -90,7 +91,7 @@ class _LeaderboardTabContent extends StatelessWidget {
               children: [
                 Positioned.fill(
                   child: Image.asset(
-                    'lib/assets/leaderboard bg.png',
+                    AppAssets.leaderboardBg,
                     fit: BoxFit.cover,
                   ),
                 ),
