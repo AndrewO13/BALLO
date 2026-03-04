@@ -28,7 +28,11 @@ class MatchCard extends StatelessWidget {
     final score1 = hasScores ? (match.teamAScore!.toString()) : '—';
     final score2 = hasScores ? (match.teamBScore!.toString()) : '—';
     final timeLabel = match.statusText;
-    final gw = match.gameweek ?? '—';
+    final isUpcoming = match.status == MatchStatus.upcoming;
+    final dateLabel = _formatDate(match.matchDate);
+    final gw = match.gameweekNumber != null
+        ? 'GW${match.gameweekNumber}'
+        : (match.gameweek ?? '—');
     final league = leagueName ?? '—';
 
     return ClipRect(
@@ -84,37 +88,51 @@ class MatchCard extends StatelessWidget {
                       ),
                       Column(
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                score1,
-                                style: textTheme.displayMedium,
-                              ),
-                              Text(' - ', style: textTheme.displayMedium),
-                              Text(
-                                score2,
-                                style: textTheme.displayMedium,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 0,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
+                          if (isUpcoming)
+                            Text(
                               timeLabel,
+                              style: textTheme.displayMedium,
+                            )
+                          else
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  score1,
+                                  style: textTheme.displayMedium,
+                                ),
+                                Text(' - ', style: textTheme.displayMedium),
+                                Text(
+                                  score2,
+                                  style: textTheme.displayMedium,
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: 8),
+                          if (isUpcoming)
+                            Text(
+                              dateLabel,
                               style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSecondaryContainer,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                timeLabel,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSecondaryContainer,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                       Expanded(
@@ -155,6 +173,17 @@ class MatchCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDate(DateTime date) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final wd = weekdays[date.weekday - 1];
+  final mon = months[date.month - 1];
+  return '$wd ${date.day} $mon';
 }
 
 class _TeamLogo extends StatelessWidget {

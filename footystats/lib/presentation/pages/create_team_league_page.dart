@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path/path.dart' as path;
+import 'create_match_entry_page.dart';
 import 'team_detail_page.dart';
 import 'league_detail_page.dart';
 
@@ -92,6 +93,20 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 16),
+                      _ChoiceCard(
+                        icon: Icons.sports_score,
+                        title: 'Create match',
+                        subtitle:
+                            'Set up a match between teams and assign league details.',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CreateMatchEntryPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
                       _ChoiceCard(
                         icon: Icons.groups_outlined,
                         title: 'Create team',
@@ -283,55 +298,58 @@ class _ItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(28),
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-              child: logoUrl != null && logoUrl!.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        logoUrl!,
-                        width: 48,
-                        height: 48,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.image_not_supported,
-                            size: 24,
-                            color: colorScheme.onSurfaceVariant,
-                          );
-                        },
+    return Card(
+      clipBehavior: Clip.hardEdge,
+      color: colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: InkWell(
+        splashColor: colorScheme.primary.withAlpha(30),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  shape: BoxShape.circle,
+                ),
+                child: logoUrl != null && logoUrl!.isNotEmpty
+                    ? ClipOval(
+                        child: Image.network(
+                          logoUrl!,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.image_not_supported,
+                              size: 24,
+                              color: colorScheme.onSurfaceVariant,
+                            );
+                          },
+                        ),
+                      )
+                    : Icon(
+                        Icons.image_outlined,
+                        size: 24,
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                    )
-                  : Icon(
-                      Icons.image_outlined,
-                      size: 24,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                name,
-                style: Theme.of(context).textTheme.bodyLarge,
               ),
-            ),
-            const Icon(Icons.chevron_right),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  name,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
         ),
       ),
     );
@@ -543,6 +561,43 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class CreateMatchPage extends StatelessWidget {
+  const CreateMatchPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Create match',
+          style: textTheme.headlineMedium,
+        ),
+        centerTitle: false,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Match creation will be available here.',
+            style: textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

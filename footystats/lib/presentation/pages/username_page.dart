@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
 import 'player_name_page.dart';
@@ -32,8 +33,13 @@ class _UsernamePageState extends State<UsernamePage> {
 
     setState(() => _isSubmitting = true);
     try {
-      // TODO: Persist username to profile via Supabase when backend is ready.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        await Supabase.instance.client.from('players').upsert({
+          'id': user.id,
+          'username': _usernameController.text.trim(),
+        });
+      }
 
       if (!mounted) return;
       Navigator.of(context).push(

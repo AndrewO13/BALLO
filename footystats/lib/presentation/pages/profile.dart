@@ -157,7 +157,14 @@ class _ProfileTabContent extends StatelessWidget {
         Center(
           child: Text(title, style: Theme.of(context).textTheme.titleLarge),
         ),
-        // TODO: Add content for each tab
+        const SizedBox(height: 12),
+        Text(
+          'Content coming soon.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+          textAlign: TextAlign.center,
+        ),
       ],
     );
   }
@@ -1003,7 +1010,21 @@ class _AttributesSection extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.info_outline),
                 onPressed: () {
-                  // TODO: Show attributes info
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Attributes'),
+                      content: const Text(
+                        'Attributes summarize your performance across key skill areas.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
                 },
                 iconSize: 20,
                 padding: EdgeInsets.zero,
@@ -1742,7 +1763,21 @@ class _BadgesSection extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.info_outline),
                 onPressed: () {
-                  // TODO: Show badges info
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Badges'),
+                      content: const Text(
+                        'Earn badges by reaching performance milestones.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
                 },
                 iconSize: 20,
                 padding: EdgeInsets.zero,
@@ -2007,7 +2042,9 @@ class _ProfileCard extends StatelessWidget {
             right: 16,
             child: FilledButton.tonal(
               onPressed: () {
-                // TODO: Implement edit profile
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Edit profile coming soon')),
+                );
               },
               style: FilledButton.styleFrom(
                 shape: const RoundedRectangleBorder(
@@ -2237,7 +2274,9 @@ class _ActionChip extends StatelessWidget {
       avatar: avatar,
       label: Text(label, style: const TextStyle(color: Colors.white)),
       onPressed: () {
-        // TODO: Handle chip action
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$label selected')),
+        );
       },
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       side: BorderSide.none,

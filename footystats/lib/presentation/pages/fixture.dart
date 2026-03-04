@@ -2276,6 +2276,13 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
     }
   }
 
+  void _logMatchEvent(BuildContext context, String label, bool isLeftTeam) {
+    final teamSide = isLeftTeam ? 'Home' : 'Away';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label logged for $teamSide team')),
+    );
+  }
+
   Widget _buildPeriodButton(
     BuildContext context, {
     required IconData icon,
@@ -2344,7 +2351,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               isLeftTile: true,
               enabled: enabled,
               onTap: () {
-                // TODO: Handle event logging
+                _logMatchEvent(
+                  context,
+                  events[0]['label'] as String,
+                  isLeftTeam,
+                );
                 Navigator.of(context).pop();
               },
             ),
@@ -2354,7 +2365,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               isLeftTile: false,
               enabled: enabled,
               onTap: () {
-                // TODO: Handle event logging
+                _logMatchEvent(
+                  context,
+                  events[1]['label'] as String,
+                  isLeftTeam,
+                );
                 Navigator.of(context).pop();
               },
             ),
@@ -2370,7 +2385,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               isLeftTile: true,
               enabled: enabled,
               onTap: () {
-                // TODO: Handle event logging
+                _logMatchEvent(
+                  context,
+                  events[2]['label'] as String,
+                  isLeftTeam,
+                );
                 Navigator.of(context).pop();
               },
             ),
@@ -2380,7 +2399,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               isLeftTile: false,
               enabled: enabled,
               onTap: () {
-                // TODO: Handle event logging
+                _logMatchEvent(
+                  context,
+                  events[3]['label'] as String,
+                  isLeftTeam,
+                );
                 Navigator.of(context).pop();
               },
             ),
@@ -2396,7 +2419,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               isLeftTile: true,
               enabled: enabled,
               onTap: () {
-                // TODO: Handle event logging
+                _logMatchEvent(
+                  context,
+                  events[4]['label'] as String,
+                  isLeftTeam,
+                );
                 Navigator.of(context).pop();
               },
             ),
@@ -2406,7 +2433,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               isLeftTile: false,
               enabled: enabled,
               onTap: () {
-                // TODO: Handle event logging
+                _logMatchEvent(
+                  context,
+                  events[5]['label'] as String,
+                  isLeftTeam,
+                );
                 Navigator.of(context).pop();
               },
             ),

@@ -53,6 +53,7 @@ class MatchModel {
     this.teamAScore,
     this.teamBScore,
     this.gameweek,
+    this.gameweekNumber,
     this.leagueName,
   });
 
@@ -65,6 +66,7 @@ class MatchModel {
   final int? teamAScore;
   final int? teamBScore;
   final String? gameweek;
+  final int? gameweekNumber;
   final String? leagueName;
 
   factory MatchModel.fromJson(Map<String, dynamic> json) {
@@ -96,6 +98,15 @@ class MatchModel {
     final scoreA = json['team_a_score'] ?? json['teamA_score'] ?? json['teamAScore'];
     final scoreB = json['team_b_score'] ?? json['teamB_score'] ?? json['teamBScore'];
 
+    // Gameweek can be nested: gameweek.week
+    final gameweekRaw = json['gameweek'];
+    final gameweekNumber = gameweekRaw is Map<String, dynamic>
+        ? int.tryParse(gameweekRaw['week']?.toString() ?? '')
+        : int.tryParse(json['week']?.toString() ?? '');
+
+    final gameweekValue =
+        gameweekRaw is Map<String, dynamic> ? null : json['gameweek']?.toString();
+
     // League can be nested: league.league_name or league_name
     final leagueRaw = json['league'];
     final leagueName = leagueRaw is Map<String, dynamic>
@@ -111,7 +122,8 @@ class MatchModel {
       teamB: teamB,
       teamAScore: scoreA is int ? scoreA : int.tryParse(scoreA?.toString() ?? ''),
       teamBScore: scoreB is int ? scoreB : int.tryParse(scoreB?.toString() ?? ''),
-      gameweek: json['gameweek']?.toString(),
+      gameweek: gameweekValue,
+      gameweekNumber: gameweekNumber,
       leagueName: leagueName,
     );
   }

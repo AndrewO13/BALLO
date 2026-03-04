@@ -1,150 +1,311 @@
-# FootyStats App - Clean Architecture Migration Summary
+# FootyStats App – Architectural Structure Diagram
 
-## ✅ Completed Tasks
+This document describes the high-level architecture of the FootyStats Flutter app.
 
-### 1. **Folder Structure Reorganization**
-- ✅ Created clean architecture structure:
-  - `core/` - Shared utilities, constants, theme, widgets
-  - `data/` - Data layer with Supabase integration
-  - `domain/` - Business logic layer (ready for entities, repositories, use cases)
-  - `presentation/` - UI layer with pages, widgets, and providers
+---
 
-### 2. **Home Page Extraction**
-- ✅ Moved home page code from `main.dart` to `presentation/pages/home_page.dart`
-- ✅ Extracted widgets into `presentation/widgets/home/`:
-  - `challenge_widget.dart`
-  - `gameweek_header.dart`
-  - `match_card.dart`
-  - `performance_chart.dart`
-  - `team_chip.dart`
+## Overview
 
-### 3. **Widget Extraction**
-- ✅ Extracted reusable widgets from pages
-- ✅ Created `core/widgets/progress_ring.dart` for shared widgets
-- ✅ Organized widgets by feature (home widgets in `widgets/home/`)
+FootyStats is a Flutter app that uses **Riverpod** for state management and **Supabase** as the backend (auth + PostgreSQL). The architecture follows a layered approach: **Presentation → Domain → Data**.
 
-### 4. **Assets Reorganization**
-- ✅ Reorganized assets into:
-  - `assets/icons/` - All SVG files (including badges, match control icons, stats table icons)
-  - `assets/images/` - All PNG/JPG files (including avatars, team logos, trophies)
-  - `assets/videos/` - Video files
-- ✅ Updated `pubspec.yaml` to use folder-based asset declarations
-- ✅ Created `core/constants/app_assets.dart` with centralized asset path constants
+---
 
-### 5. **Riverpod Integration**
-- ✅ Wrapped app with `ProviderScope` in `main.dart`
-- ✅ Created provider structure:
-  - `presentation/providers/navigation_provider.dart`
-  - `presentation/providers/home_provider.dart`
-- ✅ Ready for additional providers as features are added
+## Layer Diagram (Mermaid)
 
-### 6. **Supabase Setup**
-- ✅ Created `data/datasources/remote/supabase_client.dart`
-- ✅ Added `supabase_flutter` dependency to `pubspec.yaml`
-- ✅ Prepared initialization code in `main.dart` (commented out, ready for credentials)
+```mermaid
+flowchart TB
+    subgraph Presentation["📱 Presentation Layer"]
+        subgraph Pages["Pages"]
+            WelcomePage["WelcomePage"]
+            LoginPage["LoginPage"]
+            SignupPage["SignupPage"]
+            VerifyCodePage["VerifyCodePage"]
+            HomePage["HomePage"]
+            MatchesPage["MatchesPage"]
+            LeaderboardPage["LeaderboardPage"]
+            ExplorePage["ExplorePage"]
+            ProfilePage["ProfilePage"]
+            FixturePage["FixturePage"]
+            LeagueDetailPage["LeagueDetailPage"]
+            LeagueAddTeamsPage["LeagueAddTeamsPage"]
+            LeagueCreateMatchesPage["LeagueCreateMatchesPage"]
+            LeagueApplicationsPage["LeagueApplicationsPage"]
+            CreateTeamOrLeaguePage["CreateTeamOrLeaguePage"]
+            TeamDetailPage["TeamDetailPage"]
+            SettingsPage["SettingsPage"]
+            PlayerNamePage["PlayerNamePage"]
+            UsernamePage["UsernamePage"]
+        end
+        
+        subgraph Widgets["Widgets"]
+            MatchCard["MatchCard"]
+            MatchListItem["MatchListItem"]
+            GameweekHeader["GameweekHeader"]
+            TeamChip["TeamChip"]
+            ChallengeWidget["ChallengeWidget"]
+            PerformanceChart["PerformanceChart"]
+            ProgressRing["ProgressRing"]
+        end
+        
+        subgraph Providers["Providers (Riverpod)"]
+            MatchesProvider["matchesProvider"]
+            LeaguesProvider["leaguesProvider"]
+            TeamsProvider["teamsProvider"]
+            SeasonsProvider["seasonsProvider"]
+            LeagueTeamsProvider["leagueTeamsProvider"]
+            LeagueApplicationsProvider["leagueApplicationsProvider"]
+            HomeProvider["home_provider"]
+            NavigationProvider["navigation_provider"]
+        end
+    end
+    
+    subgraph Domain["📦 Domain Layer"]
+        subgraph Models["Models"]
+            MatchModel["MatchModel"]
+            TeamModel["TeamModel"]
+            LeagueModel["LeagueModel"]
+            LeagueTeamModel["LeagueTeamModel"]
+            LeagueApplicationModel["LeagueApplicationModel"]
+            SeasonModel["SeasonModel"]
+            UserProfile["UserProfile"]
+        end
+    end
+    
+    subgraph Data["🗄️ Data Layer"]
+        subgraph Repositories["Repositories"]
+            MatchesRepository["MatchesRepository"]
+            LeaguesRepository["LeaguesRepository"]
+            TeamsRepository["TeamsRepository"]
+            SeasonsRepository["SeasonsRepository"]
+            LeagueTeamsRepository["LeagueTeamsRepository"]
+            LeagueApplicationsRepository["LeagueApplicationsRepository"]
+            UserProfileRepository["UserProfileRepository"]
+        end
+        
+        subgraph DataSources["Data Sources"]
+            SupabaseClient["Supabase Client"]
+        end
+    end
+    
+    subgraph Core["🔧 Core"]
+        Theme["Theme"]
+        Constants["app_constants, app_assets"]
+        Utils["util.dart"]
+        SharedWidgets["progress_ring, etc."]
+    end
+    
+    subgraph External["☁️ External"]
+        Supabase["Supabase"]
+    end
+    
+    Pages --> Providers
+    Widgets --> Providers
+    Providers --> Repositories
+    Repositories --> Models
+    Repositories --> SupabaseClient
+    SupabaseClient --> Supabase
+    Pages --> Core
+    Widgets --> Core
+```
 
-### 7. **Code Organization**
-- ✅ Moved theme to `core/theme/theme.dart`
-- ✅ Moved utilities to `core/utils/util.dart`
-- ✅ Created constants files:
-  - `core/constants/app_assets.dart`
-  - `core/constants/app_constants.dart`
-- ✅ Updated all imports throughout the codebase
+---
 
-## 📁 New Structure
+## Data Flow Diagram
+
+```mermaid
+flowchart LR
+    subgraph UI["UI"]
+        Page["Page/Widget"]
+        Provider["Riverpod Provider"]
+    end
+    
+    subgraph Data["Data"]
+        Repo["Repository"]
+        Model["Domain Model"]
+    end
+    
+    subgraph Backend["Backend"]
+        SB["Supabase"]
+    end
+    
+    Page -->|watch/read| Provider
+    Provider -->|calls| Repo
+    Repo -->|query/insert| SB
+    Repo -->|returns| Model
+    Provider -->|exposes| Model
+```
+
+---
+
+## App Entry & Auth Flow
+
+```mermaid
+flowchart TD
+    main["main()"]
+    supabaseInit["Supabase.initialize()"]
+    runApp["runApp(ProviderScope)"]
+    authGate["_AuthGate"]
+    session{Session?}
+    HomePage["HomePage (Main Shell)"]
+    WelcomePage["WelcomePage"]
+    
+    main --> supabaseInit
+    supabaseInit --> runApp
+    runApp --> authGate
+    authGate --> session
+    session -->|Yes| HomePage
+    session -->|No| WelcomePage
+    
+    WelcomePage -->|Login/Signup| LoginPage
+    WelcomePage -->|Signup| SignupPage
+    LoginPage -->|OTP| VerifyCodePage
+```
+
+---
+
+## Main Shell (HomePage) Structure
+
+```mermaid
+flowchart TB
+    HomePage["HomePage"]
+    
+    subgraph Tabs["Bottom Navigation Tabs"]
+        Tab0["Home (index 0)"]
+        Tab1["Matches (index 1)"]
+        Tab2["Leaderboard (index 2)"]
+        Tab3["Explore (index 3)"]
+        Tab4["Profile (index 4)"]
+    end
+    
+    HomePage --> Tabs
+    
+    Tab0 --> HomeContent["Gameweek, Progress Rings, Performance Chart, This Week Matches, Team Card, Highlights"]
+    Tab1 --> MatchesPage
+    Tab2 --> LeaderboardPage
+    Tab3 --> ExplorePage
+    Tab4 --> ProfilePage
+    
+    MatchesPage --> CreateTeamOrLeaguePage["CreateTeamOrLeaguePage (FAB)"]
+    ProfilePage --> SettingsPage
+```
+
+---
+
+## Repository ↔ Supabase Mapping
+
+| Repository | Supabase Table(s) |
+|------------|-------------------|
+| `MatchesRepository` | `matches`, `teams`, `leagues`, `gameweeks` |
+| `LeaguesRepository` | `leagues` |
+| `TeamsRepository` | `teams` |
+| `SeaguesRepository` | `seasons` |
+| `LeagueTeamsRepository` | `league_teams` |
+| `LeagueApplicationsRepository` | `league_applications` |
+| `UserProfileRepository` | `players`, `auth.users` |
+
+---
+
+## Provider Dependencies
+
+| Provider | Repository | Purpose |
+|----------|------------|---------|
+| `matchesRepositoryProvider` | MatchesRepository | All matches |
+| `matchesProvider` | MatchesRepository | Match list (with gameweek filter) |
+| `homeThisWeekMatchesProvider` | MatchesRepository | Matches this week |
+| `fixtureMatchProvider` | MatchesRepository | Single match by ID |
+| `matchesGroupedByDateProvider` | matchesProvider | Matches grouped by date |
+| `matchClockProvider` | — | Match stopwatch state |
+| `leaguesProvider` | LeaguesRepository | Leagues list |
+| `teamsProvider` | TeamsRepository | Teams list |
+| `seasonsProvider` | SeasonsRepository | Seasons list |
+| `leagueTeamsProvider` | LeagueTeamsRepository | Teams in a league |
+| `leagueApplicationsProvider` | LeagueApplicationsRepository | League applications |
+
+---
+
+## Folder Structure
 
 ```
-lib/
-├── core/
-│   ├── constants/
-│   │   ├── app_assets.dart
-│   │   └── app_constants.dart
-│   ├── theme/
-│   │   └── theme.dart
-│   ├── utils/
-│   │   └── util.dart
-│   └── widgets/
-│       └── progress_ring.dart
-│
-├── data/
-│   ├── models/ (ready for DTOs)
-│   ├── repositories/ (ready for implementations)
-│   └── datasources/
-│       ├── local/ (ready for local storage)
-│       └── remote/
-│           └── supabase_client.dart ✅
-│
+footystats/lib/
+├── main.dart                 # Entry point, Supabase init, AuthGate
+├── core/                     # Shared infrastructure
+│   ├── constants/            # app_constants.dart, app_assets.dart
+│   ├── theme/                # theme.dart
+│   ├── utils/                # util.dart
+│   └── widgets/              # progress_ring.dart, etc.
 ├── domain/
-│   ├── entities/ (ready for business objects)
-│   ├── repositories/ (ready for interfaces)
-│   └── usecases/ (ready for business logic)
-│
-├── presentation/
-│   ├── pages/
-│   │   ├── home_page.dart ✅
-│   │   ├── matches.dart ✅
-│   │   ├── leaderboard.dart ✅
-│   │   ├── explore.dart ✅
-│   │   ├── profile.dart ✅
-│   │   └── settings.dart ✅
-│   ├── widgets/
-│   │   └── home/
-│   │       ├── challenge_widget.dart ✅
-│   │       ├── gameweek_header.dart ✅
-│   │       ├── match_card.dart ✅
-│   │       ├── performance_chart.dart ✅
-│   │       └── team_chip.dart ✅
-│   └── providers/
-│       ├── navigation_provider.dart ✅
-│       └── home_provider.dart ✅
-│
-└── main.dart ✅
+│   └── models/               # Pure data models
+│       ├── match_model.dart
+│       ├── team_model.dart
+│       ├── league_model.dart
+│       ├── league_team_model.dart
+│       ├── league_application_model.dart
+│       ├── season_model.dart
+│       └── user_profile.dart
+├── data/
+│   ├── datasources/
+│   │   └── remote/
+│   │       └── supabase_client.dart
+│   └── repositories/
+│       ├── matches_repository.dart
+│       ├── leagues_repository.dart
+│       ├── teams_repository.dart
+│       ├── seasons_repository.dart
+│       ├── league_teams_repository.dart
+│       ├── league_applications_repository.dart
+│       └── user_profile_repository.dart
+└── presentation/
+    ├── pages/                # Full screens
+    ├── widgets/              # Reusable UI components
+    │   └── home/             # Home-specific widgets
+    └── providers/            # Riverpod providers
 ```
 
-## 🎯 Next Steps
+---
 
-### Immediate Actions Required:
+## Tech Stack Summary
 
-1. **Initialize Supabase** (when credentials are ready):
-   ```dart
-   // In main.dart, uncomment and add your credentials:
-   await SupabaseClient.initialize(
-     url: 'YOUR_SUPABASE_URL',
-     anonKey: 'YOUR_SUPABASE_ANON_KEY',
-   );
-   ```
+| Concern | Technology |
+|---------|------------|
+| Framework | Flutter |
+| State Management | Riverpod (flutter_riverpod) |
+| Backend / Auth | Supabase |
+| HTTP / DB | Supabase Client (PostgreSQL) |
+| Charts | fl_chart |
+| Fonts | google_fonts |
+| Icons/Images | flutter_svg, image_picker |
 
-2. **Create Domain Layer** (as you build features):
-   - Create entities in `domain/entities/`
-   - Create repository interfaces in `domain/repositories/`
-   - Create use cases in `domain/usecases/`
+---
 
-3. **Implement Data Layer**:
-   - Create models in `data/models/`
-   - Implement repositories in `data/repositories/`
-   - Add Supabase queries in data sources
+## Simplified Block Diagram
 
-4. **Extract More Widgets**:
-   - Continue extracting widgets from pages into `presentation/widgets/`
-   - Group widgets by feature (e.g., `widgets/matches/`, `widgets/profile/`)
-
-5. **Add More Providers**:
-   - Create providers for each feature
-   - Use `FutureProvider` for async data
-   - Use `StateNotifierProvider` for complex state
-
-## 📝 Notes
-
-- All existing functionality is preserved
-- The app should run exactly as before
-- Asset paths are now centralized in `AppAssets` class
-- Ready for Supabase integration when credentials are available
-- Structure follows Clean Architecture and Riverpod best practices
-
-## 🔍 Key Files to Review
-
-- `lib/main.dart` - App entry point with Riverpod setup
-- `lib/presentation/pages/home_page.dart` - Refactored home page
-- `lib/core/constants/app_assets.dart` - All asset paths
-- `lib/data/datasources/remote/supabase_client.dart` - Supabase configuration
-- `lib/presentation/providers/` - State management providers
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         FOOTYSTATS APP                               │
+├─────────────────────────────────────────────────────────────────────┤
+│  PRESENTATION                                                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐  │
+│  │   Pages     │  │   Widgets   │  │  Riverpod Providers         │  │
+│  │ (Screens)   │  │ (Reusable)  │  │  (State Management)         │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────────────┬──────────────┘  │
+│         │                │                        │                  │
+│         └────────────────┴────────────────────────┘                  │
+│                                  │                                   │
+├──────────────────────────────────┼───────────────────────────────────┤
+│  DOMAIN                          │                                   │
+│  ┌───────────────────────────────▼───────────────────────────────┐   │
+│  │  Models: Match, Team, League, Season, UserProfile, etc.        │   │
+│  └───────────────────────────────┬───────────────────────────────┘   │
+├──────────────────────────────────┼───────────────────────────────────┤
+│  DATA                            │                                   │
+│  ┌───────────────────────────────▼───────────────────────────────┐   │
+│  │  Repositories: Matches, Leagues, Teams, Seasons, etc.          │   │
+│  └───────────────────────────────┬───────────────────────────────┘   │
+│                                  │                                   │
+├──────────────────────────────────┼───────────────────────────────────┤
+│  EXTERNAL                        │                                   │
+│  ┌───────────────────────────────▼───────────────────────────────┐   │
+│  │  Supabase (Auth + PostgreSQL)                                 │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+```

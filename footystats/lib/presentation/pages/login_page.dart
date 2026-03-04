@@ -21,6 +21,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
 
   bool _isSubmitting = false;
+  bool _isResetting = false;
 
   @override
   void dispose() {
@@ -62,6 +63,39 @@ class _LoginPageState extends State<LoginPage> {
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _onForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter your email to reset password.')),
+      );
+      return;
+    }
+
+    setState(() => _isResetting = true);
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password reset email sent to $email')),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not send reset email.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isResetting = false);
       }
     }
   }
@@ -190,9 +224,9 @@ class _LoginPageState extends State<LoginPage> {
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: TextButton(
-                                        onPressed: () {
-                                          // TODO: Implement password reset flow.
-                                        },
+                                        onPressed: _isResetting
+                                            ? null
+                                            : _onForgotPassword,
                                         child: const Text('Forgot password?'),
                                       ),
                                     ),

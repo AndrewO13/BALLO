@@ -12,6 +12,7 @@ import '../widgets/home/gameweek_header.dart';
 import '../widgets/home/match_card.dart';
 import '../widgets/home/team_chip.dart';
 import '../widgets/home/performance_chart.dart';
+import '../widgets/matches_search_anchor.dart';
 import 'fixture.dart';
 import 'matches.dart';
 import 'create_team_league_page.dart';
@@ -138,11 +139,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {},
-            tooltip: 'Search',
-          ),
+          const MatchesSearchAnchor(),
         ],
         elevation: 0,
       );
@@ -167,7 +164,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           IconButton(
             icon: const Icon(Icons.group_outlined),
             onPressed: () {
-              // TODO: Implement group functionality
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Group feature coming soon')),
+              );
             },
             tooltip: 'Group',
           ),

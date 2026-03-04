@@ -6,6 +6,28 @@ import 'welcome_page.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
+  void _showComingSoon(BuildContext context, String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label coming soon')),
+    );
+  }
+
+  void _showInfoDialog(BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -27,7 +49,7 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.person_outline,
                 title: 'Edit Profile',
                 onTap: () {
-                  // TODO: Implement edit profile
+                  _showComingSoon(context, 'Edit profile');
                 },
               ),
               _SettingsItem(
@@ -35,14 +57,14 @@ class SettingsPage extends StatelessWidget {
                 title: 'Email',
                 subtitle: 'user@example.com',
                 onTap: () {
-                  // TODO: Implement email settings
+                  _showComingSoon(context, 'Email settings');
                 },
               ),
               _SettingsItem(
                 icon: Icons.lock_outline,
                 title: 'Change Password',
                 onTap: () {
-                  // TODO: Implement change password
+                  _showComingSoon(context, 'Change password');
                 },
               ),
             ],
@@ -55,7 +77,7 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',
                 onTap: () {
-                  // TODO: Implement notifications settings
+                  _showComingSoon(context, 'Notifications');
                 },
               ),
               _SettingsItem(
@@ -63,7 +85,7 @@ class SettingsPage extends StatelessWidget {
                 title: 'Theme',
                 subtitle: 'System',
                 onTap: () {
-                  // TODO: Implement theme settings
+                  _showComingSoon(context, 'Theme settings');
                 },
               ),
               _SettingsItem(
@@ -71,7 +93,7 @@ class SettingsPage extends StatelessWidget {
                 title: 'Language',
                 subtitle: 'English',
                 onTap: () {
-                  // TODO: Implement language settings
+                  _showComingSoon(context, 'Language settings');
                 },
               ),
             ],
@@ -84,28 +106,45 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.info_outline,
                 title: 'About FootyStats',
                 onTap: () {
-                  // TODO: Show about dialog
+                  _showInfoDialog(
+                    context,
+                    'About FootyStats',
+                    'FootyStats helps you track matches, player stats, '
+                        'and league performance.',
+                  );
                 },
               ),
               _SettingsItem(
                 icon: Icons.help_outline,
                 title: 'Help & Support',
                 onTap: () {
-                  // TODO: Show help
+                  _showInfoDialog(
+                    context,
+                    'Help & Support',
+                    'Reach out to support@footystats.app for assistance.',
+                  );
                 },
               ),
               _SettingsItem(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 onTap: () {
-                  // TODO: Show privacy policy
+                  _showInfoDialog(
+                    context,
+                    'Privacy Policy',
+                    'Your data is handled securely. Full policy coming soon.',
+                  );
                 },
               ),
               _SettingsItem(
                 icon: Icons.description_outlined,
                 title: 'Terms of Service',
                 onTap: () {
-                  // TODO: Show terms
+                  _showInfoDialog(
+                    context,
+                    'Terms of Service',
+                    'Please use the app responsibly. Full terms coming soon.',
+                  );
                 },
               ),
             ],
@@ -119,7 +158,6 @@ class SettingsPage extends StatelessWidget {
                 title: 'Sign Out',
                 titleColor: Theme.of(context).colorScheme.error,
                 onTap: () {
-                  // TODO: Implement sign out
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(

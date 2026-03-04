@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import '../../core/constants/app_assets.dart';
-// TODO: Uncomment when adding video support
-// import 'package:video_player/video_player.dart';
-// import 'package:visibility_detector/visibility_detector.dart';
+import 'league_detail_page.dart';
+import 'team_detail_page.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -25,16 +30,8 @@ class _ExploreTabContent extends StatelessWidget {
     final matches = List.generate(
       3,
       (index) => {
-        'team1': {
-          'name': 'SHI',
-          'logo': AppAssets.theShieldLogo,
-          'score': 2,
-        },
-        'team2': {
-          'name': 'LAF',
-          'logo': AppAssets.laFamilleLogo,
-          'score': 0,
-        },
+        'team1': {'name': 'SHI', 'logo': AppAssets.theShieldLogo, 'score': 2},
+        'team2': {'name': 'LAF', 'logo': AppAssets.laFamilleLogo, 'score': 0},
         'league': 'The Budo League',
         'status': 'Final',
         'result': 'The Shield wins!',
@@ -214,6 +211,12 @@ class _VideoPlayerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (videoUrl != null && videoUrl!.isNotEmpty) {
+      return _VideoPlayerWidget(
+        videoUrl: videoUrl!,
+        thumbnailUrl: thumbnailUrl,
+      );
+    }
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
       height: MediaQuery.of(context).size.height * 0.5,
@@ -255,15 +258,6 @@ class _VideoPlayerSection extends StatelessWidget {
                 ),
               ),
             ),
-            // TODO: When videoUrl is available, replace this with actual video player
-            // Example implementation:
-            // if (videoUrl != null)
-            //   _VideoPlayerWidget(
-            //     videoUrl: videoUrl!,
-            //     thumbnailUrl: thumbnailUrl,
-            //   )
-            // else
-            //   [current placeholder implementation]
           ],
         ),
       ),
@@ -368,7 +362,11 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
           // Share button
           IconButton(
             onPressed: () {
-              // TODO: Implement share functionality
+              const shareUrl = 'https://footystats.app';
+              Clipboard.setData(const ClipboardData(text: shareUrl));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Share link copied')),
+              );
             },
             icon: Icon(
               Icons.share_outlined,
@@ -381,17 +379,12 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
   }
 }
 
-// TODO: Uncomment and implement when backend provides video URLs
-// This widget will handle video playback with optimizations
-/*
+// Video widget for playback when video URL is available.
 class _VideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
   final String? thumbnailUrl;
 
-  const _VideoPlayerWidget({
-    required this.videoUrl,
-    this.thumbnailUrl,
-  });
+  const _VideoPlayerWidget({required this.videoUrl, this.thumbnailUrl});
 
   @override
   State<_VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
@@ -412,11 +405,11 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   Future<void> _initializeVideo() async {
     // Use network URL from backend
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    
+
     // OPTIMIZATION: Preload video for faster playback
     await _controller!.initialize();
     _controller!.setLooping(true);
-    
+
     if (mounted) {
       setState(() {
         _isInitialized = true;
@@ -473,13 +466,8 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
           else
             // Show thumbnail while loading
             widget.thumbnailUrl != null
-                ? Image.network(
-                    widget.thumbnailUrl!,
-                    fit: BoxFit.cover,
-                  )
-                : const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                ? Image.network(widget.thumbnailUrl!, fit: BoxFit.cover)
+                : const Center(child: CircularProgressIndicator()),
           // Play/Pause overlay
           if (_isInitialized)
             Center(
@@ -511,7 +499,6 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     );
   }
 }
-*/
 
 class ExploreSearchBar extends StatefulWidget {
   const ExploreSearchBar({super.key});
@@ -521,12 +508,143 @@ class ExploreSearchBar extends StatefulWidget {
 }
 
 class _ExploreSearchBarState extends State<ExploreSearchBar> {
+  final Map<String, List<_SearchItem>> _cache = {};
+  final List<_SearchItem> _suggestions = [];
+  Timer? _debounce;
+  bool _isLoading = false;
+  String _lastQuery = '';
+  String? _errorMessage;
+  SearchController? _controller;
+  int _requestId = 0;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller?.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    final controller = _controller;
+    if (controller == null) return;
+    _onQueryChanged(controller.text);
+  }
+
+  void _attachController(SearchController controller) {
+    if (_controller == controller) return;
+    _controller?.removeListener(_handleControllerChanged);
+    _controller = controller;
+    _controller?.addListener(_handleControllerChanged);
+  }
+
+  void _onQueryChanged(String query) {
+    final trimmed = query.trim();
+    _lastQuery = trimmed;
+    _debounce?.cancel();
+
+    if (trimmed.isEmpty) {
+      setState(() {
+        _suggestions.clear();
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      _controller?.openView();
+      return;
+    }
+
+    if (trimmed.length < 2) {
+      setState(() {
+        _suggestions.clear();
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      return;
+    }
+
+    if (_cache.containsKey(trimmed)) {
+      setState(() {
+        _suggestions
+          ..clear()
+          ..addAll(_cache[trimmed]!);
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      _controller?.openView();
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      _fetchSuggestions(trimmed);
+    });
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    final requestId = ++_requestId;
+    setState(() => _isLoading = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final leaguesRes = await supabase
+          .from('leagues')
+          .select('id, league_name, logo_id')
+          .ilike('league_name', '%$query%')
+          .limit(10);
+      final teamsRes = await supabase
+          .from('teams')
+          .select('id, team_name, logo_id')
+          .ilike('team_name', '%$query%')
+          .limit(10);
+
+      final leagues = (leaguesRes as List)
+          .map(
+            (e) => _SearchItem(
+              id: (e['id'] ?? '').toString(),
+              label: (e['league_name'] ?? '').toString(),
+              type: 'League',
+              logoPath: _resolveLogoPath(e['logo_id']?.toString()),
+            ),
+          )
+          .where((item) => item.label.isNotEmpty)
+          .toList();
+      final teams = (teamsRes as List)
+          .map(
+            (e) => _SearchItem(
+              id: (e['id'] ?? '').toString(),
+              label: (e['team_name'] ?? '').toString(),
+              type: 'Team',
+              logoPath: _resolveLogoPath(e['logo_id']?.toString()),
+            ),
+          )
+          .where((item) => item.label.isNotEmpty)
+          .toList();
+
+      final combined = [...leagues, ...teams];
+      _cache[query] = combined;
+      if (!mounted || _lastQuery != query || requestId != _requestId) return;
+      setState(() {
+        _suggestions
+          ..clear()
+          ..addAll(combined);
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      _controller?.openView();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Search failed. Please try again.';
+      });
+      _controller?.openView();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: SearchAnchor(
         builder: (BuildContext context, SearchController controller) {
+          _attachController(controller);
           return SearchBar(
             controller: controller,
             padding: const WidgetStatePropertyAll<EdgeInsets>(
@@ -534,9 +652,13 @@ class _ExploreSearchBarState extends State<ExploreSearchBar> {
             ),
             onTap: () {
               controller.openView();
+              if (controller.text.isNotEmpty) {
+                _onQueryChanged(controller.text);
+              }
             },
             onChanged: (_) {
               controller.openView();
+              _onQueryChanged(controller.text);
             },
             leading: const Icon(Icons.search),
             hintText: 'Search...',
@@ -547,20 +669,115 @@ class _ExploreSearchBarState extends State<ExploreSearchBar> {
         },
         suggestionsBuilder:
             (BuildContext context, SearchController controller) {
-              // TODO: Replace with actual search suggestions
-              return List<ListTile>.generate(5, (int index) {
-                final String item = 'item $index';
+              if (_isLoading) {
+                return [
+                  const ListTile(
+                    leading: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    title: Text('Searching...'),
+                  ),
+                ];
+              }
+              if (_errorMessage != null) {
+                return [ListTile(title: Text(_errorMessage!))];
+              }
+              if (_suggestions.isEmpty) {
+                return [const ListTile(title: Text('No results'))];
+              }
+              return _suggestions.map((item) {
                 return ListTile(
-                  title: Text(item),
+                  leading: _SearchLogo(
+                    logoPath: item.logoPath,
+                    fallbackIcon: item.type == 'League'
+                        ? Icons.emoji_events
+                        : Icons.groups,
+                  ),
+                  title: Text(item.label),
+                  subtitle: Text(item.type),
                   onTap: () {
-                    setState(() {
-                      controller.closeView(item);
-                    });
+                    controller.closeView(item.label);
+                    if (item.type == 'League') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => LeagueDetailPage(leagueId: item.id),
+                        ),
+                      );
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TeamDetailPage(teamId: item.id),
+                        ),
+                      );
+                    }
                   },
                 );
-              });
+              }).toList();
             },
       ),
+    );
+  }
+}
+
+class _SearchItem {
+  const _SearchItem({
+    required this.id,
+    required this.label,
+    required this.type,
+    this.logoPath,
+  });
+
+  final String id;
+  final String label;
+  final String type;
+  final String? logoPath;
+}
+
+String? _resolveLogoPath(String? logoId) {
+  final id = logoId?.trim();
+  if (id == null || id.isEmpty) return null;
+  if (id.startsWith('http://') || id.startsWith('https://')) return id;
+  if (id.startsWith('lib/assets/') || id.startsWith('assets/')) return id;
+  // If a filename or key is provided, assume it sits under team logos
+  final name = id.contains('.') ? id : '$id.png';
+  return '${AppAssets.teamLogosPath}$name';
+}
+
+class _SearchLogo extends StatelessWidget {
+  const _SearchLogo({this.logoPath, required this.fallbackIcon});
+
+  final String? logoPath;
+  final IconData fallbackIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = logoPath;
+    if (path == null || path.isEmpty) {
+      return CircleAvatar(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+        child: Icon(
+          fallbackIcon,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    final image = isNetwork
+        ? Image.network(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          )
+        : Image.asset(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          );
+    return CircleAvatar(
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+      child: ClipOval(child: SizedBox(width: 36, height: 36, child: image)),
     );
   }
 }

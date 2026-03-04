@@ -1,22 +1,34 @@
-import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:collection';
 
-class LeagueDetailPage extends StatefulWidget {
-  const LeagueDetailPage({
-    super.key,
-    required this.leagueId,
-  });
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../data/repositories/league_applications_repository.dart';
+import '../../domain/models/season_model.dart';
+import '../../data/repositories/teams_repository.dart';
+import '../../domain/models/team_model.dart';
+import 'create_team_league_page.dart';
+import '../providers/league_teams_provider.dart';
+import '../providers/seasons_provider.dart';
+import 'league_applications_page.dart';
+import 'league_create_matches_page.dart';
+import 'league_rejected_applications_page.dart';
+import 'team_detail_page.dart';
+
+class LeagueDetailPage extends ConsumerStatefulWidget {
+  const LeagueDetailPage({super.key, required this.leagueId});
 
   final String leagueId;
 
   @override
-  State<LeagueDetailPage> createState() => _LeagueDetailPageState();
+  ConsumerState<LeagueDetailPage> createState() => _LeagueDetailPageState();
 }
 
-class _LeagueDetailPageState extends State<LeagueDetailPage> {
+class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
   Map<String, dynamic>? _league;
   bool _isLoading = true;
   bool _isDeleting = false;
+  bool _hasJoined = false;
 
   @override
   void initState() {
@@ -38,20 +50,195 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
           _league = response;
           _isLoading = false;
         });
+        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+        final createdBy = response['created_by']?.toString();
+        if (currentUserId != null && createdBy != currentUserId) {
+          await _refreshJoinState();
+        }
       } else if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('League not found')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('League not found')));
         Navigator.of(context).pop();
       }
     } catch (error) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error loading league: $error')));
+    }
+  }
+
+  List<PopupMenuItem<String>> _buildSeasonMenuItems(
+    ColorScheme colorScheme,
+  ) {
+    final seasonsAsync =
+        ref.watch(allSeasonsForLeagueProvider(widget.leagueId));
+    return seasonsAsync.when(
+      data: (seasons) {
+        final ongoing =
+            seasons.where((s) => s.status == 'ongoing').firstOrNull;
+        final upcoming =
+            seasons.where((s) => s.status == 'upcoming').firstOrNull;
+        if (ongoing != null) {
+          return [
+            PopupMenuItem<String>(
+              value: 'end_season',
+              child: Row(
+                children: [
+                  Icon(Icons.stop_circle, color: colorScheme.error),
+                  const SizedBox(width: 16),
+                  const Text('End season'),
+                ],
+              ),
+            ),
+          ];
+        }
+        if (upcoming != null) {
+          return [
+            PopupMenuItem<String>(
+              value: 'start_season',
+              child: const Row(
+                children: [
+                  Icon(Icons.play_circle),
+                  SizedBox(width: 16),
+                  Text('Start season'),
+                ],
+              ),
+            ),
+          ];
+        }
+        return [];
+      },
+      loading: () => [],
+      error: (_, __) => [],
+    );
+  }
+
+  Future<void> _handleStartSeason() async {
+    final seasonsAsync =
+        ref.read(allSeasonsForLeagueProvider(widget.leagueId));
+    final seasons = seasonsAsync.value ?? [];
+    final upcoming =
+        seasons.where((s) => s.status == 'upcoming').firstOrNull;
+    if (upcoming == null) return;
+    try {
+      await ref.read(seasonsRepositoryProvider).startSeason(upcoming.id);
+      if (!mounted) return;
+      ref.invalidate(allSeasonsForLeagueProvider(widget.leagueId));
+      ref.invalidate(ongoingOrUpcomingSeasonProvider(widget.leagueId));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading league: $error')),
+        const SnackBar(content: Text('Season started')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
       );
     }
+  }
+
+  Future<void> _handleEndSeason() async {
+    final seasonsAsync =
+        ref.read(allSeasonsForLeagueProvider(widget.leagueId));
+    final seasons = seasonsAsync.value ?? [];
+    final ongoing =
+        seasons.where((s) => s.status == 'ongoing').firstOrNull;
+    if (ongoing == null) return;
+    try {
+      await ref.read(seasonsRepositoryProvider).endSeason(ongoing.id);
+      if (!mounted) return;
+      ref.invalidate(allSeasonsForLeagueProvider(widget.leagueId));
+      ref.invalidate(ongoingOrUpcomingSeasonProvider(widget.leagueId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Season ended')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _refreshJoinState() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+      final res = await supabase
+          .from('league_team_join_requests')
+          .select('id')
+          .eq('league_id', widget.leagueId)
+          .eq('requested_by', userId)
+          .inFilter('status', ['pending', 'accepted'])
+          .limit(1);
+      if (!mounted) return;
+      setState(() {
+        _hasJoined = (res as List).isNotEmpty;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _hasJoined = false);
+    }
+  }
+
+  Future<void> _handleJoinLeague() async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to join a league')),
+      );
+      return;
+    }
+    final teamsRepo = TeamsRepository();
+    final leagueAppsRepo = LeagueApplicationsRepository();
+    List<TeamModel> teams;
+    try {
+      teams = await teamsRepo.getTeamsByCreator(currentUser.id);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error loading teams: $error')));
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => _JoinLeagueTeamPicker(
+        teams: teams,
+        onTeamSelected: (team) async {
+          Navigator.of(ctx).pop();
+          try {
+            await leagueAppsRepo.applyToLeague(
+              leagueId: widget.leagueId,
+              teamId: team.id,
+              createdBy: currentUser.id,
+            );
+            if (!mounted) return;
+            setState(() => _hasJoined = true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Your application has been sent')),
+            );
+          } catch (error) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Error applying: $error')));
+          }
+        },
+        onCreateTeam: () {
+          Navigator.of(ctx).pop();
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const CreateTeamPage()));
+        },
+      ),
+    );
   }
 
   Future<void> _deleteLeague() async {
@@ -83,16 +270,16 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
       await supabase.from('leagues').delete().eq('id', widget.leagueId);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('League deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('League deleted')));
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (error) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting league: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error deleting league: $error')));
     }
   }
 
@@ -103,50 +290,48 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'League Details',
-            style: textTheme.headlineMedium,
-          ),
-          centerTitle: false,
-        ),
+        appBar: AppBar(title: const SizedBox.shrink(), centerTitle: false),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_league == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'League Details',
-            style: textTheme.headlineMedium,
-          ),
-          centerTitle: false,
-        ),
+        appBar: AppBar(title: const SizedBox.shrink(), centerTitle: false),
         body: const Center(child: Text('League not found')),
       );
     }
 
     final leagueName = _league!['league_name'] as String? ?? 'Unknown';
     final logoUrl = _league!['logo_id'] as String?;
+    final createdBy = _league!['created_by']?.toString();
     final createdAt = _league!['created_at'];
     final createdAtDt = createdAt is DateTime
         ? createdAt
         : (createdAt is String ? DateTime.tryParse(createdAt) : null);
     final estYear = createdAtDt?.year ?? DateTime.now().year;
-    final seasonOngoing =
-        (_league?['season_started'] as bool?) ?? false; // heuristic / TODO
-    final seasonActionLabel = seasonOngoing ? 'End season' : 'Start season';
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isOwner = createdBy != null && createdBy == currentUserId;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          leagueName,
-          style: textTheme.headlineMedium,
-        ),
+        title: const SizedBox.shrink(),
         centerTitle: false,
         actions: [
-          if (_isDeleting)
+          if (!isOwner)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: _hasJoined
+                  ? FilledButton(
+                      onPressed: null,
+                      child: const Icon(Icons.check),
+                    )
+                  : FilledButton(
+                      onPressed: _handleJoinLeague,
+                      child: const Text('Join league'),
+                    ),
+            )
+          else if (_isDeleting)
             const Padding(
               padding: EdgeInsets.all(16.0),
               child: SizedBox(
@@ -162,19 +347,26 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
               onSelected: (value) {
                 switch (value) {
                   case 'create_match':
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Create matches between league teams (coming soon)',
-                        ),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            LeagueCreateMatchesPage(leagueId: widget.leagueId),
                       ),
                     );
                     break;
                   case 'manage_applications':
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Manage team applications (coming soon)',
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            LeagueApplicationsPage(leagueId: widget.leagueId),
+                      ),
+                    );
+                    break;
+                  case 'rejected_applications':
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => LeagueRejectedApplicationsPage(
+                          leagueId: widget.leagueId,
                         ),
                       ),
                     );
@@ -188,16 +380,11 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
                       ),
                     );
                     break;
-                  case 'toggle_season':
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          seasonOngoing
-                              ? 'Ending season (not yet implemented)'
-                              : 'Starting season (not yet implemented)',
-                        ),
-                      ),
-                    );
+                  case 'start_season':
+                    _handleStartSeason();
+                    break;
+                  case 'end_season':
+                    _handleEndSeason();
                     break;
                   case 'delete':
                     _deleteLeague();
@@ -207,27 +394,56 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
               itemBuilder: (context) => [
                 const PopupMenuItem<String>(
                   value: 'create_match',
-                  child: Text('Create matches'),
+                  child: Row(
+                    children: [
+                      Icon(Icons.sports_soccer),
+                      SizedBox(width: 16),
+                      Text('Create matches'),
+                    ],
+                  ),
                 ),
                 const PopupMenuItem<String>(
                   value: 'manage_applications',
-                  child: Text('Manage applications'),
+                  child: Row(
+                    children: [
+                      Icon(Icons.pending_actions),
+                      SizedBox(width: 16),
+                      Text('Manage applications'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'rejected_applications',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cancel),
+                      SizedBox(width: 16),
+                      Text('Rejected applications'),
+                    ],
+                  ),
                 ),
                 const PopupMenuItem<String>(
                   value: 'add_teams',
-                  child: Text('Add teams to league'),
+                  child: Row(
+                    children: [
+                      Icon(Icons.group_add),
+                      SizedBox(width: 16),
+                      Text('Add teams to league'),
+                    ],
+                  ),
                 ),
-                PopupMenuItem<String>(
-                  value: 'toggle_season',
-                  child: Text(seasonActionLabel),
-                ),
+                ..._buildSeasonMenuItems(colorScheme),
                 PopupMenuItem<String>(
                   value: 'delete',
-                  child: Text(
-                    'Delete league',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, color: colorScheme.error),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Delete league',
+                        style: TextStyle(color: colorScheme.error),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -235,7 +451,7 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
         ],
       ),
       body: DefaultTabController(
-        length: 7,
+        length: 8,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -277,8 +493,7 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
                                     width: 96,
                                     height: 96,
                                     fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) {
+                                    errorBuilder: (context, error, stackTrace) {
                                       return Icon(
                                         Icons.emoji_events,
                                         size: 44,
@@ -337,6 +552,7 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
                         Tab(text: 'Team stats'),
                         Tab(text: 'Player stats'),
                         Tab(text: 'Teams'),
+                        Tab(text: 'Seasons'),
                         Tab(text: 'Videos'),
                       ],
                     ),
@@ -346,14 +562,15 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
             ),
             Expanded(
               child: TabBarView(
-                children: const [
-                  _LeagueTabPlaceholder(title: 'Overview'),
-                  _LeagueTabPlaceholder(title: 'Matches'),
-                  _LeagueTabPlaceholder(title: 'Standings'),
-                  _LeagueTabPlaceholder(title: 'Team stats'),
-                  _LeagueTabPlaceholder(title: 'Player stats'),
-                  _LeagueTabPlaceholder(title: 'Teams'),
-                  _LeagueTabPlaceholder(title: 'Videos'),
+                children: [
+                  const _LeagueTabPlaceholder(title: 'Overview'),
+                  const _LeagueTabPlaceholder(title: 'Matches'),
+                  const _LeagueTabPlaceholder(title: 'Standings'),
+                  const _LeagueTabPlaceholder(title: 'Team stats'),
+                  const _LeagueTabPlaceholder(title: 'Player stats'),
+                  _LeagueTeamsTab(leagueId: widget.leagueId),
+                  _LeagueSeasonsTab(leagueId: widget.leagueId),
+                  const _LeagueTabPlaceholder(title: 'Videos'),
                 ],
               ),
             ),
@@ -363,6 +580,657 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
     );
   }
 }
+
+class _JoinLeagueTeamPicker extends StatelessWidget {
+  const _JoinLeagueTeamPicker({
+    required this.teams,
+    required this.onTeamSelected,
+    required this.onCreateTeam,
+  });
+
+  final List<TeamModel> teams;
+  final ValueChanged<TeamModel> onTeamSelected;
+  final VoidCallback onCreateTeam;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Select a team to apply', style: textTheme.titleMedium),
+          const SizedBox(height: 16),
+          if (teams.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24.0),
+              child: Column(
+                children: [
+                  Text(
+                    'You have no teams yet. Create one to apply to this league.',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => onCreateTeam(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create team'),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...teams.map(
+              (team) =>
+                  _TeamListItem(team: team, onTap: () => onTeamSelected(team)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamListItem extends StatelessWidget {
+  const _TeamListItem({required this.team, required this.onTap});
+
+  final TeamModel team;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final path = team.logoPath;
+    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
+
+    return ListTile(
+      leading: SizedBox(
+        width: 48,
+        height: 48,
+        child: ClipOval(
+          child: isNetwork
+              ? Image.network(
+                  path,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(Icons.groups, color: colorScheme.onSurfaceVariant),
+                )
+              : Image.asset(
+                  path,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(Icons.groups, color: colorScheme.onSurfaceVariant),
+                ),
+        ),
+      ),
+      title: Text(team.displayName),
+      onTap: onTap,
+    );
+  }
+}
+
+class _LeagueTeamsTab extends ConsumerWidget {
+  const _LeagueTeamsTab({required this.leagueId});
+
+  final String leagueId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final asyncTeams = ref.watch(teamsInLeagueProvider(leagueId));
+
+    return asyncTeams.when(
+      data: (teams) {
+        if (teams.isEmpty) {
+          return Center(
+            child: Text(
+              'No teams in this league yet',
+              style: textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: teams.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final team = teams[index];
+            final path = team.logoPath;
+            final isNetwork =
+                path.startsWith('http://') || path.startsWith('https://');
+            return Material(
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(28),
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TeamDetailPage(teamId: team.id),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(28),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: ClipOval(
+                          child: isNetwork
+                              ? Image.network(
+                                  path,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(
+                                    Icons.groups,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                )
+                              : Image.asset(
+                                  path,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(
+                                    Icons.groups,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          team.displayName,
+                          style: textTheme.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(child: Text('Error: $err')),
+    );
+  }
+}
+
+class _LeagueSeasonsTab extends ConsumerStatefulWidget {
+  const _LeagueSeasonsTab({required this.leagueId});
+
+  final String leagueId;
+
+  @override
+  ConsumerState<_LeagueSeasonsTab> createState() => _LeagueSeasonsTabState();
+}
+
+class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
+  Future<void> _showCreateSeasonDialog() async {
+    final nameController = TextEditingController();
+    DateTime? startDate;
+    DateTime? endDate;
+
+    final result = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Create season'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Season name',
+                        hintText: 'e.g. Season 2024',
+                        border: OutlineInputBorder(),
+                      ),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final d = await showDatePicker(
+                          context: ctx,
+                          initialDate: startDate ?? now,
+                          firstDate: now.subtract(const Duration(days: 365)),
+                          lastDate: now.add(const Duration(days: 730)),
+                        );
+                        if (d != null) {
+                          setDialogState(() => startDate = d);
+                        }
+                      },
+                      child: Text(
+                        startDate == null
+                            ? 'Start date'
+                            : '${startDate!.day}/${startDate!.month}/${startDate!.year}',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final d = await showDatePicker(
+                          context: ctx,
+                          initialDate: endDate ?? startDate ?? now,
+                          firstDate: startDate ?? now,
+                          lastDate: (startDate ?? now).add(
+                            const Duration(days: 730),
+                          ),
+                        );
+                        if (d != null) {
+                          setDialogState(() => endDate = d);
+                        }
+                      },
+                      child: Text(
+                        endDate == null
+                            ? 'End date'
+                            : '${endDate!.day}/${endDate!.month}/${endDate!.year}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final name = nameController.text.trim();
+                    if (name.isEmpty ||
+                        startDate == null ||
+                        endDate == null ||
+                        endDate!.isBefore(startDate!)) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Text('Enter a name and valid date range'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(ctx).pop({
+                      'name': name,
+                      'startDate': startDate,
+                      'endDate': endDate,
+                    });
+                  },
+                  child: const Text('Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    final name = result['name'] as String? ?? '';
+    final sd = result['startDate'] as DateTime?;
+    final ed = result['endDate'] as DateTime?;
+    if (name.isEmpty || sd == null || ed == null) return;
+    if (ed.isBefore(sd)) return;
+
+    try {
+      final repo = ref.read(seasonsRepositoryProvider);
+      await repo.createSeason(
+        leagueId: widget.leagueId,
+        seasonName: name,
+        startDate: sd,
+        endDate: ed,
+      );
+      if (!mounted) return;
+      ref.invalidate(allSeasonsForLeagueProvider(widget.leagueId));
+      ref.invalidate(ongoingOrUpcomingSeasonProvider(widget.leagueId));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Season created')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating season: $error')));
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  void _showSeasonBottomSheet(BuildContext context, SeasonModel season) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isOngoing = season.status == 'ongoing';
+    final isUpcoming = season.status == 'upcoming';
+    final dateRange =
+        '${_formatDate(season.startDate)} – ${_formatDate(season.endDate)}';
+
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              season.seasonName,
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              dateRange,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isOngoing
+                    ? colorScheme.tertiaryContainer
+                    : isUpcoming
+                        ? colorScheme.primaryContainer.withOpacity(0.5)
+                        : colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                season.status == 'ongoing'
+                    ? 'Ongoing'
+                    : season.status == 'upcoming'
+                        ? 'Upcoming'
+                        : 'Ended',
+                style: textTheme.labelMedium?.copyWith(
+                  color: isOngoing
+                      ? colorScheme.onTertiaryContainer
+                      : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (isUpcoming) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  try {
+                    await ref.read(seasonsRepositoryProvider).startSeason(season.id);
+                    if (!mounted) return;
+                    ref.invalidate(allSeasonsForLeagueProvider(widget.leagueId));
+                    ref.invalidate(ongoingOrUpcomingSeasonProvider(widget.leagueId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Season started')),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start season'),
+              ),
+            ] else if (isOngoing) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  try {
+                    await ref.read(seasonsRepositoryProvider).endSeason(season.id);
+                    if (!mounted) return;
+                    ref.invalidate(allSeasonsForLeagueProvider(widget.leagueId));
+                    ref.invalidate(ongoingOrUpcomingSeasonProvider(widget.leagueId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Season ended')),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.stop),
+                label: const Text('End season'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colorScheme.error,
+                  foregroundColor: colorScheme.onError,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final asyncSeasons = ref.watch(
+      allSeasonsForLeagueProvider(widget.leagueId),
+    );
+
+    return asyncSeasons.when(
+      data: (seasons) {
+        final hasUpcoming =
+            seasons.any((s) => s.status == 'upcoming');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: hasUpcoming ? null : _showCreateSeasonDialog,
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('Create season'),
+                  ),
+                  if (hasUpcoming) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'There is already an upcoming season. End it before creating a new one.',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Expanded(
+              child: seasons.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_month_outlined,
+                              size: 48,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No seasons yet',
+                              style: textTheme.titleMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Create a season to organize matches.',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: seasons.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final season = seasons[index];
+                        final isOngoing = season.status == 'ongoing';
+                        final isEnded = season.status == 'ended';
+                        final dateRange =
+                            '${_formatDate(season.startDate)} – ${_formatDate(season.endDate)}';
+
+                        return Material(
+                          color: colorScheme.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(16),
+                          elevation: 0,
+                          child: InkWell(
+                            onTap: () =>
+                                _showSeasonBottomSheet(context, season),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: isOngoing
+                                        ? colorScheme.tertiary
+                                        : isEnded
+                                        ? colorScheme.outlineVariant
+                                        : colorScheme.primary.withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        season.seasonName,
+                                        style: textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        dateRange,
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isOngoing)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.tertiaryContainer,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      'Ongoing',
+                                      style: textTheme.labelMedium?.copyWith(
+                                        color: colorScheme.onTertiaryContainer,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  )
+                                else if (isEnded)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      'Ended',
+                                      style: textTheme.labelMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primaryContainer
+                                          .withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      'Upcoming',
+                                      style: textTheme.labelMedium?.copyWith(
+                                        color: colorScheme.onPrimaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(child: Text('Error: $err')),
+    );
+  }
+}
+
 class _LeagueTabPlaceholder extends StatelessWidget {
   const _LeagueTabPlaceholder({required this.title});
 

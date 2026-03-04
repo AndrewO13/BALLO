@@ -5,8 +5,6 @@ import 'core/utils/util.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/welcome_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// TODO: Initialize Supabase when credentials are available
-// import 'data/datasources/remote/supabase_client.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
