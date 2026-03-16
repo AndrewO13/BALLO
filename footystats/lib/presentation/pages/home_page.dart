@@ -840,6 +840,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         setState(() {
           _selectedIndex = index;
         });
+        if (index == 1) {
+          ref.invalidate(matchesProvider);
+        }
       },
       destinations: navDestinations,
     );

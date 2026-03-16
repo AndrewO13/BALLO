@@ -46,6 +46,8 @@ dependencies:
   riverpod: ^3.2.0
   image_picker: ^1.0.7
   path: ^1.9.0
+  beep_sound: ^0.0.3
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -123,6 +125,8 @@ flutter:
     - lib/assets/images/pitch bg.png
     # Videos
     - lib/assets/videos/
+    # Sounds (add referee_whistle.mp3 for stoppage-time whistle)
+    - lib/assets/sounds/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

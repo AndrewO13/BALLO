@@ -10,8 +10,7 @@ class CreateTeamOrLeaguePage extends StatefulWidget {
   const CreateTeamOrLeaguePage({super.key});
 
   @override
-  State<CreateTeamOrLeaguePage> createState() =>
-      _CreateTeamOrLeaguePageState();
+  State<CreateTeamOrLeaguePage> createState() => _CreateTeamOrLeaguePageState();
 }
 
 class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
@@ -150,31 +149,35 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
                           padding: const EdgeInsets.all(16.0),
                           child: Text(
                             'No leagues created yet',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                             textAlign: TextAlign.center,
                           ),
                         )
                       else
-                        ..._leagues.map((league) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: _ItemCard(
-                                name: league['league_name'] as String? ?? 'Unknown',
-                                logoUrl: league['logo_id'] as String?,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => LeagueDetailPage(
-                                        leagueId: league['id'] as String,
-                                      ),
+                        ..._leagues.map(
+                          (league) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12.0),
+                            child: _ItemCard(
+                              name:
+                                  league['league_name'] as String? ?? 'Unknown',
+                              logoUrl: league['logo_id'] as String?,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => LeagueDetailPage(
+                                      leagueId: league['id'] as String,
                                     ),
-                                  );
-                                },
-                              ),
-                            )),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 32),
                       // Section 3: Teams
                       Text(
@@ -187,31 +190,34 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
                           padding: const EdgeInsets.all(16.0),
                           child: Text(
                             'No teams created yet',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                             textAlign: TextAlign.center,
                           ),
                         )
                       else
-                        ..._teams.map((team) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: _ItemCard(
-                                name: team['team_name'] as String? ?? 'Unknown',
-                                logoUrl: team['logo_id'] as String?,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => TeamDetailPage(
-                                        teamId: team['id'] as String,
-                                      ),
+                        ..._teams.map(
+                          (team) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12.0),
+                            child: _ItemCard(
+                              name: team['team_name'] as String? ?? 'Unknown',
+                              logoUrl: team['logo_id'] as String?,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => TeamDetailPage(
+                                      teamId: team['id'] as String,
                                     ),
-                                  );
-                                },
-                              ),
-                            )),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -262,16 +268,13 @@ class _ChoiceCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text(title, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -285,11 +288,7 @@ class _ChoiceCard extends StatelessWidget {
 }
 
 class _ItemCard extends StatelessWidget {
-  const _ItemCard({
-    required this.name,
-    this.logoUrl,
-    required this.onTap,
-  });
+  const _ItemCard({required this.name, this.logoUrl, required this.onTap});
 
   final String name;
   final String? logoUrl;
@@ -301,9 +300,7 @@ class _ItemCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.hardEdge,
       color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: InkWell(
         splashColor: colorScheme.primary.withAlpha(30),
         onTap: onTap,
@@ -342,10 +339,7 @@ class _ItemCard extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  name,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
+                child: Text(name, style: Theme.of(context).textTheme.bodyLarge),
               ),
               const Icon(Icons.chevron_right),
             ],
@@ -392,14 +386,17 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
       if (user == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You must be signed in to upload images')),
+          const SnackBar(
+            content: Text('You must be signed in to upload images'),
+          ),
         );
         setState(() => _isUploading = false);
         return;
       }
 
       // Generate unique filename
-      final fileName = '${user.id}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
+      final fileName =
+          '${user.id}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
       final filePath = '${widget.folderName}/$fileName';
 
       // Read file bytes
@@ -424,17 +421,18 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isUploading = false);
-      
+
       String errorMessage = 'Error uploading image';
-      if (error.toString().contains('row-level security') || 
+      if (error.toString().contains('row-level security') ||
           error.toString().contains('403') ||
           error.toString().contains('Unauthorized')) {
-        errorMessage = 'Upload failed: Storage permissions not configured. '
+        errorMessage =
+            'Upload failed: Storage permissions not configured. '
             'Please check your Supabase storage bucket RLS policies.';
       } else {
         errorMessage = 'Error uploading image: $error';
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
@@ -481,10 +479,7 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Logo (optional)',
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
+        Text('Logo (optional)', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 8),
         Center(
           child: GestureDetector(
@@ -499,30 +494,28 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
                     shape: BoxShape.circle,
                   ),
                   child: _isUploading
-                      ? const Center(
-                          child: CircularProgressIndicator(),
-                        )
+                      ? const Center(child: CircularProgressIndicator())
                       : _logoUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                _logoUrl!,
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    Icons.image_not_supported,
-                                    size: 60,
-                                    color: colorScheme.onSurfaceVariant,
-                                  );
-                                },
-                              ),
-                            )
-                          : Icon(
-                              Icons.person,
-                              size: 60,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                      ? ClipOval(
+                          child: Image.network(
+                            _logoUrl!,
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                Icons.image_not_supported,
+                                size: 60,
+                                color: colorScheme.onSurfaceVariant,
+                              );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          Icons.person,
+                          size: 60,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                 ),
                 Positioned(
                   bottom: 0,
@@ -533,10 +526,7 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHigh,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: colorScheme.surface,
-                        width: 2,
-                      ),
+                      border: Border.all(color: colorScheme.surface, width: 2),
                     ),
                     child: _isUploading
                         ? SizedBox(
@@ -575,10 +565,7 @@ class CreateMatchPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Create match',
-          style: textTheme.headlineMedium,
-        ),
+        title: Text('Create match', style: textTheme.headlineMedium),
         centerTitle: false,
       ),
       body: Padding(
@@ -635,34 +622,38 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
       if (user == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You must be signed in to create a team')),
+          const SnackBar(
+            content: Text('You must be signed in to create a team'),
+          ),
         );
         return;
       }
 
-      final response = await supabase.from('teams').insert({
-        'team_name': _teamNameController.text.trim(),
-        'short_form': _shortFormController.text.trim(),
-        'logo_id': _logoUrl,
-        'created_by': user.id,
-      }).select('id').single();
+      final response = await supabase
+          .from('teams')
+          .insert({
+            'team_name': _teamNameController.text.trim(),
+            'short_form': _shortFormController.text.trim(),
+            'logo_id': _logoUrl,
+            'created_by': user.id,
+          })
+          .select('id')
+          .single();
 
       if (!mounted) return;
       final teamId = response['id'] as String;
       Navigator.of(context).pop(); // Close create page
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => TeamDetailPage(teamId: teamId),
-        ),
+        MaterialPageRoute(builder: (_) => TeamDetailPage(teamId: teamId)),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Team created')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Team created')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating team: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating team: $error')));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -677,10 +668,7 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Create team',
-          style: textTheme.headlineMedium,
-        ),
+        title: Text('Create team', style: textTheme.headlineMedium),
         centerTitle: false,
       ),
       body: SingleChildScrollView(
@@ -697,10 +685,7 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Team details',
-                    style: textTheme.titleMedium,
-                  ),
+                  Text('Team details', style: textTheme.titleMedium),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _teamNameController,
@@ -763,8 +748,7 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Only you (the creator) will be allowed to manage this team, '
-                    'based on the `created_by` field and your database RLS policies.',
+                    'Only you (the creator) will be allowed to manage this team.',
                     style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -810,33 +794,37 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
       if (user == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You must be signed in to create a league')),
+          const SnackBar(
+            content: Text('You must be signed in to create a league'),
+          ),
         );
         return;
       }
 
-      final response = await supabase.from('leagues').insert({
-        'league_name': _leagueNameController.text.trim(),
-        'logo_id': _logoUrl,
-        'created_by': user.id,
-      }).select('id').single();
+      final response = await supabase
+          .from('leagues')
+          .insert({
+            'league_name': _leagueNameController.text.trim(),
+            'logo_id': _logoUrl,
+            'created_by': user.id,
+          })
+          .select('id')
+          .single();
 
       if (!mounted) return;
       final leagueId = response['id'] as String;
       Navigator.of(context).pop(); // Close create page
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => LeagueDetailPage(leagueId: leagueId),
-        ),
+        MaterialPageRoute(builder: (_) => LeagueDetailPage(leagueId: leagueId)),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('League created')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('League created')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating league: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating league: $error')));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -851,10 +839,7 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Create league',
-          style: textTheme.headlineMedium,
-        ),
+        title: Text('Create league', style: textTheme.headlineMedium),
         centerTitle: false,
       ),
       body: SingleChildScrollView(
@@ -871,10 +856,7 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'League details',
-                    style: textTheme.titleMedium,
-                  ),
+                  Text('League details', style: textTheme.titleMedium),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _leagueNameController,
@@ -920,8 +902,7 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Only you (the creator) will be allowed to manage this league, '
-                    'based on the `created_by` field and your database RLS policies.',
+                    'Only you (the creator) will be allowed to manage this league.',
                     style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -935,4 +916,3 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
     );
   }
 }
-

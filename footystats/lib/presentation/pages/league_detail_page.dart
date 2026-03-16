@@ -10,6 +10,7 @@ import '../../domain/models/team_model.dart';
 import 'create_team_league_page.dart';
 import '../providers/league_teams_provider.dart';
 import '../providers/seasons_provider.dart';
+import 'league_add_teams_page.dart';
 import 'league_applications_page.dart';
 import 'league_create_matches_page.dart';
 import 'league_rejected_applications_page.dart';
@@ -196,9 +197,9 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
     }
     final teamsRepo = TeamsRepository();
     final leagueAppsRepo = LeagueApplicationsRepository();
-    List<TeamModel> teams;
+    List<TeamModel> allTeams;
     try {
-      teams = await teamsRepo.getTeamsByCreator(currentUser.id);
+      allTeams = await teamsRepo.getTeamsByCreator(currentUser.id);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -206,11 +207,24 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
       ).showSnackBar(SnackBar(content: Text('Error loading teams: $error')));
       return;
     }
+    final supabase = Supabase.instance.client;
+    final existingRes = await supabase
+        .from('league_team_join_requests')
+        .select('team_id')
+        .eq('league_id', widget.leagueId)
+        .eq('requested_by', currentUser.id)
+        .inFilter('status', ['pending', 'accepted']);
+    final existingTeamIds = (existingRes as List)
+        .map((r) => (r as Map)['team_id']?.toString())
+        .whereType<String>()
+        .toSet();
+    final teams = allTeams.where((t) => !existingTeamIds.contains(t.id)).toList();
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => _JoinLeagueTeamPicker(
         teams: teams,
+        alreadyAppliedCount: existingTeamIds.length,
         onTeamSelected: (team) async {
           Navigator.of(ctx).pop();
           try {
@@ -220,7 +234,8 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
               createdBy: currentUser.id,
             );
             if (!mounted) return;
-            setState(() => _hasJoined = true);
+            _refreshJoinState();
+            ref.invalidate(teamsInLeagueProvider(widget.leagueId));
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Your application has been sent')),
             );
@@ -321,15 +336,11 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
           if (!isOwner)
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
-              child: _hasJoined
-                  ? FilledButton(
-                      onPressed: null,
-                      child: const Icon(Icons.check),
-                    )
-                  : FilledButton(
-                      onPressed: _handleJoinLeague,
-                      child: const Text('Join league'),
-                    ),
+              child: FilledButton.icon(
+                onPressed: _handleJoinLeague,
+                icon: Icon(_hasJoined ? Icons.add : Icons.login),
+                label: Text(_hasJoined ? 'Add team' : 'Join league'),
+              ),
             )
           else if (_isDeleting)
             const Padding(
@@ -372,11 +383,10 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
                     );
                     break;
                   case 'add_teams':
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Search and add teams to this league (coming soon)',
-                        ),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            LeagueAddTeamsPage(leagueId: widget.leagueId),
                       ),
                     );
                     break;
@@ -586,11 +596,13 @@ class _JoinLeagueTeamPicker extends StatelessWidget {
     required this.teams,
     required this.onTeamSelected,
     required this.onCreateTeam,
+    this.alreadyAppliedCount = 0,
   });
 
   final List<TeamModel> teams;
   final ValueChanged<TeamModel> onTeamSelected;
   final VoidCallback onCreateTeam;
+  final int alreadyAppliedCount;
 
   @override
   Widget build(BuildContext context) {
@@ -603,7 +615,12 @@ class _JoinLeagueTeamPicker extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Select a team to apply', style: textTheme.titleMedium),
+          Text(
+            alreadyAppliedCount > 0
+                ? 'Select another team to add'
+                : 'Select a team to apply',
+            style: textTheme.titleMedium,
+          ),
           const SizedBox(height: 16),
           if (teams.isEmpty)
             Padding(
@@ -611,7 +628,9 @@ class _JoinLeagueTeamPicker extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    'You have no teams yet. Create one to apply to this league.',
+                    alreadyAppliedCount > 0
+                        ? 'All your teams have already been applied. Create a new team to add another.'
+                        : 'You have no teams yet. Create one to apply to this league.',
                     style: textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),

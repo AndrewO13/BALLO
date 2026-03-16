@@ -19,3 +19,10 @@ final teamsInLeagueProvider =
   final repo = ref.watch(leagueTeamsRepositoryProvider);
   return repo.getTeamsInLeague(leagueId);
 });
+
+/// Active team IDs for fixture generation (end_date IS NULL).
+final activeTeamIdsForLeagueProvider =
+    FutureProvider.family<List<String>, String>((ref, leagueId) async {
+  final repo = ref.watch(leagueTeamsRepositoryProvider);
+  return repo.getActiveTeamIdsForLeague(leagueId);
+});

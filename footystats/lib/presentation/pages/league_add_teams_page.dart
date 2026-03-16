@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../providers/teams_provider.dart';
+import '../../core/constants/app_assets.dart';
+import '../../domain/models/team_model.dart';
 import '../providers/league_teams_provider.dart';
+import '../providers/teams_provider.dart';
 
 class LeagueAddTeamsPage extends ConsumerStatefulWidget {
   const LeagueAddTeamsPage({super.key, required this.leagueId});
@@ -17,29 +21,96 @@ class LeagueAddTeamsPage extends ConsumerStatefulWidget {
 
 class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
   final _searchController = TextEditingController();
-  String _query = '';
+  List<TeamModel> _searchResults = [];
+  bool _isSearching = false;
+  bool _hasSearched = false;
+  final Set<String> _processingIds = {};
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      final q = _searchController.text.trim();
+      if (q.isEmpty) {
+        setState(() {
+          _searchResults = [];
+          _hasSearched = false;
+        });
+        return;
+      }
+      _performSearch(q);
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
+    setState(() {
+      _isSearching = true;
+      _hasSearched = true;
+    });
+    try {
+      final teamsRepo = ref.read(teamsRepositoryProvider);
+      final results = await teamsRepo.searchTeams(query);
+      final leagueTeamIds = await ref
+          .read(leagueTeamsRepositoryProvider)
+          .getTeamIdsInLeague(widget.leagueId);
+      final excludeSet = leagueTeamIds.toSet();
+      final filtered = results.where((t) => !excludeSet.contains(t.id)).toList();
+      if (!mounted) return;
+      setState(() {
+        _searchResults = filtered;
+        _isSearching = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _addTeam(String teamId) async {
+  Future<void> _addTeam(TeamModel team) async {
+    if (_processingIds.contains(team.id)) return;
+    setState(() => _processingIds.add(team.id));
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      setState(() => _processingIds.remove(team.id));
+      return;
+    }
     try {
       final repo = ref.read(leagueTeamsRepositoryProvider);
       await repo.addTeamToLeague(
         leagueId: widget.leagueId,
-        teamId: teamId,
+        teamId: team.id,
         addedBy: userId,
       );
+      if (!mounted) return;
       ref.invalidate(teamsInLeagueProvider(widget.leagueId));
+      ref.invalidate(activeTeamIdsForLeagueProvider(widget.leagueId));
+      setState(() {
+        _processingIds.remove(team.id);
+        _searchResults = _searchResults.where((t) => t.id != team.id).toList();
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Team added to league')),
+        SnackBar(content: Text('${team.displayName} added to league')),
       );
     } catch (error) {
+      if (!mounted) return;
+      setState(() => _processingIds.remove(team.id));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error adding team: $error')),
       );
@@ -48,8 +119,8 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final asyncTeams = ref.watch(allTeamsProvider);
     final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -57,65 +128,186 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
         centerTitle: false,
       ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search teams',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: 'Search by team name',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                filled: true,
               ),
-              onChanged: (value) => setState(() => _query = value.trim()),
+              autofocus: true,
             ),
           ),
           Expanded(
-            child: asyncTeams.when(
-              data: (teams) {
-                final filtered = teams.where((t) {
-                  final name = (t.teamName ?? t.shortForm).toLowerCase();
-                  return name.contains(_query.toLowerCase());
-                }).toList();
-                if (filtered.isEmpty) {
-                  return const Center(child: Text('No teams found'));
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final team = filtered[index];
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
+            child: _isSearching
+                ? const Center(child: CircularProgressIndicator())
+                : !_hasSearched
+                    ? Center(
+                        child: Text(
+                          'Type to search teams in the database',
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : _searchResults.isEmpty
+                        ? Center(
                             child: Text(
-                              team.teamName ?? team.shortForm,
-                              style: textTheme.bodyMedium,
+                              'No teams found',
+                              style: textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _searchResults.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final team = _searchResults[index];
+                              final isProcessing = _processingIds.contains(team.id);
+                              return _TeamSearchListItem(
+                                team: team,
+                                onAdd: () => _addTeam(team),
+                                isProcessing: isProcessing,
+                              );
+                            },
                           ),
-                          FilledButton(
-                            onPressed: () => _addTeam(team.id),
-                            child: const Text('Add'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(child: Text('Error: $err')),
-            ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _TeamSearchListItem extends StatelessWidget {
+  const _TeamSearchListItem({
+    required this.team,
+    required this.onAdd,
+    required this.isProcessing,
+  });
+
+  final TeamModel team;
+  final VoidCallback onAdd;
+  final bool isProcessing;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Row(
+        children: [
+          _TeamLogo(logoId: team.logoId),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  team.displayName,
+                  style: textTheme.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (team.teamName != null &&
+                    team.shortForm.isNotEmpty &&
+                    team.shortForm != team.teamName) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    team.shortForm,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: isProcessing ? null : onAdd,
+            icon: isProcessing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add, size: 20),
+            label: Text(isProcessing ? 'Adding' : 'Add'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamLogo extends StatelessWidget {
+  const _TeamLogo({this.logoId});
+
+  final String? logoId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final path = _resolvePath(logoId);
+    final isNetwork =
+        path.startsWith('http://') || path.startsWith('https://');
+
+    return ClipOval(
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: isNetwork
+            ? Image.network(
+                path,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.groups,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 28,
+                ),
+              )
+            : Image.asset(
+                path,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.groups,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 28,
+                ),
+              ),
+      ),
+    );
+  }
+
+  String _resolvePath(String? logoId) {
+    final lid = logoId?.trim();
+    if (lid == null || lid.isEmpty) {
+      return AppAssets.leftersLogo;
+    }
+    if (lid.startsWith('http://') || lid.startsWith('https://')) {
+      return lid;
+    }
+    if (lid.startsWith('lib/') || lid.startsWith('assets/')) {
+      return lid;
+    }
+    final name = lid.contains('.') ? lid : '$lid.png';
+    return '${AppAssets.teamLogosPath}$name';
   }
 }

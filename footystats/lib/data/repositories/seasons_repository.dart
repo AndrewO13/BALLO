@@ -64,6 +64,33 @@ class SeasonsRepository {
     return list.map(SeasonModel.fromJson).toList();
   }
 
+  /// Returns seasons for the given league IDs (for matches filter).
+  Future<List<SeasonModel>> getSeasonsForLeagues(
+    List<String> leagueIds,
+  ) async {
+    if (leagueIds.isEmpty) return [];
+    final res = await _client
+        .from('seasons')
+        .select('id, league_id, season_name, start_date, end_date, status')
+        .inFilter('league_id', leagueIds)
+        .order('start_date', ascending: false);
+    final list = List<Map<String, dynamic>>.from(res as List);
+    return list.map(SeasonModel.fromJson).toList();
+  }
+
+  /// Returns gameweeks for the given season IDs. Each item: {id, season_id, week}.
+  Future<List<Map<String, dynamic>>> getGameweeksForSeasons(
+    List<String> seasonIds,
+  ) async {
+    if (seasonIds.isEmpty) return [];
+    final res = await _client
+        .from('gameweeks')
+        .select('id, season_id, week')
+        .inFilter('season_id', seasonIds)
+        .order('week', ascending: true);
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
   Future<String> createSeason({
     required String leagueId,
     required String seasonName,
