@@ -1,9 +1,13 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../core/utils/stoppage_alert.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:video_player/video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../domain/models/fixture_goal_event.dart';
@@ -21,6 +25,7 @@ class FixturePage extends ConsumerStatefulWidget {
 }
 
 class _FixturePageState extends ConsumerState<FixturePage> {
+  bool _isUploadingMatchVideo = false;
   @override
   Widget build(BuildContext context) {
     final asyncMatch = ref.watch(fixtureMatchProvider(widget.matchId));
@@ -71,14 +76,17 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     );
 
     if (result != null && context.mounted) {
-      ref.read(matchTimerConfigProvider(matchId).notifier).setHalfDuration(result);
+      ref
+          .read(matchTimerConfigProvider(matchId).notifier)
+          .setHalfDuration(result);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Timer set: $result min per half')),
       );
     }
   }
 
-  /// Picks a video from gallery and uploads to Supabase storage. Returns public URL or null.
+  /// Picks a video from gallery and uploads to Supabase storage.
+  /// Also inserts a row into the `videos` table. Returns public URL or null.
   Future<String?> _pickAndUploadMatchVideo(
     BuildContext context,
     String matchId,
@@ -88,23 +96,46 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       final xFile = await picker.pickVideo(source: ImageSource.gallery);
       if (xFile == null || !context.mounted) return null;
       final bytes = await xFile.readAsBytes();
+
+      int? durationSeconds;
+      if (!kIsWeb) {
+        try {
+          final file = File(xFile.path);
+          final tempController = VideoPlayerController.file(file);
+          await tempController.initialize();
+          durationSeconds = tempController.value.duration.inSeconds;
+          await tempController.dispose();
+        } catch (_) {
+          durationSeconds = null;
+        }
+      }
+
       final supabase = Supabase.instance.client;
       const bucket = 'Match videos';
       final path =
           'match-videos/$matchId/${matchId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
       await supabase.storage.from(bucket).uploadBinary(path, bytes);
       final url = supabase.storage.from(bucket).getPublicUrl(path);
+      await supabase.from('videos').insert({
+        'match_id': matchId,
+        'uploader_user_id': supabase.auth.currentUser?.id,
+        'duration_seconds': durationSeconds,
+        'video_url': url,
+        // thumbnail_url and hls_url can be filled later by a Supabase Edge Function.
+        'thumbnail_url': null,
+        'hls_url': null,
+      });
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Video added')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Video added')));
       }
       return url;
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not add video: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not add video: $e')));
       }
       return null;
     }
@@ -120,9 +151,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -138,9 +167,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               const SizedBox(height: 16),
               Consumer(
                 builder: (context, ref, _) {
-                  final eventsAsync =
-                      ref.watch(matchEventsProvider(match.id));
-                  final videos = ref.watch(matchVideosProvider(match.id));
+                  final eventsAsync = ref.watch(matchEventsProvider(match.id));
                   return eventsAsync.when(
                     loading: () => const Padding(
                       padding: EdgeInsets.all(24),
@@ -154,11 +181,10 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                       ),
                     ),
                     data: (events) {
-                      const goalTypes = {
-                        'goal',
-                        'own_goal',
-                        'penalty_goal',
-                      };
+                      final videosAsync = ref.watch(
+                        matchVideosProvider(match.id),
+                      );
+                      const goalTypes = {'goal', 'own_goal', 'penalty_goal'};
                       final goals = events
                           .where((e) => goalTypes.contains(e.eventType))
                           .toList();
@@ -169,128 +195,107 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                       final teamBGoals = goals
                           .where((g) => g.teamId != teamAId)
                           .toList();
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      match.teamA.shortForm,
-                                      style: textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (teamAGoals.isEmpty)
-                                      Text(
-                                        '—',
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      )
-                                    else
-                                      ...teamAGoals.map(
-                                        (g) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 6,
-                                          ),
-                                          child: Text(
-                                            g.assisterName != null
-                                                ? '${g.scorerName ?? '?'} (${g.assisterName}) ${g.minute}\''
-                                                : '${g.scorerName ?? '?'} ${g.minute}\'',
-                                            style: textTheme.bodySmall,
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      match.teamB.shortForm,
-                                      style: textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (teamBGoals.isEmpty)
-                                      Text(
-                                        '—',
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      )
-                                    else
-                                      ...teamBGoals.map(
-                                        (g) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 6,
-                                          ),
-                                          child: Text(
-                                            g.assisterName != null
-                                                ? '${g.minute}\' ${g.scorerName ?? '?'} (${g.assisterName})'
-                                                : '${g.minute}\' ${g.scorerName ?? '?'}',
-                                            style: textTheme.bodySmall,
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            'Videos',
-                            style: textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
+                      return videosAsync.when(
+                        loading: () => const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        error: (_, __) => Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildScorersColumns(
+                              textTheme,
+                              colorScheme,
+                              match,
+                              teamAGoals,
+                              teamBGoals,
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 72,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              shrinkWrap: true,
-                              children: [
-                                ...videos.map(
-                                  (url) => Padding(
-                                    padding: const EdgeInsets.only(right: 12),
-                                    child: _MatchStoryCircle(url: url),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Could not load videos',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                        data: (videos) => Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildScorersColumns(
+                              textTheme,
+                              colorScheme,
+                              match,
+                              teamAGoals,
+                              teamBGoals,
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Videos',
+                              style: textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: 72,
+                              child: Row(
+                                children: [
+                                  _MatchStoryAddButton(
+                                    onPressed: () async {
+                                      if (_isUploadingMatchVideo) return;
+                                      setState(() {
+                                        _isUploadingMatchVideo = true;
+                                      });
+                                      showDialog<void>(
+                                        context: ctx,
+                                        barrierDismissible: false,
+                                        builder: (_) => const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+                                      final url =
+                                          await _pickAndUploadMatchVideo(
+                                            ctx,
+                                            match.id,
+                                          );
+                                      if (ctx.mounted) {
+                                        Navigator.of(ctx).pop(); // close loader
+                                        if (url != null) {
+                                          ref.invalidate(
+                                            matchVideosProvider(match.id),
+                                          );
+                                        }
+                                      }
+                                      if (mounted) {
+                                        setState(() {
+                                          _isUploadingMatchVideo = false;
+                                        });
+                                      }
+                                    },
                                   ),
-                                ),
-                                _MatchStoryAddButton(
-                                  onPressed: () async {
-                                    final url = await _pickAndUploadMatchVideo(
-                                        ctx, match.id);
-                                    if (url != null && ctx.mounted) {
-                                      ref
-                                          .read(matchVideosProvider(match.id)
-                                              .notifier)
-                                          .add(url);
-                                    }
-                                  },
-                                ),
-                              ],
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemBuilder: (context, index) =>
+                                          _MatchStoryCircle(
+                                            url: videos[index],
+                                            teamALogo: match.teamA.logoPath,
+                                            teamBLogo: match.teamB.logoPath,
+                                          ),
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(width: 12),
+                                      itemCount: videos.length,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       );
                     },
                   );
@@ -308,11 +313,134 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     );
   }
 
+  Widget _buildScorersColumns(
+    TextTheme textTheme,
+    ColorScheme colorScheme,
+    MatchModel match,
+    List<MatchEventDisplay> teamAGoals,
+    List<MatchEventDisplay> teamBGoals,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                match.teamA.shortForm,
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (teamAGoals.isEmpty)
+                Text(
+                  '—',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                ...teamAGoals.map(
+                  (g) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${g.scorerName ?? '?'} ${g.minute}\'',
+                          style: textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        if (g.assisterName != null)
+                          Text(
+                            '(${g.assisterName})',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                match.teamB.shortForm,
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (teamBGoals.isEmpty)
+                Text(
+                  '—',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                ...teamBGoals.map(
+                  (g) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${g.minute}\' ${g.scorerName ?? '?'}',
+                          style: textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        if (g.assisterName != null)
+                          Text(
+                            '(${g.assisterName})',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFixtureWithMatch(BuildContext context, MatchModel match) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final clock = ref.watch(matchClockProvider(match.id));
     final clockLabel = formatMatchClock(clock);
+    final leaguesAsync = ref.watch(matchesFilterLeaguesProvider);
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+    final bool isLeagueOwner = leaguesAsync.maybeWhen(
+      data: (leagues) {
+        if (currentUserId == null || match.leagueName == null) {
+          return false;
+        }
+        return leagues.any(
+          (l) =>
+              l.leagueName == (match.leagueName ?? '') &&
+              l.createdBy == currentUserId,
+        );
+      },
+      orElse: () => false,
+    );
 
     // Ensure the match clock is running whenever this fixture is viewed while
     // the match is in an ongoing state (e.g. after navigating back to the page
@@ -347,10 +475,16 @@ class _FixturePageState extends ConsumerState<FixturePage> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: () {},
-            ),
+            if (isLeagueOwner)
+              PopupMenuButton<int>(
+                icon: const Icon(Icons.more_vert),
+                itemBuilder: (context) => const <PopupMenuEntry<int>>[],
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () {},
+              ),
           ],
         ),
         body: NestedScrollView(
@@ -400,11 +534,14 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
-                                       IconButton(
+                                      IconButton(
                                         icon: const Icon(Icons.open_in_full),
                                         onPressed: () =>
                                             _showScorersAssistersDialog(
-                                                context, ref, match),
+                                              context,
+                                              ref,
+                                              match,
+                                            ),
                                         iconSize: 20,
                                         color: colorScheme.onSurface,
                                         padding: EdgeInsets.zero,
@@ -458,10 +595,10 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                                     match: match,
                                                     onTap: () =>
                                                         _showSetTimerDialog(
-                                                            context,
-                                                            match.id,
-                                                            ref,
-                                                          ),
+                                                          context,
+                                                          match.id,
+                                                          ref,
+                                                        ),
                                                   )
                                                 : _BuildOngoingPill(
                                                     match: match,
@@ -505,14 +642,20 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                       );
                                       return eventsAsync.when(
                                         loading: () => const SizedBox.shrink(),
-                                        error: (_, __) => const SizedBox.shrink(),
+                                        error: (_, __) =>
+                                            const SizedBox.shrink(),
                                         data: (events) {
                                           final goalTypes = {
-                                            'goal', 'own_goal', 'penalty_goal',
+                                            'goal',
+                                            'own_goal',
+                                            'penalty_goal',
                                           };
                                           final goals = events
-                                              .where((e) =>
-                                                  goalTypes.contains(e.eventType))
+                                              .where(
+                                                (e) => goalTypes.contains(
+                                                  e.eventType,
+                                                ),
+                                              )
                                               .toList();
                                           if (goals.isEmpty) {
                                             return const SizedBox.shrink();
@@ -539,19 +682,22 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                                 child: Column(
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.center,
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: firstA != null
                                                       ? [
                                                           Padding(
                                                             padding:
                                                                 const EdgeInsets.only(
-                                                                    bottom: 4),
+                                                                  bottom: 4,
+                                                                ),
                                                             child: Text(
                                                               '${firstA.scorerName ?? '?'} ${firstA.minute}\'',
-                                                              style:
-                                                                  textTheme.bodySmall,
+                                                              style: textTheme
+                                                                  .bodySmall,
                                                               textAlign:
-                                                                  TextAlign.center,
+                                                                  TextAlign
+                                                                      .center,
                                                             ),
                                                           ),
                                                         ]
@@ -560,7 +706,8 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                               ),
                                               Padding(
                                                 padding: const EdgeInsets.only(
-                                                    top: 2),
+                                                  top: 2,
+                                                ),
                                                 child: Container(
                                                   width: 20,
                                                   height: 20,
@@ -585,19 +732,22 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                                 child: Column(
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.center,
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: firstB != null
                                                       ? [
                                                           Padding(
                                                             padding:
                                                                 const EdgeInsets.only(
-                                                                    bottom: 4),
+                                                                  bottom: 4,
+                                                                ),
                                                             child: Text(
                                                               '${firstB.minute}\' ${firstB.scorerName ?? '?'}',
-                                                              style:
-                                                                  textTheme.bodySmall,
+                                                              style: textTheme
+                                                                  .bodySmall,
                                                               textAlign:
-                                                                  TextAlign.center,
+                                                                  TextAlign
+                                                                      .center,
                                                             ),
                                                           ),
                                                         ]
@@ -1183,7 +1333,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                   child: Icon(
                                     icon,
                                     size: 20,
-                                    color: iconColor ?? colorScheme.onSurfaceVariant,
+                                    color:
+                                        iconColor ??
+                                        colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 SizedBox(
@@ -1202,7 +1354,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                   child: Icon(
                                     icon,
                                     size: 20,
-                                    color: iconColor ?? colorScheme.onSurfaceVariant,
+                                    color:
+                                        iconColor ??
+                                        colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 if (!isTeamA)
@@ -1494,8 +1648,18 @@ class _FixturePageState extends ConsumerState<FixturePage> {
 
 String _formatMatchDate(DateTime d) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return '${weekdays[d.weekday - 1]} ${d.day} ${months[d.month - 1]}';
@@ -1546,10 +1710,17 @@ class _FixtureTeamLogo extends StatelessWidget {
 }
 
 /// Circular story-style tile for a match video (Instagram/Snapchat style).
+/// Shows team A and team B logos with a diagonal separator and a ring border.
 class _MatchStoryCircle extends StatelessWidget {
-  const _MatchStoryCircle({required this.url});
+  const _MatchStoryCircle({
+    required this.url,
+    required this.teamALogo,
+    required this.teamBLogo,
+  });
 
   final String url;
+  final String teamALogo;
+  final String teamBLogo;
 
   @override
   Widget build(BuildContext context) {
@@ -1559,7 +1730,11 @@ class _MatchStoryCircle extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          // TODO: open full-screen video player
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => _MatchVideoPlayerPage(videoUrl: url),
+            ),
+          );
         },
         borderRadius: BorderRadius.circular(size / 2),
         child: Container(
@@ -1567,40 +1742,171 @@ class _MatchStoryCircle extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(
-              color: colorScheme.primary,
-              width: 2.5,
-            ),
+            border: Border.all(color: colorScheme.primary, width: 3),
             boxShadow: [
               BoxShadow(
-                color: colorScheme.primary.withOpacity(0.3),
+                color: colorScheme.primary.withOpacity(0.35),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
           child: ClipOval(
-            child: url.startsWith('http')
-                ? Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _storyPlaceholder(context),
-                  )
-                : _storyPlaceholder(context),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    color: colorScheme.surfaceContainerHigh,
+                    child: Center(
+                      child: _FixtureTeamLogo(path: teamALogo, size: 28),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    color: colorScheme.surfaceContainer,
+                    child: Center(
+                      child: _FixtureTeamLogo(path: teamBLogo, size: 28),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _storyPlaceholder(BuildContext context) {
+/// Full-screen video player for a single match video (reels-style).
+class _MatchVideoPlayerPage extends StatefulWidget {
+  const _MatchVideoPlayerPage({required this.videoUrl});
+
+  final String videoUrl;
+
+  @override
+  State<_MatchVideoPlayerPage> createState() => _MatchVideoPlayerPageState();
+}
+
+class _MatchVideoPlayerPageState extends State<_MatchVideoPlayerPage> {
+  late final VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    _controller
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          setState(() {
+            _initialized = true;
+            _isPlaying = true;
+          });
+          _controller.play();
+          _controller.setLooping(true);
+        })
+        .catchError((e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not load video')));
+        });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    if (!_initialized) return;
+    setState(() {
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+        _isPlaying = false;
+      } else {
+        _controller.play();
+        _isPlaying = true;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      color: colorScheme.surfaceContainerHigh,
-      child: Icon(
-        Icons.videocam,
-        size: 28,
-        color: colorScheme.onSurfaceVariant,
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(
+            child: _initialized
+                ? GestureDetector(
+                    onTap: _togglePlay,
+                    child: AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: VideoPlayer(_controller),
+                    ),
+                  )
+                : const CircularProgressIndicator(),
+          ),
+          SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          if (_initialized)
+            Positioned(
+              right: 16,
+              bottom: 32,
+              child: IconButton(
+                iconSize: 36,
+                icon: Icon(
+                  _isPlaying ? Icons.pause_circle_filled : Icons.play_circle,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+                onPressed: _togglePlay,
+              ),
+            ),
+          Positioned(
+            left: 16,
+            bottom: 32,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sports_soccer,
+                    size: 16,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Match highlight',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1627,16 +1933,9 @@ class _MatchStoryAddButton extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: colorScheme.surfaceContainerHigh,
-            border: Border.all(
-              color: colorScheme.outline,
-              width: 2,
-            ),
+            border: Border.all(color: colorScheme.outline, width: 2),
           ),
-          child: Icon(
-            Icons.add,
-            size: 32,
-            color: colorScheme.primary,
-          ),
+          child: Icon(Icons.add, size: 32, color: colorScheme.primary),
         ),
       ),
     );
@@ -1645,10 +1944,7 @@ class _MatchStoryAddButton extends StatelessWidget {
 
 /// Green pill with stopwatch shown when match is upcoming. Tappable to set timer.
 class _BuildUpcomingPill extends StatelessWidget {
-  const _BuildUpcomingPill({
-    required this.match,
-    required this.onTap,
-  });
+  const _BuildUpcomingPill({required this.match, required this.onTap});
 
   final MatchModel match;
   final VoidCallback onTap;
@@ -1667,15 +1963,16 @@ class _BuildUpcomingPill extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF00FF5A).withOpacity(0.2),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xFF00FF5A),
-              width: 1.5,
-            ),
+            border: Border.all(color: const Color(0xFF00FF5A), width: 1.5),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.timer_outlined, size: 18, color: const Color(0xFF00FF5A)),
+              Icon(
+                Icons.timer_outlined,
+                size: 18,
+                color: const Color(0xFF00FF5A),
+              ),
               const SizedBox(width: 6),
               Text(
                 _formatMatchDate(match.matchDate),
@@ -1684,7 +1981,11 @@ class _BuildUpcomingPill extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.touch_app, size: 14, color: colorScheme.onSurfaceVariant.withOpacity(0.7)),
+              Icon(
+                Icons.touch_app,
+                size: 14,
+                color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+              ),
             ],
           ),
         ),
@@ -1818,7 +2119,8 @@ class _SetTimerDialogState extends State<_SetTimerDialog> {
           Wrap(
             spacing: 8,
             children: presets.map((m) {
-              final isSelected = _selectedMinutes == m && _customController.text.isEmpty;
+              final isSelected =
+                  _selectedMinutes == m && _customController.text.isEmpty;
               return ChoiceChip(
                 label: Text('$m min'),
                 selected: isSelected,
@@ -1872,8 +2174,9 @@ class _SetTimerDialogState extends State<_SetTimerDialog> {
           child: const Text('Skip'),
         ),
         FilledButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_effectiveMinutes ?? widget.initialMinutes),
+          onPressed: () => Navigator.of(
+            context,
+          ).pop(_effectiveMinutes ?? widget.initialMinutes),
           child: const Text('Set'),
         ),
       ],
@@ -2780,7 +3083,6 @@ class _MatchControlsModal extends ConsumerStatefulWidget {
 class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
   bool _isHalfTime = true;
   bool _isUpdating = false;
-  bool _hasBeenResumed = false;
   MatchStatus? _overrideStatus;
 
   @override
@@ -2813,9 +3115,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
             ),
             error: (err, _) => Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Center(
-                child: Text('Could not load match controls'),
-              ),
+              child: Center(child: Text('Could not load match controls')),
             ),
             data: (match) {
               if (match == null) {
@@ -2851,10 +3151,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
           label: 'Start match',
           onTap: _isUpdating
               ? null
-              : () => _changeStatus(
-                    MatchStatus.ongoing,
-                    resetResumed: true,
-                  ),
+              : () => _changeStatus(MatchStatus.ongoing, resetResumed: true),
         );
       case MatchStatus.halfTime:
         return _buildPrimaryActionButton(
@@ -2862,15 +3159,14 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
           label: 'Resume match',
           onTap: _isUpdating
               ? null
-              : () => _changeStatus(
-                    MatchStatus.ongoing,
-                    markResumed: true,
-                  ),
+              : () => _changeStatus(MatchStatus.ongoing, markResumed: true),
         );
       case MatchStatus.ongoing:
       case MatchStatus.fullTime:
         final allDisabled = status == MatchStatus.fullTime || _isUpdating;
-        final disableHalfTime = status == MatchStatus.fullTime || _hasBeenResumed;
+        final timerConfig = ref.watch(matchTimerConfigProvider(widget.matchId));
+        final disableHalfTime =
+            status == MatchStatus.fullTime || timerConfig.hasReachedHalfTime;
         final textTheme = Theme.of(context).textTheme;
 
         return Column(
@@ -3076,7 +3372,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
       }
 
       final clock = ref.read(matchClockProvider(widget.matchId).notifier);
-      final timerConfig = ref.read(matchTimerConfigProvider(widget.matchId).notifier);
+      final timerConfig = ref.read(
+        matchTimerConfigProvider(widget.matchId).notifier,
+      );
       switch (newStatus) {
         case MatchStatus.upcoming:
           clock.reset();
@@ -3110,8 +3408,6 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
 
       setState(() {
         _overrideStatus = newStatus;
-        if (resetResumed) _hasBeenResumed = false;
-        if (markResumed) _hasBeenResumed = true;
       });
     } finally {
       if (mounted) {
@@ -3124,9 +3420,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
 
   void _logMatchEvent(BuildContext context, String label, bool isLeftTeam) {
     final teamSide = isLeftTeam ? 'Home' : 'Away';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label logged for $teamSide team')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label logged for $teamSide team')));
   }
 
   Future<void> _openCardFlow(
@@ -3202,7 +3498,10 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                                   fit: BoxFit.cover,
                                 ),
                               )
-                            : Icon(Icons.person, color: colorScheme.onSurfaceVariant),
+                            : Icon(
+                                Icons.person,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                       ),
                       title: Text(p.name),
                       subtitle: Text(p.position),
@@ -3261,7 +3560,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Could not record card. Ensure match status is ongoing.'),
+              content: Text(
+                'Could not record card. Ensure match status is ongoing.',
+              ),
             ),
           );
         }
@@ -3286,9 +3587,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
   ) async {
     final teamId = isTeamA ? match.teamA.id : match.teamB.id;
     if (teamId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Team not found')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Team not found')));
       return;
     }
     final clock = ref.read(matchClockProvider(widget.matchId));
@@ -3344,12 +3645,14 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
     ];
     final List<FixturePickerPlayer> out = [];
     for (var i = 0; i < names.length; i++) {
-      out.add(FixturePickerPlayer(
-        id: '${id}_$i',
-        name: names[(seed + i) % names.length],
-        position: positions[(seed + i) % positions.length],
-        imagePath: AppAssets.playerImage,
-      ));
+      out.add(
+        FixturePickerPlayer(
+          id: '${id}_$i',
+          name: names[(seed + i) % names.length],
+          position: positions[(seed + i) % positions.length],
+          imagePath: AppAssets.playerImage,
+        ),
+      );
     }
     // Dedupe names for display
     final seen = <String>{};
@@ -3405,8 +3708,10 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                 onTap: onSelect,
                 borderRadius: BorderRadius.circular(16),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: 8,
+                  ),
                   child: Row(
                     children: [
                       Radio<String>(
@@ -3416,10 +3721,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                       ),
                       CircleAvatar(
                         radius: 22,
-                        backgroundColor:
-                            colorScheme.surfaceContainerHighest,
-                        backgroundImage: !p.useNetworkImage &&
-                                p.imagePath != null
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        backgroundImage:
+                            !p.useNetworkImage && p.imagePath != null
                             ? AssetImage(p.imagePath!)
                             : null,
                         child: p.useNetworkImage && p.imageUrl != null
@@ -3436,9 +3740,11 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                                 ),
                               )
                             : (!p.useNetworkImage && p.imagePath == null)
-                                ? Icon(Icons.person,
-                                    color: colorScheme.onSurfaceVariant)
-                                : null,
+                            ? Icon(
+                                Icons.person,
+                                color: colorScheme.onSurfaceVariant,
+                              )
+                            : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -3470,8 +3776,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               return Container(
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(28)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
                 ),
                 padding: EdgeInsets.only(
                   bottom: MediaQuery.of(context).viewInsets.bottom + 24,
@@ -3527,7 +3834,8 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                 ).hasMatch(scorer!.id);
 
                 if (scorerIdIsUuid) {
-                  final assistId = (assist != null &&
+                  final assistId =
+                      (assist != null &&
                           RegExp(
                             r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
                             r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -3545,7 +3853,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                     if (sheetContext.mounted) {
                       ScaffoldMessenger.of(sheetContext).showSnackBar(
                         const SnackBar(
-                          content: Text('Could not record goal. Ensure match status is ongoing.'),
+                          content: Text(
+                            'Could not record goal. Ensure match status is ongoing.',
+                          ),
                         ),
                       );
                     }
@@ -3556,7 +3866,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                   if (sheetContext.mounted) {
                     ScaffoldMessenger.of(sheetContext).showSnackBar(
                       const SnackBar(
-                        content: Text('Please use real squad players to record stats.'),
+                        content: Text(
+                          'Please use real squad players to record stats.',
+                        ),
                       ),
                     );
                   }
@@ -3600,8 +3912,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
             return Container(
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHigh,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
               ),
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
@@ -3620,9 +3933,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                         onPressed: saving
                             ? null
                             : () => setModalState(() {
-                                  step = 0;
-                                  assist = null;
-                                }),
+                                step = 0;
+                                assist = null;
+                              }),
                       ),
                       Expanded(
                         child: Text(
@@ -3691,12 +4004,19 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
     required VoidCallback? onTap,
   }) {
     final textTheme = Theme.of(context).textTheme;
+    final bool isDisabled = onTap == null;
+    final Color effectiveBackground = isDisabled
+        ? backgroundColor.withOpacity(0.35)
+        : backgroundColor;
+    final Color effectiveForeground = isDisabled
+        ? foregroundColor.withOpacity(0.55)
+        : foregroundColor;
 
     return SizedBox(
       width: 186,
       height: 96,
       child: Material(
-        color: backgroundColor,
+        color: effectiveBackground,
         borderRadius: BorderRadius.circular(28),
         child: InkWell(
           onTap: onTap,
@@ -3705,12 +4025,12 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: foregroundColor, size: 32),
+                Icon(icon, color: effectiveForeground, size: 32),
                 const SizedBox(width: 12),
                 Text(
                   label,
                   style: textTheme.headlineSmall?.copyWith(
-                    color: foregroundColor,
+                    color: effectiveForeground,
                   ),
                 ),
               ],
@@ -3749,12 +4069,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               iconPath: events[0]['icon'] as String,
               isLeftTile: true,
               enabled: enabled,
-              onTap: () => _recordTeamEvent(
-                context,
-                match,
-                isLeftTeam,
-                'shot',
-              ),
+              onTap: () => _recordTeamEvent(context, match, isLeftTeam, 'shot'),
             ),
             _buildEventButton(
               context,
@@ -3776,24 +4091,16 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               iconPath: events[2]['icon'] as String,
               isLeftTile: true,
               enabled: enabled,
-              onTap: () => _openCardFlow(
-                context,
-                match,
-                isLeftTeam,
-                'yellow_card',
-              ),
+              onTap: () =>
+                  _openCardFlow(context, match, isLeftTeam, 'yellow_card'),
             ),
             _buildEventButton(
               context,
               iconPath: events[3]['icon'] as String,
               isLeftTile: false,
               enabled: enabled,
-              onTap: () => _openCardFlow(
-                context,
-                match,
-                isLeftTeam,
-                'red_card',
-              ),
+              onTap: () =>
+                  _openCardFlow(context, match, isLeftTeam, 'red_card'),
             ),
           ],
         ),
@@ -3806,12 +4113,8 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               iconPath: events[4]['icon'] as String,
               isLeftTile: true,
               enabled: enabled,
-              onTap: () => _recordTeamEvent(
-                context,
-                match,
-                isLeftTeam,
-                'corner',
-              ),
+              onTap: () =>
+                  _recordTeamEvent(context, match, isLeftTeam, 'corner'),
             ),
             _buildEventButton(
               context,
@@ -3847,29 +4150,56 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
       bottomRight: Radius.circular(isLeftTile ? 16 : 28),
     );
 
-    return InkWell(
-      onTap: enabled ? onTap : null,
+    final Color tileColor = enabled
+        ? colorScheme.surfaceContainerHighest
+        : colorScheme.surfaceContainerHighest.withOpacity(0.4);
+    final Color iconColor = colorScheme.onSurface.withOpacity(
+      enabled ? 1.0 : 0.6,
+    );
+
+    return Material(
+      color: Colors.transparent,
       borderRadius: tileRadius,
-      child: SizedBox(
-        width: 84.75,
-        height: 72,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            borderRadius: tileRadius,
-          ),
-          child: Center(
-            child: SvgPicture.asset(
-              iconPath,
-              width: 32,
-              height: 32,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(
-                  Icons.sports_soccer,
-                  size: 32,
-                  color: colorScheme.onSurface,
-                );
-              },
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: tileRadius,
+        splashColor: colorScheme.primary.withOpacity(0.12),
+        highlightColor: colorScheme.primary.withOpacity(0.04),
+        child: SizedBox(
+          width: 84.75,
+          height: 72,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: tileColor,
+              borderRadius: tileRadius,
+            ),
+            child: Center(
+              child: enabled
+                  ? SvgPicture.asset(
+                      iconPath,
+                      width: 32,
+                      height: 32,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.sports_soccer,
+                          size: 32,
+                          color: iconColor,
+                        );
+                      },
+                    )
+                  : SvgPicture.asset(
+                      iconPath,
+                      width: 32,
+                      height: 32,
+                      colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.sports_soccer,
+                          size: 32,
+                          color: iconColor,
+                        );
+                      },
+                    ),
             ),
           ),
         ),

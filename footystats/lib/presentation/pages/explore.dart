@@ -19,54 +19,111 @@ class ExplorePage extends StatelessWidget {
   }
 }
 
-class _ExploreTabContent extends StatelessWidget {
+class _ExploreTabContent extends StatefulWidget {
   final String title;
   const _ExploreTabContent({required this.title});
 
   @override
-  Widget build(BuildContext context) {
-    // Sample match data - replace with actual data from backend
-    // When backend is connected, videoUrl will be provided from API
-    final matches = List.generate(
-      3,
-      (index) => {
-        'team1': {'name': 'SHI', 'logo': AppAssets.theShieldLogo, 'score': 2},
-        'team2': {'name': 'LAF', 'logo': AppAssets.laFamilleLogo, 'score': 0},
-        'league': 'The Budo League',
-        'status': 'Final',
-        'result': 'The Shield wins!',
-        'videoUrl':
-            null, // Will be provided from backend: e.g., 'https://example.com/video.mp4'
-        'thumbnailUrl': null, // Optional: thumbnail for faster loading
-        'posterName': 'LukoFafa', // Name of person who posted
-        'posterAvatar': null, // Optional: profile picture URL or asset path
-      },
-    );
+  State<_ExploreTabContent> createState() => _ExploreTabContentState();
+}
 
-    return ListView.builder(
-      itemCount: matches.length,
-      itemBuilder: (context, index) {
-        final match = matches[index];
-        return Column(
-          children: [
-            _MatchInfoCard(
-              team1: match['team1'] as Map<String, dynamic>,
-              team2: match['team2'] as Map<String, dynamic>,
-              league: match['league'] as String,
-              status: match['status'] as String,
-              result: match['result'] as String,
-            ),
-            _VideoPlayerSection(
-              videoUrl: match['videoUrl'] as String?,
-              thumbnailUrl: match['thumbnailUrl'] as String?,
-            ),
-            _PosterInfoSection(
-              posterName: match['posterName'] as String,
-              posterAvatar: match['posterAvatar'] as String?,
-            ),
-          ],
-        );
-      },
+class _ExploreTabContentState extends State<_ExploreTabContent> {
+  late Future<List<_ExploreVideoItem>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchExploreVideos();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _future = _fetchExploreVideos();
+    });
+    await _future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: FutureBuilder<List<_ExploreVideoItem>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !(snapshot.hasData && snapshot.data!.isNotEmpty)) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      'Could not load videos',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          final items = snapshot.data ?? const [];
+          if (items.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      'No videos yet',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final playUrl = item.hlsUrl ?? item.videoUrl;
+              return Column(
+                children: [
+                  _MatchInfoCard(
+                    team1: {
+                      'name': item.teamAShort,
+                      'logo': item.teamALogo,
+                      'score': item.teamAScore,
+                    },
+                    team2: {
+                      'name': item.teamBShort,
+                      'logo': item.teamBLogo,
+                      'score': item.teamBScore,
+                    },
+                    league: item.leagueName,
+                    status: item.statusText,
+                    result: item.resultText,
+                  ),
+                  _VideoPlayerSection(
+                    videoUrl: playUrl,
+                    thumbnailUrl: item.thumbnailUrl,
+                  ),
+                  _PosterInfoSection(
+                    posterName: item.uploaderName ?? 'Unknown',
+                    posterAvatar: item.uploaderAvatar,
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -204,7 +261,7 @@ class _MatchInfoCard extends StatelessWidget {
 /// 5. Use lower quality for initial load, upgrade on user interaction
 /// 6. Implement lazy loading - only initialize video when scrolled into view
 class _VideoPlayerSection extends StatelessWidget {
-  final String? videoUrl; // Video URL from backend
+  final String? videoUrl; // Video URL from backend (mp4 or HLS)
   final String? thumbnailUrl; // Optional thumbnail URL for faster loading
 
   const _VideoPlayerSection({this.videoUrl, this.thumbnailUrl});
@@ -212,9 +269,14 @@ class _VideoPlayerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (videoUrl != null && videoUrl!.isNotEmpty) {
-      return _VideoPlayerWidget(
-        videoUrl: videoUrl!,
-        thumbnailUrl: thumbnailUrl,
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 0),
+        height: MediaQuery.of(context).size.height * 0.5,
+        decoration: const BoxDecoration(color: Colors.black),
+        child: _VideoPlayerWidget(
+          videoUrl: videoUrl!,
+          thumbnailUrl: thumbnailUrl,
+        ),
       );
     }
     return Container(
@@ -399,21 +461,32 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
   }
 
   Future<void> _initializeVideo() async {
-    // Use network URL from backend
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    try {
+      // Use network URL from backend (supabase public URL, ensure download param)
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl),
+      );
 
-    // OPTIMIZATION: Preload video for faster playback
-    await _controller!.initialize();
-    _controller!.setLooping(true);
+      // OPTIMIZATION: Preload video for faster playback
+      await _controller!.initialize();
+      _controller!.setLooping(true);
 
-    if (mounted) {
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _isInitialized = true;
+        _isInitialized = false;
       });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not load video')));
     }
   }
 
@@ -446,11 +519,16 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     return VisibilityDetector(
       key: Key(_videoKey),
       onVisibilityChanged: (VisibilityInfo info) {
-        // Play when more than 50% visible, pause otherwise (Instagram-like)
-        if (info.visibleFraction > 0.5) {
-          _playVideo();
-        } else {
+        // When scrolled far away, stop and dispose to free resources.
+        if (info.visibleFraction < 0.1) {
           _pauseVideo();
+          _controller?.dispose();
+          _controller = null;
+          if (mounted) {
+            setState(() {
+              _isInitialized = false;
+            });
+          }
         }
       },
       child: Stack(
@@ -468,36 +546,178 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
             widget.thumbnailUrl != null
                 ? Image.network(widget.thumbnailUrl!, fit: BoxFit.cover)
                 : const Center(child: CircularProgressIndicator()),
-          // Play/Pause overlay
-          if (_isInitialized)
-            Center(
-              child: GestureDetector(
-                onTap: () {
+          // Play / pause overlay
+          Center(
+            child: GestureDetector(
+              onTap: () {
+                if (!_isInitialized) {
+                  _initializeVideo().then((_) {
+                    if (mounted && _isInitialized) _playVideo();
+                  });
+                } else {
                   if (_isPlaying) {
                     _pauseVideo();
                   } else {
                     _playVideo();
                   }
-                },
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: Colors.white,
-                    size: 32,
-                  ),
+                }
+              },
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isInitialized && _isPlaying ? Icons.pause : Icons.play_arrow,
+                  color: Colors.white,
+                  size: 32,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
   }
+}
+
+/// Combined view-model for an explore video row.
+class _ExploreVideoItem {
+  const _ExploreVideoItem({
+    required this.videoId,
+    required this.videoUrl,
+    this.hlsUrl,
+    required this.durationSeconds,
+    required this.teamALogo,
+    required this.teamBLogo,
+    required this.teamAShort,
+    required this.teamBShort,
+    required this.teamAScore,
+    required this.teamBScore,
+    required this.leagueName,
+    required this.statusText,
+    required this.resultText,
+    required this.uploaderName,
+    required this.uploaderAvatar,
+    this.thumbnailUrl,
+  });
+
+  final String videoId;
+  final String videoUrl;
+  final String? hlsUrl;
+  final int? durationSeconds;
+  final String teamALogo;
+  final String teamBLogo;
+  final String teamAShort;
+  final String teamBShort;
+  final int teamAScore;
+  final int teamBScore;
+  final String leagueName;
+  final String statusText;
+  final String resultText;
+  final String? uploaderName;
+  final String? uploaderAvatar;
+  final String? thumbnailUrl;
+}
+
+Future<List<_ExploreVideoItem>> _fetchExploreVideos() async {
+  final client = Supabase.instance.client;
+
+  final videosRes = await client
+      .from('videos')
+      .select(
+        'id, match_id, uploader_user_id, duration_seconds, video_url, thumbnail_url, hls_url',
+      )
+      .order('created_at', ascending: false);
+
+  final videos = List<Map<String, dynamic>>.from(videosRes as List);
+  if (videos.isEmpty) return const [];
+
+  final matchIds = <String>{};
+  final uploaderIds = <String>{};
+  for (final v in videos) {
+    final mid = v['match_id']?.toString();
+    if (mid != null && mid.isNotEmpty) matchIds.add(mid);
+    final uid = v['uploader_user_id']?.toString();
+    if (uid != null && uid.isNotEmpty) uploaderIds.add(uid);
+  }
+
+  final matchesMap = <String, Map<String, dynamic>>{};
+  if (matchIds.isNotEmpty) {
+    final matchesRes = await client
+        .from('matches')
+        .select('''
+      id, status, teamA_score, teamB_score,
+      league:leagues(league_name),
+      teamA:teams!teamA(id, logo_id, short_form),
+      teamB:teams!teamB(id, logo_id, short_form)
+    ''')
+        .inFilter('id', matchIds.toList());
+    for (final m in List<Map<String, dynamic>>.from(matchesRes as List)) {
+      final id = m['id']?.toString();
+      if (id != null) matchesMap[id] = m;
+    }
+  }
+
+  final uploadersMap = <String, Map<String, dynamic>>{};
+  if (uploaderIds.isNotEmpty) {
+    final uploadersRes = await client
+        .from('players')
+        .select('id, player_name, image_url')
+        .inFilter('id', uploaderIds.toList());
+    for (final p in List<Map<String, dynamic>>.from(uploadersRes as List)) {
+      final id = p['id']?.toString();
+      if (id != null) uploadersMap[id] = p;
+    }
+  }
+
+  return videos.map((v) {
+    final match = matchesMap[v['match_id']?.toString()] ?? <String, dynamic>{};
+    final league = match['league'] as Map<String, dynamic>? ?? {};
+    final teamA = match['teamA'] as Map<String, dynamic>? ?? {};
+    final teamB = match['teamB'] as Map<String, dynamic>? ?? {};
+    final uploader =
+        uploadersMap[v['uploader_user_id']?.toString()] ?? <String, dynamic>{};
+
+    final teamAScore = match['teamA_score'] is int
+        ? match['teamA_score'] as int
+        : int.tryParse(match['teamA_score']?.toString() ?? '0') ?? 0;
+    final teamBScore = match['teamB_score'] is int
+        ? match['teamB_score'] as int
+        : int.tryParse(match['teamB_score']?.toString() ?? '0') ?? 0;
+
+    String result;
+    if (teamAScore > teamBScore) {
+      result = '${teamA['short_form'] ?? 'Team A'} wins!';
+    } else if (teamBScore > teamAScore) {
+      result = '${teamB['short_form'] ?? 'Team B'} wins!';
+    } else {
+      result = 'Draw';
+    }
+
+    final status = match['status']?.toString() ?? '';
+
+    return _ExploreVideoItem(
+      videoId: v['id']?.toString() ?? '',
+      videoUrl: v['video_url']?.toString() ?? '',
+      hlsUrl: v['hls_url']?.toString(),
+      durationSeconds: v['duration_seconds'] as int?,
+      teamALogo: teamA['logo_id']?.toString() ?? AppAssets.theShieldLogo,
+      teamBLogo: teamB['logo_id']?.toString() ?? AppAssets.laFamilleLogo,
+      teamAShort: teamA['short_form']?.toString() ?? 'Team A',
+      teamBShort: teamB['short_form']?.toString() ?? 'Team B',
+      teamAScore: teamAScore,
+      teamBScore: teamBScore,
+      leagueName: league['league_name']?.toString() ?? 'League',
+      statusText: status,
+      resultText: result,
+      uploaderName: uploader['player_name']?.toString(),
+      uploaderAvatar: uploader['image_url']?.toString(),
+      thumbnailUrl: v['thumbnail_url']?.toString(),
+    );
+  }).toList();
 }
 
 class ExploreSearchBar extends StatefulWidget {

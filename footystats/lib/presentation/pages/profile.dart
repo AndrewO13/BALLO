@@ -1956,7 +1956,11 @@ class _AttributesRadarChart extends StatelessWidget {
             borderColor: Theme.of(context).colorScheme.primaryContainer,
             borderWidth: 2,
             dataEntries: attributes
-                .map((attr) => RadarEntry(value: attr['value'] as double))
+                .map(
+                  (attr) => RadarEntry(
+                    value: (attr['value'] as num).toDouble(),
+                  ),
+                )
                 .toList(),
           ),
         ],

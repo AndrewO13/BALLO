@@ -24,8 +24,8 @@ class SelectedGameweekNotifier extends Notifier<String?> {
 
 final selectedGameweekProvider =
     NotifierProvider<SelectedGameweekNotifier, String?>(
-  SelectedGameweekNotifier.new,
-);
+      SelectedGameweekNotifier.new,
+    );
 
 /// Selected league filter (league id). Null = all leagues user participates in.
 class SelectedMatchesLeagueNotifier extends Notifier<String?> {
@@ -36,8 +36,8 @@ class SelectedMatchesLeagueNotifier extends Notifier<String?> {
 
 final selectedMatchesLeagueProvider =
     NotifierProvider<SelectedMatchesLeagueNotifier, String?>(
-  SelectedMatchesLeagueNotifier.new,
-);
+      SelectedMatchesLeagueNotifier.new,
+    );
 
 /// Selected season filter (season id). Null = all.
 class SelectedMatchesSeasonNotifier extends Notifier<String?> {
@@ -48,8 +48,8 @@ class SelectedMatchesSeasonNotifier extends Notifier<String?> {
 
 final selectedMatchesSeasonProvider =
     NotifierProvider<SelectedMatchesSeasonNotifier, String?>(
-  SelectedMatchesSeasonNotifier.new,
-);
+      SelectedMatchesSeasonNotifier.new,
+    );
 
 /// Selected team filter (team id). Null = all teams user participates in.
 class SelectedMatchesTeamNotifier extends Notifier<String?> {
@@ -60,8 +60,8 @@ class SelectedMatchesTeamNotifier extends Notifier<String?> {
 
 final selectedMatchesTeamProvider =
     NotifierProvider<SelectedMatchesTeamNotifier, String?>(
-  SelectedMatchesTeamNotifier.new,
-);
+      SelectedMatchesTeamNotifier.new,
+    );
 
 /// Label for the selected gameweek (e.g. "Gameweek 5") or null if all.
 final selectedGameweekLabelProvider = Provider.autoDispose<String?>((ref) {
@@ -86,43 +86,44 @@ final selectedGameweekLabelProvider = Provider.autoDispose<String?>((ref) {
 /// Leagues the user participates in (created or has team in).
 final matchesFilterLeaguesProvider =
     FutureProvider.autoDispose<List<LeagueModel>>((ref) async {
-  final userId = Supabase.instance.client.auth.currentUser?.id;
-  if (userId == null) return [];
-  final repo = ref.watch(leaguesRepositoryProvider);
-  return repo.getLeaguesForUser(userId);
-});
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return [];
+      final repo = ref.watch(leaguesRepositoryProvider);
+      return repo.getLeaguesForUser(userId);
+    });
 
 /// Seasons for matches filter. If league selected, that league's seasons;
 /// else seasons from all user's leagues.
 final matchesFilterSeasonsProvider =
     FutureProvider.autoDispose<List<SeasonModel>>((ref) async {
-  final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
-  final selectedLeague = ref.watch(selectedMatchesLeagueProvider);
-  if (leagues.isEmpty) return [];
-  final leagueIds = selectedLeague != null
-      ? [selectedLeague]
-      : leagues.map((l) => l.id).toList();
-  final seasonsRepo = ref.watch(seasonsRepositoryProvider);
-  return seasonsRepo.getSeasonsForLeagues(leagueIds);
-});
+      final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
+      final selectedLeague = ref.watch(selectedMatchesLeagueProvider);
+      if (leagues.isEmpty) return [];
+      final leagueIds = selectedLeague != null
+          ? [selectedLeague]
+          : leagues.map((l) => l.id).toList();
+      final seasonsRepo = ref.watch(seasonsRepositoryProvider);
+      return seasonsRepo.getSeasonsForLeagues(leagueIds);
+    });
 
 /// Gameweeks for matches filter. From selected season or all user's seasons.
 final matchesFilterGameweeksProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final seasons = await ref.watch(matchesFilterSeasonsProvider.future);
-  final selectedSeason = ref.watch(selectedMatchesSeasonProvider);
-  if (seasons.isEmpty) return [];
-  final seasonIds = selectedSeason != null
-      ? [selectedSeason]
-      : seasons.map((s) => s.id).toList();
-  final seasonsRepo = ref.watch(seasonsRepositoryProvider);
-  return seasonsRepo.getGameweeksForSeasons(seasonIds);
-});
+      final seasons = await ref.watch(matchesFilterSeasonsProvider.future);
+      final selectedSeason = ref.watch(selectedMatchesSeasonProvider);
+      if (seasons.isEmpty) return [];
+      final seasonIds = selectedSeason != null
+          ? [selectedSeason]
+          : seasons.map((s) => s.id).toList();
+      final seasonsRepo = ref.watch(seasonsRepositoryProvider);
+      return seasonsRepo.getGameweeksForSeasons(seasonIds);
+    });
 
 /// Teams in leagues the user participates in. If a league is selected, only
 /// teams in that league; otherwise teams from all user's leagues.
-final matchesFilterTeamsProvider =
-    FutureProvider.autoDispose<List<TeamModel>>((ref) async {
+final matchesFilterTeamsProvider = FutureProvider.autoDispose<List<TeamModel>>((
+  ref,
+) async {
   final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
   final selectedLeague = ref.watch(selectedMatchesLeagueProvider);
   if (leagues.isEmpty) return [];
@@ -135,8 +136,9 @@ final matchesFilterTeamsProvider =
 
 /// Fetches matches from Supabase. Filters by league, season, gameweek, team
 /// via the selected filter providers. RLS restricts to user's matches.
-final matchesProvider =
-    FutureProvider.autoDispose<List<MatchModel>>((ref) async {
+final matchesProvider = FutureProvider.autoDispose<List<MatchModel>>((
+  ref,
+) async {
   final repo = ref.watch(matchesRepositoryProvider);
   final gameweek = ref.watch(selectedGameweekProvider);
   final leagueId = ref.watch(selectedMatchesLeagueProvider);
@@ -170,35 +172,35 @@ final matchesProvider =
 /// (Monday–Sunday of the current week).
 final homeThisWeekMatchesProvider =
     FutureProvider.autoDispose<List<MatchModel>>((ref) async {
-  final repo = ref.watch(matchesRepositoryProvider);
-  return repo.getMatchesThisWeek();
-});
+      final repo = ref.watch(matchesRepositoryProvider);
+      return repo.getMatchesThisWeek();
+    });
 
 /// Fetches a single match by id for the fixture detail page.
-final fixtureMatchProvider =
-    FutureProvider.autoDispose.family<MatchModel?, String>((ref, matchId) async {
-  if (matchId.isEmpty) return null;
-  final repo = ref.watch(matchesRepositoryProvider);
-  return repo.getMatchById(matchId);
-});
+final fixtureMatchProvider = FutureProvider.autoDispose
+    .family<MatchModel?, String>((ref, matchId) async {
+      if (matchId.isEmpty) return null;
+      final repo = ref.watch(matchesRepositoryProvider);
+      return repo.getMatchById(matchId);
+    });
 
 /// Matches grouped by date for UI. Key: "yyyy-MM-dd", value: list of matches on that date.
 final matchesGroupedByDateProvider =
     Provider.autoDispose<Map<String, List<MatchModel>>>((ref) {
-  final asyncMatches = ref.watch(matchesProvider);
-  return asyncMatches.when(
-    data: (list) {
-      final map = <String, List<MatchModel>>{};
-      for (final m in list) {
-        final key = _dateKey(m.matchDate);
-        map.putIfAbsent(key, () => []).add(m);
-      }
-      return map;
-    },
-    loading: () => <String, List<MatchModel>>{},
-    error: (_, __) => <String, List<MatchModel>>{},
-  );
-});
+      final asyncMatches = ref.watch(matchesProvider);
+      return asyncMatches.when(
+        data: (list) {
+          final map = <String, List<MatchModel>>{};
+          for (final m in list) {
+            final key = _dateKey(m.matchDate);
+            map.putIfAbsent(key, () => []).add(m);
+          }
+          return map;
+        },
+        loading: () => <String, List<MatchModel>>{},
+        error: (_, __) => <String, List<MatchModel>>{},
+      );
+    });
 
 /// Simple ticking clock per match, used to keep stopwatch in sync between
 /// pages.
@@ -238,8 +240,8 @@ class MatchClockNotifier extends Notifier<Duration> {
 
 final matchClockProvider =
     NotifierProvider.family<MatchClockNotifier, Duration, String>(
-  MatchClockNotifier.new,
-);
+      MatchClockNotifier.new,
+    );
 
 /// Timer config per match: half duration and whether we've reached half time.
 /// When half duration is set and clock exceeds it (45' or 90'), the pill turns red.
@@ -276,19 +278,16 @@ class MatchTimerConfig {
   MatchTimerConfig copyWith({
     int? halfDurationMinutes,
     bool? hasReachedHalfTime,
-  }) =>
-      MatchTimerConfig(
-        halfDurationMinutes: halfDurationMinutes ?? this.halfDurationMinutes,
-        hasReachedHalfTime: hasReachedHalfTime ?? this.hasReachedHalfTime,
-      );
+  }) => MatchTimerConfig(
+    halfDurationMinutes: halfDurationMinutes ?? this.halfDurationMinutes,
+    hasReachedHalfTime: hasReachedHalfTime ?? this.hasReachedHalfTime,
+  );
 
   /// Target minute for red pill. First half: halfDuration. Second half: halfDuration * 2
   /// (clock continues from 45 to 90, etc.).
   int? get targetMinute {
     if (halfDurationMinutes == null) return null;
-    return hasReachedHalfTime
-        ? halfDurationMinutes! * 2
-        : halfDurationMinutes;
+    return hasReachedHalfTime ? halfDurationMinutes! * 2 : halfDurationMinutes;
   }
 
   /// True when clock has passed the half target (stoppage time).
@@ -305,8 +304,8 @@ class MatchTimerConfig {
 
 final matchTimerConfigProvider =
     NotifierProvider.family<MatchTimerConfigNotifier, MatchTimerConfig, String>(
-  MatchTimerConfigNotifier.new,
-);
+      MatchTimerConfigNotifier.new,
+    );
 
 String formatMatchClock(Duration d) {
   final m = d.inMinutes;
@@ -323,8 +322,18 @@ String formatMatchDateKey(String key) {
   final d = int.tryParse(parts[2]) ?? 1;
   final dt = DateTime(y, m, d);
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   final wd = weekdays[dt.weekday - 1];
@@ -339,17 +348,20 @@ String _dateKey(DateTime d) {
   return '$y-$m-$day';
 }
 
-/// In-memory list of video URLs per match (story-style). Add via pick + upload.
-class MatchVideosNotifier extends Notifier<List<String>> {
-  MatchVideosNotifier(this.matchId);
-  final String matchId;
-
-  @override
-  List<String> build() => [];
-
-  void add(String url) => state = [...state, url];
-}
-
-final matchVideosProvider =
-    NotifierProvider.family<MatchVideosNotifier, List<String>, String>(
-        MatchVideosNotifier.new);
+/// Match videos for a given match, loaded from the `videos` table.
+/// Returns list of public video URLs.
+final matchVideosProvider = FutureProvider.autoDispose
+    .family<List<String>, String>((ref, matchId) async {
+      if (matchId.isEmpty) return [];
+      final client = Supabase.instance.client;
+      final res = await client
+          .from('videos')
+          .select('video_url')
+          .eq('match_id', matchId)
+          .order('created_at');
+      final list = res as List;
+      return list
+          .map((row) => row['video_url']?.toString())
+          .whereType<String>()
+          .toList();
+    });
