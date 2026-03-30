@@ -35,6 +35,18 @@ class AppAssets {
   static const String avatar13 = '${avatarsPath}3d_avatar_13.png';
   static const String avatar18 = '${avatarsPath}3d_avatar_18.png';
   static const String avatar20 = '${avatarsPath}3d_avatar_20.png';
+  static const String avatar1 = '${avatarsPath}3d_avatar_1.png';
+  static const String avatar6 = '${avatarsPath}3d_avatar_6.png';
+  static const String avatar8 = '${avatarsPath}3d_avatar_8.png';
+  static const String avatar10 = '${avatarsPath}3d_avatar_10.png';
+  static const String avatar19 = '${avatarsPath}3d_avatar_19.png';
+  static const String avatar21 = '${avatarsPath}3d_avatar_21.png';
+  static const String avatar23 = '${avatarsPath}3d_avatar_23.png';
+  static const String avatar22 = '${avatarsPath}3d_avatar_22.png';
+  static const String avatar26 = '${avatarsPath}3d_avatar_26.png';
+  static const String avatar28 = '${avatarsPath}3d_avatar_28.png';
+  static const String avatar29 = '${avatarsPath}3d_avatar_29.png';
+  static const String avatar24 = '${avatarsPath}3d_avatar_24.png';
 
   // Badges
   static const String badgesPath = 'lib/assets/icons/badges/';

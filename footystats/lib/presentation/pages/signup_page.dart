@@ -22,6 +22,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final _confirmPasswordController = TextEditingController();
 
   bool _isSubmitting = false;
+  String? _emailError;
 
   @override
   void dispose() {
@@ -39,12 +40,23 @@ class _SignUpPageState extends State<SignUpPage> {
 
     try {
       final supabase = Supabase.instance.client;
-      await supabase.auth.signUp(
+      final response = await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
       if (!mounted) return;
+
+      // Supabase returns an empty identities list instead of an error
+      // when the email is already registered (to prevent enumeration).
+      if (response.user?.identities?.isEmpty ?? false) {
+        setState(() {
+          _emailError = 'An account with this email already exists';
+        });
+        _formKey.currentState?.validate();
+        return;
+      }
+
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => VerifyCodePage(email: _emailController.text.trim()),
@@ -162,7 +174,15 @@ class _SignUpPageState extends State<SignUpPage> {
                                         labelText: 'Email',
                                         hintText: 'you@example.com',
                                       ),
+                                      onChanged: (_) {
+                                        if (_emailError != null) {
+                                          setState(() => _emailError = null);
+                                        }
+                                      },
                                       validator: (value) {
+                                        if (_emailError != null) {
+                                          return _emailError;
+                                        }
                                         if (value == null || value.isEmpty) {
                                           return 'Enter your email';
                                         }

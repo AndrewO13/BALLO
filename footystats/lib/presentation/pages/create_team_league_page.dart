@@ -774,6 +774,8 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
   final _formKey = GlobalKey<FormState>();
   final _leagueNameController = TextEditingController();
   String? _logoUrl;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   bool _isSubmitting = false;
 
@@ -786,6 +788,23 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
   Future<void> _onSubmit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
+
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select both start date and end date'),
+        ),
+      );
+      return;
+    }
+    if (_endDate!.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('End date must be on or after start date'),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
@@ -801,13 +820,19 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
         return;
       }
 
+      final insertData = <String, dynamic>{
+        'league_name': _leagueNameController.text.trim(),
+        'logo_id': _logoUrl,
+        'created_by': user.id,
+      };
+      insertData['start_date'] =
+          '${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}';
+      insertData['end_date'] =
+          '${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}';
+
       final response = await supabase
           .from('leagues')
-          .insert({
-            'league_name': _leagueNameController.text.trim(),
-            'logo_id': _logoUrl,
-            'created_by': user.id,
-          })
+          .insert(insertData)
           .select('id')
           .single();
 
@@ -879,6 +904,66 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
                         _logoUrl = url;
                       });
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final now = DateTime.now();
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: _startDate ?? now,
+                              firstDate:
+                                  now.subtract(const Duration(days: 365)),
+                              lastDate: now.add(const Duration(days: 730)),
+                            );
+                            if (d != null) {
+                              setState(() => _startDate = d);
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                          child: Text(
+                            _startDate == null
+                                ? 'Start date'
+                                : '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final now = DateTime.now();
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: _endDate ?? _startDate ?? now,
+                              firstDate: _startDate ?? now,
+                              lastDate: (_startDate ?? now)
+                                  .add(const Duration(days: 730)),
+                            );
+                            if (d != null) {
+                              setState(() => _endDate = d);
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                          child: Text(
+                            _endDate == null
+                                ? 'End date'
+                                : '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   SizedBox(

@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../core/utils/stoppage_alert.dart';
@@ -8,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../domain/models/fixture_goal_event.dart';
@@ -95,35 +96,63 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       final picker = ImagePicker();
       final xFile = await picker.pickVideo(source: ImageSource.gallery);
       if (xFile == null || !context.mounted) return null;
-      final bytes = await xFile.readAsBytes();
+      final supabase = Supabase.instance.client;
+      const bucket = 'Match videos';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
 
+      // Read video file
+      final videoFile = File(xFile.path);
+      final videoExt = p.extension(videoFile.path);
+      final videoPath = 'match-videos/$matchId/${matchId}_$timestamp$videoExt';
+      final videoBytes = await videoFile.readAsBytes();
+
+      // Duration
       int? durationSeconds;
+      try {
+        final tempController = VideoPlayerController.file(videoFile);
+        await tempController.initialize();
+        durationSeconds = tempController.value.duration.inSeconds;
+        await tempController.dispose();
+      } catch (_) {
+        durationSeconds = null;
+      }
+
+      // Thumbnail (mobile/desktop only)
+      String? thumbUrl;
       if (!kIsWeb) {
         try {
-          final file = File(xFile.path);
-          final tempController = VideoPlayerController.file(file);
-          await tempController.initialize();
-          durationSeconds = tempController.value.duration.inSeconds;
-          await tempController.dispose();
+          final thumbPath = await VideoThumbnail.thumbnailFile(
+            video: videoFile.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 720,
+            quality: 75,
+            timeMs: 300,
+          );
+          if (thumbPath != null) {
+            final thumbFile = File(thumbPath);
+            final thumbBytes = await thumbFile.readAsBytes();
+            final thumbStoragePath =
+                'match-thumbnails/$matchId/${matchId}_$timestamp.jpg';
+            await supabase.storage
+                .from(bucket)
+                .uploadBinary(thumbStoragePath, thumbBytes);
+            thumbUrl = supabase.storage
+                .from(bucket)
+                .getPublicUrl(thumbStoragePath);
+          }
         } catch (_) {
-          durationSeconds = null;
+          thumbUrl = null;
         }
       }
 
-      final supabase = Supabase.instance.client;
-      const bucket = 'Match videos';
-      final path =
-          'match-videos/$matchId/${matchId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
-      await supabase.storage.from(bucket).uploadBinary(path, bytes);
-      final url = supabase.storage.from(bucket).getPublicUrl(path);
+      await supabase.storage.from(bucket).uploadBinary(videoPath, videoBytes);
+      final url = supabase.storage.from(bucket).getPublicUrl(videoPath);
       await supabase.from('videos').insert({
         'match_id': matchId,
         'uploader_user_id': supabase.auth.currentUser?.id,
         'duration_seconds': durationSeconds,
         'video_url': url,
-        // thumbnail_url and hls_url can be filled later by a Supabase Edge Function.
-        'thumbnail_url': null,
-        'hls_url': null,
+        'thumbnail_url': thumbUrl,
       });
       if (context.mounted) {
         ScaffoldMessenger.of(

@@ -23,7 +23,7 @@ class UserProfileRepository {
 
     final res = await _client
         .from('players')
-        .select('id, username, player_name')
+        .select('id, username, player_name, position, image_url, country')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -41,12 +41,18 @@ class UserProfileRepository {
       email: user.email ?? '',
       username: map['username'] as String?,
       playerName: map['player_name'] as String?,
+      position: map['position'] as String?,
+      imageUrl: map['image_url'] as String?,
+      country: map['country'] as String?,
     );
   }
 
   Future<UserProfile> upsertCurrentProfile({
     required String username,
     required String playerName,
+    String? position,
+    String? imageUrl,
+    String? country,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -58,6 +64,9 @@ class UserProfileRepository {
       'username': username,
       'player_name': playerName,
     };
+    if (position != null) payload['position'] = position;
+    if (imageUrl != null) payload['image_url'] = imageUrl;
+    if (country != null) payload['country'] = country;
 
     final res = await _client
         .from('players')
@@ -66,7 +75,6 @@ class UserProfileRepository {
         .maybeSingle();
 
     if (res == null) {
-      // If the database does not return the row, fall back to local payload.
       return UserProfile(
         id: user.id,
         email: user.email ?? '',

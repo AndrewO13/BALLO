@@ -3,12 +3,18 @@ class UserProfile {
   final String email;
   final String? username;
   final String? playerName;
+  final String? position;
+  final String? imageUrl;
+  final String? country;
 
   const UserProfile({
     required this.id,
     required this.email,
     this.username,
     this.playerName,
+    this.position,
+    this.imageUrl,
+    this.country,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -17,6 +23,9 @@ class UserProfile {
       email: json['email']?.toString() ?? '',
       username: json['username'] as String?,
       playerName: json['player_name'] as String?,
+      position: json['position'] as String?,
+      imageUrl: json['image_url'] as String?,
+      country: json['country'] as String?,
     );
   }
 
@@ -26,6 +35,9 @@ class UserProfile {
       'email': email,
       'username': username,
       'player_name': playerName,
+      'position': position,
+      'image_url': imageUrl,
+      'country': country,
     };
   }
 }

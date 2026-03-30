@@ -2,8 +2,11 @@ import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants/app_assets.dart';
 import '../../data/repositories/league_applications_repository.dart';
+import '../../data/repositories/leagues_repository.dart';
 import '../../domain/models/season_model.dart';
 import '../../data/repositories/teams_repository.dart';
 import '../../domain/models/team_model.dart';
@@ -573,7 +576,7 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage> {
             Expanded(
               child: TabBarView(
                 children: [
-                  const _LeagueTabPlaceholder(title: 'Overview'),
+                  _LeagueOverviewTab(league: _league!),
                   const _LeagueTabPlaceholder(title: 'Matches'),
                   const _LeagueTabPlaceholder(title: 'Standings'),
                   const _LeagueTabPlaceholder(title: 'Team stats'),
@@ -1246,6 +1249,737 @@ class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error: $err')),
+    );
+  }
+}
+
+class _LeagueOverviewTab extends StatelessWidget {
+  const _LeagueOverviewTab({required this.league});
+
+  final Map<String, dynamic> league;
+
+  static const _monthAbbr = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _formatDateShort(DateTime d) => '${d.day} ${_monthAbbr[d.month - 1]}';
+
+  DateTime? _parseDate(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v.split('T').first);
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final leagueName = league['league_name'] as String? ?? 'Unknown';
+    final logoUrl = league['logo_id'] as String?;
+    final startRaw = league['start_date'];
+    final endRaw = league['end_date'];
+    final startDate = _parseDate(startRaw);
+    final endDate = _parseDate(endRaw);
+
+    double? progress;
+    if (startDate != null && endDate != null) {
+      final now = DateTime.now();
+      final start = DateTime(startDate.year, startDate.month, startDate.day);
+      final end = DateTime(endDate.year, endDate.month, endDate.day);
+      final today = DateTime(now.year, now.month, now.day);
+      final totalDays = end.difference(start).inDays;
+      progress = totalDays > 0
+          ? (today.difference(start).inDays / totalDays).clamp(0.0, 1.0)
+          : 0.0;
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (startDate != null && endDate != null) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant,
+                            width: 1,
+                          ),
+                        ),
+                        child: logoUrl != null && logoUrl.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(11),
+                                child: Image.network(
+                                  logoUrl,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(
+                                    Icons.emoji_events,
+                                    size: 24,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.emoji_events,
+                                size: 24,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              leagueName,
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(
+                        year2023: false,
+                        value: progress!,
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatDateShort(startDate),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            _formatDateShort(endDate),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ] else
+            Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Text(
+                'Season dates not set for this league.',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          const SizedBox(height: 16),
+          _PlayerOfSeasonSection(leagueId: league['id'] as String? ?? ''),
+          const SizedBox(height: 16),
+          _TeamOfTheWeekSection(leagueId: league['id'] as String? ?? ''),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlayerOfSeasonSection extends StatelessWidget {
+  const _PlayerOfSeasonSection({required this.leagueId});
+
+  final String leagueId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: leagueId.isEmpty
+          ? Future.value([])
+          : LeaguesRepository().getTopPlayersByRating(leagueId, limit: 3),
+      builder: (context, snapshot) {
+        final players = snapshot.data ?? [];
+        if (players.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(24.0),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.emoji_events_outlined,
+                      size: 24,
+                      color: colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Player of the Season race',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: colorScheme.primary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No match stats yet. Play matches to see top players.',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.emoji_events_outlined,
+                    size: 24,
+                    color: colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Player of the Season race',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: colorScheme.primary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...List.generate(players.length, (i) {
+                final p = players[i];
+                final rank = i + 1;
+                final name = p['player_name'] as String? ?? 'Unknown';
+                final teamName = p['team_name'] as String? ?? '—';
+                final imageUrl = p['image_url'] as String?;
+                final teamLogo = p['team_logo'] as String?;
+                final avgRating = (p['avg_rating'] as num?)?.toDouble() ?? 0.0;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: i < players.length - 1 ? 12 : 0),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        child: Text(
+                          '$rank',
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _PlayerAvatar(imageUrl: imageUrl),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: textTheme.bodyLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                if (teamLogo != null && teamLogo.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ClipOval(
+                                      child: _isValidUrl(teamLogo)
+                                          ? Image.network(
+                                              teamLogo,
+                                              width: 16,
+                                              height: 16,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : Icon(
+                                              Icons.groups,
+                                              size: 16,
+                                              color: colorScheme.onSurfaceVariant,
+                                            ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    teamName,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.star,
+                              size: 14,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              avgRating.toStringAsFixed(2),
+                              style: textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Full player stats coming soon'),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.chevron_right, size: 18, color: colorScheme.primary),
+                  label: Text(
+                    'View top players',
+                    style: TextStyle(color: colorScheme.primary),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static bool _isValidUrl(String? s) =>
+      s != null &&
+      s.isNotEmpty &&
+      (s.startsWith('http://') || s.startsWith('https://'));
+}
+
+class _PlayerAvatar extends StatelessWidget {
+  const _PlayerAvatar({this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: colorScheme.surfaceContainerHighest,
+        child: Icon(Icons.person, color: colorScheme.onSurfaceVariant),
+      );
+    }
+    final url = imageUrl!;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: colorScheme.surfaceContainerHighest,
+        backgroundImage: NetworkImage(url),
+      );
+    }
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      backgroundImage: AssetImage(url),
+    );
+  }
+}
+
+class _TeamOfTheWeekSection extends StatelessWidget {
+  const _TeamOfTheWeekSection({required this.leagueId});
+
+  final String leagueId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+      future: leagueId.isEmpty
+          ? Future.value({})
+          : LeaguesRepository().getTeamOfTheWeek(leagueId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final data = snapshot.data ?? {};
+        final gk = data['Goalkeeper'] ?? [];
+        final def = data['Defender'] ?? [];
+        final mid = data['Midfielder'] ?? [];
+        final att = data['Attacker'] ?? [];
+        final hasPlayers =
+            gk.isNotEmpty || def.isNotEmpty || mid.isNotEmpty || att.isNotEmpty;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.star_rounded,
+                        color: colorScheme.primary, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Team of the Week',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!hasPlayers)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Text(
+                    'No match stats yet. Play matches to see the team of the week.',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                  child: _TeamOfTheWeekPitch(
+                    goalkeepers: gk,
+                    defenders: def,
+                    midfielders: mid,
+                    attackers: att,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TeamOfTheWeekPitch extends StatelessWidget {
+  const _TeamOfTheWeekPitch({
+    required this.goalkeepers,
+    required this.defenders,
+    required this.midfielders,
+    required this.attackers,
+  });
+
+  final List<Map<String, dynamic>> goalkeepers;
+  final List<Map<String, dynamic>> defenders;
+  final List<Map<String, dynamic>> midfielders;
+  final List<Map<String, dynamic>> attackers;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pitchWidth = constraints.maxWidth;
+        final pitchHeight = pitchWidth * (274 / 380);
+        final bgHeight = pitchWidth;
+        final pitchTop = bgHeight - pitchHeight;
+        const playerSize = 60.0;
+
+        // Divide pitch into 4 rows: ATT (top), MID, DEF, GK (bottom)
+        final rowHeight = pitchHeight / 4;
+        final rowCenters = [
+          pitchTop + rowHeight * 0.5, // Attackers
+          pitchTop + rowHeight * 1.5, // Midfielders
+          pitchTop + rowHeight * 2.5, // Defenders
+          pitchTop + rowHeight * 3.5, // Goalkeepers
+        ];
+
+        List<Positioned> _buildRow(
+          List<Map<String, dynamic>> players,
+          double rowCenterY,
+        ) {
+          if (players.isEmpty) return [];
+          final count = players.length;
+          final spacing = pitchWidth / (count + 1);
+          return List.generate(players.length, (i) {
+            final p = players[i];
+            final x = spacing * (i + 1) - playerSize / 2;
+            final y = rowCenterY - playerSize / 2;
+            final name = p['player_name'] as String? ?? '';
+            final imageUrl = p['image_url'] as String? ?? '';
+            final rating = p['rating'];
+            double ratingVal = 0.0;
+            if (rating is num) ratingVal = rating.toDouble();
+            else if (rating is String) ratingVal = double.tryParse(rating) ?? 0;
+
+            return Positioned(
+              left: x,
+              top: y,
+              child: _TeamOfTheWeekPlayer(
+                name: name,
+                imageAsset: imageUrl,
+                rating: ratingVal,
+              ),
+            );
+          });
+        }
+
+        return SizedBox(
+          width: pitchWidth,
+          height: bgHeight,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                top: 0,
+                width: pitchWidth,
+                child: Image.asset(
+                  'lib/assets/images/pitch bg.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomCenter,
+                  color: const Color(0xFF107F6B),
+                  colorBlendMode: BlendMode.color,
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: pitchTop,
+                width: pitchWidth,
+                height: pitchHeight,
+                child: SvgPicture.asset(
+                  'lib/assets/icons/squad/pitch.svg',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              ..._buildRow(attackers, rowCenters[0]),
+              ..._buildRow(midfielders, rowCenters[1]),
+              ..._buildRow(defenders, rowCenters[2]),
+              ..._buildRow(goalkeepers, rowCenters[3]),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TeamOfTheWeekPlayer extends StatelessWidget {
+  const _TeamOfTheWeekPlayer({
+    required this.name,
+    required this.imageAsset,
+    required this.rating,
+  });
+
+  final String name;
+  final String imageAsset;
+  final double rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final path = imageAsset.trim();
+    final isNetwork =
+        path.startsWith('http://') || path.startsWith('https://');
+    final image = path.isEmpty
+        ? Image.asset(AppAssets.playerImage,
+            width: 60, height: 60, fit: BoxFit.cover)
+        : isNetwork
+            ? Image.network(path,
+                width: 60,
+                height: 60,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Image.asset(
+                      AppAssets.playerImage,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ))
+            : Image.asset(path,
+                width: 60,
+                height: 60,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Image.asset(
+                      AppAssets.playerImage,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ));
+
+    return SizedBox(
+      width: 60,
+      height: 76,
+      child: Column(
+        children: [
+          SizedBox(
+            width: 60,
+            height: 60,
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                Positioned(
+                  top: 0,
+                  child: SvgPicture.asset(
+                    'lib/assets/icons/squad/back.svg',
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                Positioned(top: 0, child: image),
+                Positioned(
+                  bottom: 0,
+                  child: SizedBox(
+                    width: 60,
+                    height: 16,
+                    child: Stack(
+                      children: [
+                        SvgPicture.asset(
+                          'lib/assets/icons/squad/name.svg',
+                          width: 60,
+                          height: 16,
+                          fit: BoxFit.contain,
+                        ),
+                        Center(
+                          child: Text(
+                            name,
+                            style: textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onPrimary,
+                              fontSize: 9,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              rating.toStringAsFixed(1),
+              style: textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onPrimaryContainer,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

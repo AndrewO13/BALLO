@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
-import 'player_name_page.dart';
+import 'onboarding_position_page.dart';
 
 class UsernamePage extends StatefulWidget {
   const UsernamePage({super.key, required this.email});
@@ -44,7 +44,7 @@ class _UsernamePageState extends State<UsernamePage> {
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => PlayerNamePage(
+          builder: (_) => OnboardingPositionPage(
             email: widget.email,
             username: _usernameController.text.trim(),
           ),

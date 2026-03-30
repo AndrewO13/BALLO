@@ -145,6 +145,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  cached_video_player_plus:
+    dependency: "direct main"
+    description:
+      name: cached_video_player_plus
+      sha256: b7560ea4c5f6d3f2ab3cf1bfbdb35e454bd2860f71f2d38bc6a935e450b5b094
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.1.0"
   characters:
     dependency: transitive
     description:
@@ -257,6 +265,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.1"
+  dotted_border:
+    dependency: "direct main"
+    description:
+      name: dotted_border
+      sha256: "108837e11848ca776c53b30bc870086f84b62ed6e01c503ed976e8f8c7df9c04"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
   ed25519_edwards:
     dependency: transitive
     description:
@@ -350,6 +366,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_cache_manager:
+    dependency: transitive
+    description:
+      name: flutter_cache_manager
+      sha256: "400b6592f16a4409a7f2bb929a9a7e38c72cceb8ffb99ee57bbf2cb2cecf8386"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.1"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -408,6 +432,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.5.0"
+  get:
+    dependency: transitive
+    description:
+      name: get
+      sha256: "5ed34a7925b85336e15d472cc4cfe7d9ebf4ab8e8b9f688585bf6b50f4c3d79a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.7.3"
+  get_storage:
+    dependency: transitive
+    description:
+      name: get_storage
+      sha256: "39db1fffe779d0c22b3a744376e86febe4ade43bf65e06eab5af707dc84185a2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
   glob:
     dependency: transitive
     description:
@@ -680,6 +720,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.9.1"
+  path_drawing:
+    dependency: transitive
+    description:
+      name: path_drawing
+      sha256: bbb1934c0cbb03091af082a6389ca2080345291ef07a5fa6d6e078ba8682f977
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   path_parsing:
     dependency: transitive
     description:
@@ -941,6 +989,46 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.1"
+  sqflite:
+    dependency: transitive
+    description:
+      name: sqflite
+      sha256: e2297b1da52f127bc7a3da11439985d9b536f75070f3325e62ada69a5c585d03
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_android:
+    dependency: transitive
+    description:
+      name: sqflite_android
+      sha256: "881e28efdcc9950fd8e9bb42713dcf1103e62a2e7168f23c9338d82db13dec40"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2+3"
+  sqflite_common:
+    dependency: transitive
+    description:
+      name: sqflite_common
+      sha256: "6ef422a4525ecc601db6c0a2233ff448c731307906e92cabc9ba292afaae16a6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.5.6"
+  sqflite_darwin:
+    dependency: transitive
+    description:
+      name: sqflite_darwin
+      sha256: "279832e5cde3fe99e8571879498c9211f3ca6391b0d818df4e17d9fff5c6ccb3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_platform_interface:
+    dependency: transitive
+    description:
+      name: sqflite_platform_interface
+      sha256: "8dd4515c7bdcae0a785b0062859336de775e8c65db81ae33dd5445f35be61920"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0"
   stack_trace:
     dependency: transitive
     description:
@@ -1110,7 +1198,7 @@ packages:
     source: hosted
     version: "3.1.5"
   uuid:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: uuid
       sha256: "1fef9e8e11e2991bb773070d4656b7bd5d850967a2456cfc83cf47925ba79489"
@@ -1189,6 +1277,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.0"
+  video_thumbnail:
+    dependency: "direct main"
+    description:
+      name: video_thumbnail
+      sha256: "181a0c205b353918954a881f53a3441476b9e301641688a581e0c13f00dc588b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.6"
   visibility_detector:
     dependency: "direct main"
     description:

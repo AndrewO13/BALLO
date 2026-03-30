@@ -3,8 +3,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../core/constants/app_assets.dart';
+import '../../core/constants/countries.dart';
 import '../../data/repositories/user_profile_repository.dart';
 import '../../domain/models/user_profile.dart';
+import 'edit_profile_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -1995,9 +1997,67 @@ class _AttributesRadarChart extends StatelessWidget {
   }
 }
 
-class _ProfileCard extends StatelessWidget {
+/// Displays profile image - supports network URL or asset path.
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Image.asset(
+        AppAssets.playerImage,
+        width: 248,
+        height: 318,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    }
+    final url = imageUrl!;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        width: 248,
+        height: 318,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        errorBuilder: (_, __, ___) => Image.asset(
+          AppAssets.playerImage,
+          width: 248,
+          height: 318,
+          fit: BoxFit.contain,
+          alignment: Alignment.bottomCenter,
+        ),
+      );
+    }
+    // Asset path (e.g. preset avatar from onboarding)
+    return Image.asset(
+      url,
+      width: 248,
+      height: 318,
+      fit: BoxFit.contain,
+      alignment: Alignment.bottomCenter,
+      errorBuilder: (_, __, ___) => Image.asset(
+        AppAssets.playerImage,
+        width: 248,
+        height: 318,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+      ),
+    );
+  }
+}
+
+class _ProfileCard extends StatefulWidget {
   const _ProfileCard();
 
+  @override
+  State<_ProfileCard> createState() => _ProfileCardState();
+}
+
+class _ProfileCardState extends State<_ProfileCard> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<UserProfile?>(
@@ -2040,47 +2100,13 @@ class _ProfileCard extends StatelessWidget {
                   ),
                 ),
               ),
-          // Edit button in upper right corner
-          Positioned(
-            top: 16,
-            right: 16,
-            child: FilledButton.tonal(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Edit profile coming soon')),
-                );
-              },
-              style: FilledButton.styleFrom(
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(999)),
-                ),
-                padding: const EdgeInsets.only(
-                  left: 17,
-                  right: 17,
-                  top: 12,
-                  bottom: 12,
-                ),
-                minimumSize: const Size(60, 40),
-              ),
-              child: const Icon(Icons.edit_outlined, size: 20),
-            ),
-          ),
           // Player image aligned to baseline (bottom) of container
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Center(
-              child: Image.asset(
-                AppAssets.playerImage,
-                width: 248,
-                height: 318,
-                fit: BoxFit.contain,
-                alignment: Alignment.bottomCenter,
-                errorBuilder: (context, error, stackTrace) {
-                  return const SizedBox.shrink();
-                },
-              ),
+              child: _ProfileAvatar(imageUrl: profile?.imageUrl),
             ),
           ),
               // Gradient overlay fading from bottom to top
@@ -2143,7 +2169,9 @@ class _ProfileCard extends StatelessWidget {
                     children: [
                       _ActionChip(
                         svgPath: AppAssets.positionIcon,
-                        label: 'Defender',
+                        label: profile?.position?.isNotEmpty == true
+                            ? profile!.position!
+                            : '—',
                         context: context,
                       ),
                       const SizedBox(width: 8),
@@ -2161,11 +2189,44 @@ class _ProfileCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       _ActionChip(
                         icon: Icons.public_outlined,
-                        label: 'Uganda',
+                        label: profile?.country != null &&
+                                profile!.country!.isNotEmpty
+                            ? countryCodeToName(profile.country!)
+                            : '—',
                         context: context,
                       ),
                     ],
                   ),
+                ),
+              ),
+              // Edit button on top so it receives taps (must be last in Stack)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: FilledButton.tonal(
+                  onPressed: profile == null
+                      ? null
+                      : () async {
+                          final saved = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => EditProfilePage(profile: profile),
+                            ),
+                          );
+                          if (saved == true && mounted) setState(() {});
+                        },
+                  style: FilledButton.styleFrom(
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                    ),
+                    padding: const EdgeInsets.only(
+                      left: 17,
+                      right: 17,
+                      top: 12,
+                      bottom: 12,
+                    ),
+                    minimumSize: const Size(60, 40),
+                  ),
+                  child: const Icon(Icons.edit_outlined, size: 20),
                 ),
               ),
             ],

@@ -48,6 +48,10 @@ dependencies:
   path: ^1.9.0
   beep_sound: ^0.0.3
   audioplayers: ^6.1.0
+  cached_video_player_plus: ^4.1.0
+  video_thumbnail: ^0.5.6
+  uuid: ^4.5.1
+  dotted_border: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -110,6 +114,20 @@ flutter:
     - lib/assets/images/avatars/3d_avatar_13.png
     - lib/assets/images/avatars/3d_avatar_18.png
     - lib/assets/images/avatars/3d_avatar_20.png
+    - lib/assets/images/avatars/3d_avatar_1.png
+    - lib/assets/images/avatars/3d_avatar_6.png
+    - lib/assets/images/avatars/3d_avatar_8.png
+    - lib/assets/images/avatars/3d_avatar_10.png
+    - lib/assets/images/avatars/3d_avatar_13.png
+    - lib/assets/images/avatars/3d_avatar_20.png
+    - lib/assets/images/avatars/3d_avatar_19.png
+    - lib/assets/images/avatars/3d_avatar_21.png
+    - lib/assets/images/avatars/3d_avatar_23.png
+    - lib/assets/images/avatars/3d_avatar_22.png
+    - lib/assets/images/avatars/3d_avatar_26.png
+    - lib/assets/images/avatars/3d_avatar_28.png
+    - lib/assets/images/avatars/3d_avatar_29.png
+    - lib/assets/images/avatars/3d_avatar_24.png
     - lib/assets/images/trophies/budo league.png
     - lib/assets/images/trophies/bugujju league.png
     - lib/assets/images/trophies/inter uni league.png
