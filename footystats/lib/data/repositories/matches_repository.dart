@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/models/fixture_generation_options.dart';
 import '../../domain/models/fixture_generation_result.dart';
 import '../../domain/models/match_model.dart';
+import '../../domain/models/fixture_match_rated_player.dart';
+import '../../domain/models/match_team_stats_snapshot.dart';
 import '../../domain/services/fixture_generator.dart';
 
 /// Fetches matches from Supabase matches table with teamA/teamB embedded.
@@ -536,21 +538,22 @@ class MatchesRepository {
     required int minute,
     int second = 0,
     String? playerId,
+    String? secondaryPlayerId,
   }) async {
     if (matchId.isEmpty || teamId.isEmpty) return;
-    try {
-      await _client.rpc(
-        'record_match_event',
-        params: {
-          'p_match_id': matchId,
-          'p_event_type': eventType,
-          'p_team_id': teamId,
-          'p_minute': minute,
-          'p_second': second,
-          if (playerId != null && playerId.isNotEmpty) 'p_player_id': playerId,
-        },
-      );
-    } catch (_) {}
+    await _client.rpc(
+      'record_match_event',
+      params: {
+        'p_match_id': matchId,
+        'p_event_type': eventType,
+        'p_team_id': teamId,
+        'p_minute': minute,
+        'p_second': second,
+        if (playerId != null && playerId.isNotEmpty) 'p_player_id': playerId,
+        if (secondaryPlayerId != null && secondaryPlayerId.isNotEmpty)
+          'p_secondary_player_id': secondaryPlayerId,
+      },
+    );
   }
 
   /// Voids (undoes) a match event. Reverses stat updates and marks event deleted.
@@ -562,6 +565,109 @@ class MatchesRepository {
         params: {'p_event_id': eventId},
       );
     } catch (_) {}
+  }
+
+  /// Players with non-null [rating] for this match, highest first (PotM + top rated).
+  Future<List<FixtureMatchRatedPlayer>> getMatchPlayerRatingsRanked(String matchId) async {
+    if (matchId.isEmpty) return <FixtureMatchRatedPlayer>[];
+    try {
+      final res = await _client.from('match_player_stats').select('''
+            player_id, team_id, rating,
+            player:players!match_player_stats_player_id_fkey(player_name, image_url, position),
+            team:teams!match_player_stats_team_id_fkey(short_form)
+          ''').eq('match_id', matchId).not('rating', 'is', null).order(
+            'rating',
+            ascending: false,
+          );
+      final list = List<Map<String, dynamic>>.from(res as List);
+      final out = <FixtureMatchRatedPlayer>[];
+      for (final row in list) {
+        final rating = double.tryParse(row['rating']?.toString() ?? '');
+        final playerId = row['player_id']?.toString() ?? '';
+        final teamId = row['team_id']?.toString() ?? '';
+        if (rating == null || playerId.isEmpty || teamId.isEmpty) continue;
+        final player = row['player'];
+        final playerMap = player is Map<String, dynamic>
+            ? player
+            : (player is Map ? Map<String, dynamic>.from(player) : <String, dynamic>{});
+        final team = row['team'];
+        final teamMap = team is Map<String, dynamic>
+            ? team
+            : (team is Map ? Map<String, dynamic>.from(team) : <String, dynamic>{});
+        out.add(
+          FixtureMatchRatedPlayer(
+            playerId: playerId,
+            teamId: teamId,
+            name: playerMap['player_name']?.toString() ?? '—',
+            rating: rating,
+            imageUrl: playerMap['image_url']?.toString(),
+            position: playerMap['position']?.toString(),
+            teamShortForm: teamMap['short_form']?.toString(),
+          ),
+        );
+      }
+      return out;
+    } catch (_) {
+      try {
+        final res = await _client
+            .from('match_player_stats')
+            .select('player_id, team_id, rating')
+            .eq('match_id', matchId)
+            .not('rating', 'is', null)
+            .order('rating', ascending: false);
+        final list = List<Map<String, dynamic>>.from(res as List);
+        return list
+            .map(
+              (row) => FixtureMatchRatedPlayer(
+                playerId: row['player_id']?.toString() ?? '',
+                teamId: row['team_id']?.toString() ?? '',
+                name: 'Player',
+                rating: double.tryParse(row['rating']?.toString() ?? '') ?? 0,
+              ),
+            )
+            .where((p) => p.playerId.isNotEmpty && p.teamId.isNotEmpty)
+            .toList();
+      } catch (__) {
+        return [];
+      }
+    }
+  }
+
+  /// Aggregated team stats for the Stats tab (`match_team_stats` per team).
+  Future<({MatchTeamStatsSnapshot teamA, MatchTeamStatsSnapshot teamB})>
+  getMatchTeamStatsForMatch(
+    String matchId,
+    String teamAId,
+    String teamBId,
+  ) async {
+    if (matchId.isEmpty) {
+      return (
+        teamA: const MatchTeamStatsSnapshot(),
+        teamB: const MatchTeamStatsSnapshot(),
+      );
+    }
+    try {
+      final res = await _client
+          .from('match_team_stats')
+          .select()
+          .eq('match_id', matchId)
+          .inFilter('team_id', [teamAId, teamBId]);
+      final list = List<Map<String, dynamic>>.from(res as List);
+      final byTeam = <String, Map<String, dynamic>>{};
+      for (final r in list) {
+        final tid = r['team_id']?.toString();
+        if (tid != null) byTeam[tid] = r;
+      }
+      return (
+        teamA: MatchTeamStatsSnapshot.fromRow(byTeam[teamAId]),
+        teamB: MatchTeamStatsSnapshot.fromRow(byTeam[teamBId]),
+      );
+    } catch (_) {
+      return (
+        teamA: const MatchTeamStatsSnapshot(),
+        teamB: const MatchTeamStatsSnapshot(),
+      );
+    }
   }
 
   /// Fetches match_events for a match (excluding voided), with scorer/assister names.

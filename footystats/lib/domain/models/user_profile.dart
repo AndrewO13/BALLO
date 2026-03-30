@@ -6,6 +6,9 @@ class UserProfile {
   final String? position;
   final String? imageUrl;
   final String? country;
+  final String? socialInstagram;
+  final String? socialTiktok;
+  final String? socialX;
 
   const UserProfile({
     required this.id,
@@ -15,6 +18,9 @@ class UserProfile {
     this.position,
     this.imageUrl,
     this.country,
+    this.socialInstagram,
+    this.socialTiktok,
+    this.socialX,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -26,6 +32,9 @@ class UserProfile {
       position: json['position'] as String?,
       imageUrl: json['image_url'] as String?,
       country: json['country'] as String?,
+      socialInstagram: json['social_instagram']?.toString(),
+      socialTiktok: json['social_tiktok']?.toString(),
+      socialX: json['social_x']?.toString(),
     );
   }
 
@@ -38,6 +47,9 @@ class UserProfile {
       'position': position,
       'image_url': imageUrl,
       'country': country,
+      'social_instagram': socialInstagram,
+      'social_tiktok': socialTiktok,
+      'social_x': socialX,
     };
   }
 }

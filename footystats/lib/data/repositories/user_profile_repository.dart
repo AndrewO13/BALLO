@@ -17,13 +17,21 @@ class UserProfileRepository {
 
   final SupabaseClient _client;
 
+  static String? _trimOrNull(String? value) {
+    if (value == null) return null;
+    final t = value.trim();
+    return t.isEmpty ? null : t;
+  }
+
   Future<UserProfile?> getCurrentProfile() async {
     final user = _client.auth.currentUser;
     if (user == null) return null;
 
     final res = await _client
         .from('players')
-        .select('id, username, player_name, position, image_url, country')
+        .select(
+          'id, username, player_name, position, image_url, country, social_instagram, social_tiktok, social_x',
+        )
         .eq('id', user.id)
         .maybeSingle();
 
@@ -44,6 +52,35 @@ class UserProfileRepository {
       position: map['position'] as String?,
       imageUrl: map['image_url'] as String?,
       country: map['country'] as String?,
+      socialInstagram: map['social_instagram']?.toString(),
+      socialTiktok: map['social_tiktok']?.toString(),
+      socialX: map['social_x']?.toString(),
+    );
+  }
+
+  /// Public `players` row for any user (e.g. leaderboard → profile). Email is empty.
+  Future<UserProfile?> getProfileByPlayerId(String playerId) async {
+    if (playerId.isEmpty) return null;
+    final res = await _client
+        .from('players')
+        .select(
+          'id, username, player_name, position, image_url, country, social_instagram, social_tiktok, social_x',
+        )
+        .eq('id', playerId)
+        .maybeSingle();
+    if (res == null) return null;
+    final map = Map<String, dynamic>.from(res);
+    return UserProfile(
+      id: map['id']?.toString() ?? playerId,
+      email: '',
+      username: map['username'] as String?,
+      playerName: map['player_name'] as String?,
+      position: map['position'] as String?,
+      imageUrl: map['image_url'] as String?,
+      country: map['country'] as String?,
+      socialInstagram: map['social_instagram']?.toString(),
+      socialTiktok: map['social_tiktok']?.toString(),
+      socialX: map['social_x']?.toString(),
     );
   }
 
@@ -53,6 +90,10 @@ class UserProfileRepository {
     String? position,
     String? imageUrl,
     String? country,
+    String? socialInstagram,
+    String? socialTiktok,
+    String? socialX,
+    bool updateSocialLinks = false,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -67,11 +108,18 @@ class UserProfileRepository {
     if (position != null) payload['position'] = position;
     if (imageUrl != null) payload['image_url'] = imageUrl;
     if (country != null) payload['country'] = country;
+    if (updateSocialLinks) {
+      payload['social_instagram'] = _trimOrNull(socialInstagram);
+      payload['social_tiktok'] = _trimOrNull(socialTiktok);
+      payload['social_x'] = _trimOrNull(socialX);
+    }
 
     final res = await _client
         .from('players')
         .upsert(payload)
-        .select('id, username, player_name')
+        .select(
+          'id, username, player_name, position, image_url, country, social_instagram, social_tiktok, social_x',
+        )
         .maybeSingle();
 
     if (res == null) {
@@ -80,6 +128,12 @@ class UserProfileRepository {
         email: user.email ?? '',
         username: username,
         playerName: playerName,
+        position: position,
+        imageUrl: imageUrl,
+        country: country,
+        socialInstagram: socialInstagram,
+        socialTiktok: socialTiktok,
+        socialX: socialX,
       );
     }
 
@@ -89,6 +143,12 @@ class UserProfileRepository {
       email: user.email ?? '',
       username: map['username'] as String?,
       playerName: map['player_name'] as String?,
+      position: map['position'] as String?,
+      imageUrl: map['image_url'] as String?,
+      country: map['country'] as String?,
+      socialInstagram: map['social_instagram']?.toString(),
+      socialTiktok: map['social_tiktok']?.toString(),
+      socialX: map['social_x']?.toString(),
     );
   }
 }

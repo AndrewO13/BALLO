@@ -291,9 +291,9 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          'or choose from avatars',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
+                          'Or choose an avatar:',
+                          style: textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
                           ),
                           textAlign: TextAlign.center,
                         ),

@@ -42,6 +42,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _playerNameController;
   late final TextEditingController _usernameController;
+  late final TextEditingController _socialInstagramController;
+  late final TextEditingController _socialTiktokController;
+  late final TextEditingController _socialXController;
   late String? _position;
   late String? _imageUrl;
   late String? _countryCode;
@@ -56,6 +59,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.initState();
     _playerNameController = TextEditingController(text: widget.profile.playerName ?? '');
     _usernameController = TextEditingController(text: widget.profile.username ?? '');
+    _socialInstagramController =
+        TextEditingController(text: widget.profile.socialInstagram ?? '');
+    _socialTiktokController = TextEditingController(text: widget.profile.socialTiktok ?? '');
+    _socialXController = TextEditingController(text: widget.profile.socialX ?? '');
     _position = widget.profile.position;
     _imageUrl = widget.profile.imageUrl;
     _countryCode = widget.profile.country;
@@ -65,6 +72,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
   void dispose() {
     _playerNameController.dispose();
     _usernameController.dispose();
+    _socialInstagramController.dispose();
+    _socialTiktokController.dispose();
+    _socialXController.dispose();
     super.dispose();
   }
 
@@ -150,6 +160,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
         position: _position,
         imageUrl: _imageUrl,
         country: _countryCode,
+        socialInstagram: _socialInstagramController.text,
+        socialTiktok: _socialTiktokController.text,
+        socialX: _socialXController.text,
+        updateSocialLinks: true,
       );
 
       if (!mounted) return;
@@ -263,6 +277,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              Text(
+                'Or choose an avatar:',
+                style: textTheme.titleSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 12,
@@ -366,11 +387,65 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   },
                 ),
               ),
+              const SizedBox(height: 24),
+              Text('Social links (optional)', style: textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Use full URLs starting with https://',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _socialInstagramController,
+                decoration: const InputDecoration(
+                  labelText: 'Instagram',
+                  hintText: 'https://instagram.com/…',
+                ),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                validator: _optionalHttpsUrlValidator,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _socialTiktokController,
+                decoration: const InputDecoration(
+                  labelText: 'TikTok',
+                  hintText: 'https://www.tiktok.com/@…',
+                ),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                validator: _optionalHttpsUrlValidator,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _socialXController,
+                decoration: const InputDecoration(
+                  labelText: 'X (Twitter)',
+                  hintText: 'https://x.com/…',
+                ),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                validator: _optionalHttpsUrlValidator,
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  static String? _optionalHttpsUrlValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || !uri.hasScheme) {
+      return 'Enter a valid URL';
+    }
+    if (!(uri.isScheme('http') || uri.isScheme('https'))) {
+      return 'URL must start with http:// or https://';
+    }
+    return null;
   }
 
   Widget _buildProfileImage() {

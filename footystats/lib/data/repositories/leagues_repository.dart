@@ -161,9 +161,9 @@ class LeaguesRepository {
       for (final r in rows) {
         final v = r['rating'];
         double val = 0.0;
-        if (v is num)
+        if (v is num) {
           val = v.toDouble();
-        else if (v is String)
+        } else if (v is String)
           val = double.tryParse(v) ?? 0.0;
         if (val > 0) ratings.add(val);
       }
@@ -241,8 +241,9 @@ class LeaguesRepository {
       if (pid == null || pid.isEmpty) continue;
       final v = row['rating'];
       double rating = 0.0;
-      if (v is num) rating = v.toDouble();
-      else if (v is String) rating = double.tryParse(v) ?? 0.0;
+      if (v is num) {
+        rating = v.toDouble();
+      } else if (v is String) rating = double.tryParse(v) ?? 0.0;
       final existing = byPlayer[pid];
       if (existing == null || rating > (existing['rating'] as double)) {
         byPlayer[pid] = {...row, 'rating': rating};
@@ -252,7 +253,7 @@ class LeaguesRepository {
     final allPlayers = byPlayer.values.toList()
       ..sort((a, b) => (b['rating'] as double).compareTo(a['rating'] as double));
 
-    String _normalizePosition(String? pos) {
+    String normalizePosition(String? pos) {
       if (pos == null || pos.isEmpty) return 'Unknown';
       final lc = pos.toLowerCase().trim();
       if (lc.contains('goal') || lc == 'gk') return 'Goalkeeper';
@@ -262,14 +263,14 @@ class LeaguesRepository {
       return pos;
     }
 
-    Map<String, dynamic> _toEntry(Map<String, dynamic> row) {
+    Map<String, dynamic> toEntry(Map<String, dynamic> row) {
       final p = row['player'] is Map ? Map<String, dynamic>.from(row['player'] as Map) : <String, dynamic>{};
       final t = row['team'] is Map ? Map<String, dynamic>.from(row['team'] as Map) : <String, dynamic>{};
       return {
         'player_id': row['player_id']?.toString(),
         'player_name': p['player_name'] ?? 'Unknown',
         'image_url': p['image_url'],
-        'position': _normalizePosition(p['position']?.toString()),
+        'position': normalizePosition(p['position']?.toString()),
         'team_name': t['team_name'] ?? '—',
         'team_logo': t['logo_id'],
         'team_short': t['short_form'],
@@ -283,9 +284,9 @@ class LeaguesRepository {
     final att = <Map<String, dynamic>>[];
 
     for (final row in allPlayers) {
-      final entry = _toEntry(row);
+      final entry = toEntry(row);
       final pos = entry['position'] as String;
-      if (pos == 'Goalkeeper' && gk.length < 1) {
+      if (pos == 'Goalkeeper' && gk.isEmpty) {
         gk.add(entry);
       } else if (pos == 'Defender' && def.length < 4) {
         def.add(entry);
@@ -302,5 +303,144 @@ class LeaguesRepository {
       'Midfielder': mid,
       'Attacker': att,
     };
+  }
+
+  /// Fetches league standings computed from finished matches via RPC.
+  Future<List<Map<String, dynamic>>> getLeagueStandings(
+    String leagueId,
+  ) async {
+    final res = await _client.rpc(
+      'get_league_standings',
+      params: {'p_league_id': leagueId},
+    );
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
+  static DateTime? _parseDateOnly(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return DateTime(v.year, v.month, v.day);
+    if (v is String) {
+      final d = DateTime.tryParse(v.split('T').first);
+      if (d == null) return null;
+      return DateTime(d.year, d.month, d.day);
+    }
+    return null;
+  }
+
+  static bool _leagueSeasonEnded(DateTime endDate) {
+    final n = DateTime.now();
+    final today = DateTime(n.year, n.month, n.day);
+    final e = DateTime(endDate.year, endDate.month, endDate.day);
+    return today.isAfter(e);
+  }
+
+  /// Leagues whose `end_date` is in the past where [teamId] is first in
+  /// [getLeagueStandings] (champion). Team must appear in
+  /// `league_team_memberships` for that league.
+  ///
+  /// Returns rows: `league_id`, `league_name`, `logo_id`, `end_year`.
+  Future<List<Map<String, dynamic>>> getChampionTrophiesForTeam(
+    String teamId,
+  ) async {
+    if (teamId.isEmpty) return [];
+
+    final ltm = await _client
+        .from('league_team_memberships')
+        .select('league_id')
+        .eq('team_id', teamId);
+    final leagueIds = (ltm as List)
+        .map((r) => (r as Map)['league_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (leagueIds.isEmpty) return [];
+
+    final leaguesRes = await _client
+        .from('leagues')
+        .select('id, league_name, logo_id, start_date, end_date')
+        .inFilter('id', leagueIds);
+    final leagues = List<Map<String, dynamic>>.from(leaguesRes as List);
+
+    final out = <Map<String, dynamic>>[];
+    for (final row in leagues) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      final end = _parseDateOnly(row['end_date']);
+      if (end == null || !_leagueSeasonEnded(end)) continue;
+
+      List<Map<String, dynamic>> standings;
+      try {
+        standings = await getLeagueStandings(id);
+      } catch (_) {
+        continue;
+      }
+      if (standings.isEmpty) continue;
+
+      final leaderId = standings.first['team_id']?.toString();
+      if (leaderId != teamId) continue;
+
+      out.add({
+        'league_id': id,
+        'league_name': row['league_name']?.toString() ?? 'League',
+        'logo_id': row['logo_id']?.toString(),
+        'end_year': end.year,
+      });
+    }
+
+    out.sort((a, b) {
+      final ya = a['end_year'] as int;
+      final yb = b['end_year'] as int;
+      if (ya != yb) return yb.compareTo(ya);
+      return (a['league_name'] as String).compareTo(b['league_name'] as String);
+    });
+    return out;
+  }
+
+  /// Fetches aggregated team stats for a league via RPC.
+  Future<List<Map<String, dynamic>>> getLeagueTeamStats(
+    String leagueId,
+  ) async {
+    final res = await _client.rpc(
+      'get_league_team_stats',
+      params: {'p_league_id': leagueId},
+    );
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
+  /// Fetches aggregated player stats for a league via RPC.
+  Future<List<Map<String, dynamic>>> getLeaguePlayerStats(
+    String leagueId,
+  ) async {
+    final res = await _client.rpc(
+      'get_league_player_stats',
+      params: {'p_league_id': leagueId},
+    );
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
+  /// Fetches videos uploaded for matches in a given league.
+  Future<List<Map<String, dynamic>>> getLeagueVideos(
+    String leagueId,
+  ) async {
+    final matchRes = await _client
+        .from('matches')
+        .select('id')
+        .eq('league_id', leagueId);
+    final matchIds = (matchRes as List)
+        .map((r) => (r as Map)['id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (matchIds.isEmpty) return [];
+    final res = await _client
+        .from('videos')
+        .select(
+          'id, match_id, uploader_user_id, duration_seconds, '
+          'video_url, thumbnail_url, created_at',
+        )
+        .inFilter('match_id', matchIds)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(res as List);
   }
 }
