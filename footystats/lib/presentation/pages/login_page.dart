@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/auth_constants.dart';
+import '../../core/utils/apple_sign_in.dart';
 import '../../core/utils/auth_helpers.dart';
 import '../../domain/models/onboarding_draft.dart';
 import '../widgets/auth_or_divider.dart';
@@ -207,6 +208,16 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      if (provider == OAuthProvider.apple) {
+        final response = await signInWithApple();
+        // Native Apple returns a session immediately; browser OAuth relies
+        // on the auth-state listener after deep-link return.
+        if (response?.session != null && mounted) {
+          _goToHome();
+        }
+        return;
+      }
+
       await Supabase.instance.client.auth.signInWithOAuth(
         provider,
         redirectTo: kOAuthRedirectUrl,
@@ -217,7 +228,8 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
-    } catch (_) {
+    } catch (error) {
+      if (isAppleSignInCanceled(error)) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

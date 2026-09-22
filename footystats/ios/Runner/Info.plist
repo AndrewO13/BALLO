@@ -68,5 +68,8 @@
 		<string>Ballo may save photos you capture to your library.</string>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>Ballo uses the microphone when you record a video.</string>
+		<!-- Standard HTTPS only; skip App Store Connect export-compliance prompt. -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 	</dict>
 </plist>

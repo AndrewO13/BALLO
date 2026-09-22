@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/auth_constants.dart';
 import '../../core/constants/onboarding_steps.dart';
+import '../../core/utils/apple_sign_in.dart';
 import '../../core/utils/auth_helpers.dart';
 import '../../data/repositories/onboarding_repository.dart';
 import '../../domain/models/onboarding_draft.dart';
@@ -196,6 +197,18 @@ class _SignUpPageState extends State<SignUpPage> {
     });
 
     try {
+      if (provider == OAuthProvider.apple) {
+        final response = await signInWithApple();
+        // Native Apple returns a session immediately; continue onboarding.
+        // Browser OAuth keeps _awaitingOAuthSignIn and waits for the stream.
+        if (response?.session != null) {
+          _awaitingOAuthSignIn = false;
+          if (!mounted) return;
+          await _onOAuthComplete();
+        }
+        return;
+      }
+
       await Supabase.instance.client.auth.signInWithOAuth(
         provider,
         redirectTo: kOAuthRedirectUrl,
@@ -207,8 +220,9 @@ class _SignUpPageState extends State<SignUpPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
-    } catch (_) {
+    } catch (error) {
       _awaitingOAuthSignIn = false;
+      if (isAppleSignInCanceled(error)) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
