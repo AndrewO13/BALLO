@@ -1,28 +1,31 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../core/adaptive/adaptive.dart';
+import '../../../core/widgets/media_placeholders.dart';
 
 import '../../../../domain/models/match_model.dart';
+import '../match_odds_chips.dart';
 
 /// Carousel card for a match. Displays team logos, short forms, scores,
-/// time/status, odds, league name, gameweek. Tapping navigates to fixture.
+/// time/status, predictions, league name, gameweek. Tapping navigates to fixture.
 class MatchCard extends StatelessWidget {
   const MatchCard({
     super.key,
     required this.match,
     this.leagueName,
-    this.odds = const ['1.8', '2.1', '1.3'],
     required this.onTap,
   });
 
   final MatchModel match;
   final String? leagueName;
-  final List<String> odds;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
+    final width = MediaQuery.sizeOf(context).width;
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
+    final scale = AppResponsive.widthScaleOf(context);
+    final cardPad = 70.0 * scale;
 
     final hasScores = match.teamAScore != null && match.teamBScore != null;
     final score1 = hasScores ? (match.teamAScore!.toString()) : '—';
@@ -49,10 +52,10 @@ class MatchCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
               ),
-              padding: const EdgeInsetsDirectional.only(
-                start: 70.0,
-                end: 70.0,
-                top: 16.0,
+              padding: EdgeInsetsDirectional.only(
+                start: cardPad,
+                end: cardPad,
+                top: 16.0 * AppResponsive.layoutScaleOf(context),
                 bottom: 0.0,
               ),
               child: Column(
@@ -75,7 +78,7 @@ class MatchCard extends StatelessWidget {
                           children: [
                             _TeamLogo(
                               path: match.teamA.logoPath,
-                              size: 46.4,
+                              size: 46.4 * scale,
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -140,7 +143,7 @@ class MatchCard extends StatelessWidget {
                           children: [
                             _TeamLogo(
                               path: match.teamB.logoPath,
-                              size: 46.4,
+                              size: 46.4 * scale,
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -154,17 +157,7 @@ class MatchCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      for (final odd in odds)
-                        ActionChip(
-                          label: Text(odd),
-                          onPressed: () {},
-                          backgroundColor: colorScheme.surfaceContainerHigh,
-                        ),
-                    ],
-                  ),
+                  MatchOddsChips(match: match, compact: true),
                 ],
               ),
             ),
@@ -201,17 +194,17 @@ class _TeamLogo extends StatelessWidget {
         width: size,
         height: size,
         child: isNetwork
-            ? Image.network(
-                path,
+            ? Image(
+                image: appCachedImageProvider(path),
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(context),
+                errorBuilder: (_, _, _) => _placeholder(context),
               )
             : Image.asset(
                 path,
                 width: size,
                 height: size,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(context),
+                errorBuilder: (_, _, _) => _placeholder(context),
               ),
       ),
     );

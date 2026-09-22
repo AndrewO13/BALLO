@@ -1,4 +1,4 @@
-# FootyStats - Clean Architecture Structure
+# Ballo - Clean Architecture Structure
 
 This project follows **Clean Architecture** principles with **Riverpod** for state management and **Supabase** for backend services.
 

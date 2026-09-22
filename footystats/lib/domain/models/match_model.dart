@@ -55,6 +55,11 @@ class MatchModel {
     this.gameweek,
     this.gameweekNumber,
     this.leagueName,
+    this.leagueId,
+    this.leagueCountry,
+    this.leagueLogoId,
+    this.venueImageUrl,
+    this.halfDurationMinutes,
   });
 
   final String id;
@@ -68,6 +73,11 @@ class MatchModel {
   final String? gameweek;
   final int? gameweekNumber;
   final String? leagueName;
+  final String? leagueId;
+  final String? leagueCountry;
+  final String? leagueLogoId;
+  final String? venueImageUrl;
+  final int? halfDurationMinutes;
 
   factory MatchModel.fromJson(Map<String, dynamic> json) {
     final dateRaw = json['match_date'];
@@ -112,6 +122,12 @@ class MatchModel {
     final leagueName = leagueRaw is Map<String, dynamic>
         ? (leagueRaw['league_name']?.toString())
         : (json['league_name']?.toString());
+    final leagueCountry = leagueRaw is Map<String, dynamic>
+        ? (leagueRaw['country']?.toString())
+        : (json['league_country']?.toString());
+    final leagueLogoId = leagueRaw is Map<String, dynamic>
+        ? (leagueRaw['logo_id']?.toString())
+        : (json['league_logo_id']?.toString());
 
     return MatchModel(
       id: json['id']?.toString() ?? '',
@@ -125,7 +141,20 @@ class MatchModel {
       gameweek: gameweekValue,
       gameweekNumber: gameweekNumber,
       leagueName: leagueName,
+      leagueId: json['league_id']?.toString(),
+      leagueCountry: leagueCountry,
+      leagueLogoId: leagueLogoId,
+      venueImageUrl: json['venue_image_url']?.toString(),
+      halfDurationMinutes: _parseHalfDurationMinutes(
+        json['half_duration_minutes'],
+      ),
     );
+  }
+
+  static int? _parseHalfDurationMinutes(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is int) return raw;
+    return int.tryParse(raw.toString());
   }
 
   /// Score string for display, e.g. "1 - 2" or null if upcoming.

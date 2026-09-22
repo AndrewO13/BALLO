@@ -1,111 +1,190 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
-class PerformanceChart extends StatelessWidget {
-  const PerformanceChart({super.key});
+class PerformanceChart extends StatefulWidget {
+  const PerformanceChart({
+    super.key,
+    required this.gameweekRatings,
+  });
+
+  final List<PerformanceGameweekRating> gameweekRatings;
+
+  @override
+  State<PerformanceChart> createState() => _PerformanceChartState();
+}
+
+class _PerformanceChartState extends State<PerformanceChart> {
+  static final _yTickValues = <double>{0, 5, 8, 10};
+
+  int? _revealedBarIndex;
+  int _revealRequestCounter = 0;
+
+  void _revealRatingBriefly(int index) {
+    final requestId = ++_revealRequestCounter;
+    setState(() => _revealedBarIndex = index);
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 1400), () {
+        if (!mounted || requestId != _revealRequestCounter) return;
+        setState(() => _revealedBarIndex = null);
+      }),
+    );
+  }
+
+  bool _showsYTick(double value) =>
+      _yTickValues.any((tick) => (tick - value).abs() < 0.01);
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isLight = colorScheme.brightness == Brightness.light;
+    const chartHeight = 200.0;
 
-    // Sample data for GW3-GW10 (ratings)
-    final gameweekData = [
-      {'week': 'GW3', 'rating': 4.5},
-      {'week': 'GW4', 'rating': 6.0},
-      {'week': 'GW5', 'rating': 7.5},
-      {'week': 'GW6', 'rating': 3.0},
-      {'week': 'GW7', 'rating': 10.0}, // Exceptional performance
-      {'week': 'GW8', 'rating': 7.0},
-      {'week': 'GW9', 'rating': 7.5},
-      {'week': 'GW10', 'rating': 5.0},
-    ];
+    final gameweekData = widget.gameweekRatings;
 
-    final maxRating = 10.0;
+    const maxRating = 10.0;
 
     return SizedBox(
-      height: 200,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Chart area
-          Expanded(
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxRating,
-                barTouchData: BarTouchData(enabled: false),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        final index = value.toInt();
-                        if (index >= 0 && index < gameweekData.length) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              gameweekData[index]['week'] as String,
-                              style: textTheme.labelSmall,
-                            ),
-                          );
-                        }
-                        return const Text('');
-                      },
-                      reservedSize: 40,
-                    ),
-                  ),
-                  leftTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                gridData: FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                barGroups: gameweekData.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final data = entry.value;
-                  final rating = data['rating'] as double;
-                  final isExceptional = rating >= 8.0;
-                  return BarChartGroupData(
-                    x: index,
-                    barRods: [
-                      BarChartRodData(
-                        toY: rating,
-                        color: isExceptional
-                            ? const Color(0xff14ff8e)
-                            : const Color(0xfff2fff1),
-                        width: 38,
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
+      height: chartHeight,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          minY: 0,
+          maxY: maxRating,
+          barTouchData: BarTouchData(
+            enabled: true,
+            handleBuiltInTouches: false,
+            touchTooltipData: BarTouchTooltipData(
+              tooltipBorderRadius: BorderRadius.circular(10),
+              tooltipPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+              getTooltipColor: (_) => colorScheme.inverseSurface,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                return BarTooltipItem(
+                  rod.toY.toStringAsFixed(1),
+                  textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onInverseSurface,
+                        fontWeight: FontWeight.w700,
+                      ) ??
+                      TextStyle(
+                        color: colorScheme.onInverseSurface,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                    barsSpace: 8,
+                );
+              },
+            ),
+            touchCallback: (event, response) {
+              if (!event.isInterestedForInteractions) return;
+              final spot = response?.spot;
+              if (spot == null) return;
+              _revealRatingBriefly(spot.touchedBarGroupIndex);
+            },
+          ),
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (value, meta) {
+                  final index = value.toInt();
+                  if (index >= 0 && index < gameweekData.length) {
+                    return SideTitleWidget(
+                      meta: meta,
+                      space: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'GW${gameweekData[index].gameweek}',
+                          style: textTheme.labelSmall,
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+                reservedSize: 40,
+              ),
+            ),
+            leftTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 22,
+                interval: 1,
+                getTitlesWidget: (value, meta) {
+                  if (!_showsYTick(value)) {
+                    return const SizedBox.shrink();
+                  }
+                  return SideTitleWidget(
+                    meta: meta,
+                    space: 4,
+                    child: Text(
+                      value.round().toString(),
+                      style: textTheme.labelSmall,
+                    ),
                   );
-                }).toList(),
+                },
               ),
             ),
           ),
-          // Y-axis labels on the right
-          Padding(
-            padding: const EdgeInsets.only(left: 8.0),
-            child: SizedBox(
-              height: 163,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [10, 5, 0].map((value) {
-                  return Text(value.toString(), style: textTheme.labelSmall);
-                }).toList(),
-              ),
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: 1,
+            checkToShowHorizontalLine: (value) => (value - 8).abs() < 0.01,
+            getDrawingHorizontalLine: (_) => FlLine(
+              color: colorScheme.onSurface.withValues(alpha: 0.22),
+              strokeWidth: 1,
             ),
           ),
-        ],
+          borderData: FlBorderData(show: false),
+          barGroups: gameweekData.asMap().entries.map((entry) {
+            final index = entry.key;
+            final data = entry.value;
+            final rating = data.rating;
+            final isExceptional = rating >= 8.0;
+            return BarChartGroupData(
+              x: index,
+              showingTooltipIndicators: _revealedBarIndex == index
+                  ? const [0]
+                  : const [],
+              barRods: [
+                BarChartRodData(
+                  toY: rating,
+                  color: isExceptional
+                      ? colorScheme.primaryContainer
+                      : (isLight
+                            ? colorScheme.primary
+                            : const Color(0xfff2fff1)),
+                  width: 39,
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ],
+              barsSpace: 4,
+            );
+          }).toList(),
+        ),
       ),
     );
   }
+}
+
+class PerformanceGameweekRating {
+  const PerformanceGameweekRating({
+    required this.gameweek,
+    required this.rating,
+  });
+
+  final int gameweek;
+  final double rating;
 }

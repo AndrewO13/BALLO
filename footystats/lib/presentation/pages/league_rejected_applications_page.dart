@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/media_placeholders.dart';
 import '../providers/league_applications_provider.dart';
 import '../providers/league_teams_provider.dart';
 
@@ -103,7 +105,6 @@ class _LeagueRejectedApplicationsPageState
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
-                filled: true,
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -113,21 +114,20 @@ class _LeagueRejectedApplicationsPageState
               data: (apps) {
                 final filtered = _filter(apps);
                 if (filtered.isEmpty) {
-                  return Center(
-                    child: Text(
-                      apps.isEmpty
-                          ? 'No rejected applications'
-                          : 'No matches',
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                  return ScrollableAppEmptyState(
+                    imageAsset: AppAssets.rejectedApplicationsEmpty,
+                    title: apps.isEmpty
+                        ? 'No rejected applications'
+                        : 'No matching applications',
+                    subtitle: apps.isEmpty
+                        ? 'Teams you decline will appear here so you can accept them again later.'
+                        : 'Try a different team name in your search.',
                   );
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final app = filtered[index];
                     final applicationId = app['id']?.toString() ?? '';
@@ -213,48 +213,16 @@ class _TeamLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final lid = logoId?.trim();
-    if (lid == null || lid.isEmpty) {
-      return CircleAvatar(
-        radius: 24,
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.groups,
-          color: colorScheme.onSurfaceVariant,
-          size: 28,
+    return ClipOval(
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: buildTeamLogo(
+          resolveTeamLogoPath(logoId),
+          size: 48,
+          placeholderIconColor: colorScheme.onSurfaceVariant,
         ),
-      );
-    }
-    final isNetwork =
-        lid.startsWith('http://') || lid.startsWith('https://');
-    final path = isNetwork
-        ? lid
-        : (lid.startsWith('lib/') || lid.startsWith('assets/')
-            ? lid
-            : '${AppAssets.teamLogosPath}${lid.contains('.') ? lid : '$lid.png'}');
-    final image = isNetwork
-        ? Image.network(
-            path,
-            fit: BoxFit.cover,
-            width: 48,
-            height: 48,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.groups,
-              color: colorScheme.onSurfaceVariant,
-              size: 28,
-            ),
-          )
-        : Image.asset(
-            path,
-            fit: BoxFit.cover,
-            width: 48,
-            height: 48,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.groups,
-              color: colorScheme.onSurfaceVariant,
-              size: 28,
-            ),
-          );
-    return ClipOval(child: SizedBox(width: 48, height: 48, child: image));
+      ),
+    );
   }
 }

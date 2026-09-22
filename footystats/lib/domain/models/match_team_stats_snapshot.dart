@@ -9,7 +9,6 @@ class MatchTeamStatsSnapshot {
     this.saves = 0,
     this.yellowCards = 0,
     this.redCards = 0,
-    this.xg = 0.0,
   });
 
   final int goals;
@@ -20,7 +19,6 @@ class MatchTeamStatsSnapshot {
   final int saves;
   final int yellowCards;
   final int redCards;
-  final double xg;
 
   /// Best-effort when only total shots and on-target are stored.
   int get shotsOffTarget {
@@ -37,17 +35,6 @@ class MatchTeamStatsSnapshot {
       return int.tryParse(v?.toString() ?? '0') ?? 0;
     }
 
-    double d() {
-      for (final k in ['XG', 'xG', 'xg']) {
-        final v = row[k];
-        if (v is double) return v;
-        if (v is num) return v.toDouble();
-        final p = double.tryParse(v?.toString() ?? '');
-        if (p != null) return p;
-      }
-      return 0.0;
-    }
-
     return MatchTeamStatsSnapshot(
       goals: i('goals'),
       shots: i('shots'),
@@ -57,7 +44,6 @@ class MatchTeamStatsSnapshot {
       saves: i('saves'),
       yellowCards: i('yellow_cards'),
       redCards: i('red_cards'),
-      xg: d(),
     );
   }
 }

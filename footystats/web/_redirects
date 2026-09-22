@@ -1,0 +1,17 @@
+# Clean legal URLs (must stay above SPA fallback)
+/privacy                 /privacy.html                 200
+/privacy/                /privacy.html                 200
+/terms                   /terms.html                   200
+/terms/                  /terms.html                   200
+/community-guidelines    /community-guidelines.html    200
+/community-guidelines/   /community-guidelines.html    200
+
+# Share deep links
+/v/*    /index.html   200
+
+# Auth callback (email confirm / OAuth return) — Flutter SPA
+/login-callback        /index.html   200
+/login-callback/       /index.html   200
+
+# Flutter SPA fallback
+/*      /index.html   200

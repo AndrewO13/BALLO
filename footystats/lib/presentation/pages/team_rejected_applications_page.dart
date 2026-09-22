@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/constants/app_assets.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/media_placeholders.dart';
 
 class TeamRejectedApplicationsPage extends StatefulWidget {
   const TeamRejectedApplicationsPage({super.key, required this.teamId});
@@ -17,11 +20,14 @@ class _TeamRejectedApplicationsPageState
   List<Map<String, dynamic>> _applications = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  final Set<String> _processingInvitePlayerIds = {};
+  final Set<String> _pendingInvitePlayerIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadApplications();
+    _loadPendingInvites();
   }
 
   Future<void> _loadApplications() async {
@@ -37,9 +43,54 @@ class _TeamRejectedApplicationsPageState
           .eq('status', 'rejected')
           .order('created_at', ascending: false);
 
+      final rows = List<Map<String, dynamic>>.from(response);
+      final playerIds = rows
+          .map((row) => row['player_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      Set<String> activeMemberIds = {};
+      Set<String> acceptedInviteIds = {};
+
+      if (playerIds.isNotEmpty) {
+        try {
+          final activeMembershipRows = await supabase
+              .from('player_team_memberships')
+              .select('player_id')
+              .eq('team_id', widget.teamId)
+              .isFilter('end_date', null)
+              .inFilter('player_id', playerIds);
+          activeMemberIds = (activeMembershipRows as List)
+              .map((row) => (row as Map)['player_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        } catch (_) {}
+
+        try {
+          final acceptedInviteRows = await supabase
+              .from('team_player_invites')
+              .select('player_id')
+              .eq('team_id', widget.teamId)
+              .eq('status', 'accepted')
+              .inFilter('player_id', playerIds);
+          acceptedInviteIds = (acceptedInviteRows as List)
+              .map((row) => (row as Map)['player_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        } catch (_) {}
+      }
+
+      final filtered = rows.where((row) {
+        final playerId = row['player_id']?.toString() ?? '';
+        if (playerId.isEmpty) return true;
+        return !activeMemberIds.contains(playerId) &&
+            !acceptedInviteIds.contains(playerId);
+      }).toList();
+
       if (mounted) {
         setState(() {
-          _applications = List<Map<String, dynamic>>.from(response);
+          _applications = filtered;
           _isLoading = false;
         });
       }
@@ -50,6 +101,69 @@ class _TeamRejectedApplicationsPageState
           SnackBar(content: Text('Error loading applications: $error')),
         );
       }
+    }
+  }
+
+  Future<void> _loadPendingInvites() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('team_player_invites')
+          .select('player_id')
+          .eq('team_id', widget.teamId)
+          .eq('status', 'pending');
+
+      if (!mounted) return;
+      setState(() {
+        _pendingInvitePlayerIds
+          ..clear()
+          ..addAll(
+            (response as List)
+                .map((row) => (row as Map)['player_id']?.toString() ?? '')
+                .where((id) => id.isNotEmpty),
+          );
+      });
+    } catch (_) {
+      // Non-blocking: only affects invite button state.
+    }
+  }
+
+  Future<void> _inviteRejectedPlayer({
+    required String playerId,
+    required String playerName,
+  }) async {
+    if (playerId.isEmpty) return;
+    if (_pendingInvitePlayerIds.contains(playerId)) return;
+    if (_processingInvitePlayerIds.contains(playerId)) return;
+
+    final inviterId = Supabase.instance.client.auth.currentUser?.id;
+    if (inviterId == null || inviterId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You need to be signed in')),
+      );
+      return;
+    }
+
+    setState(() => _processingInvitePlayerIds.add(playerId));
+    try {
+      await Supabase.instance.client.from('team_player_invites').insert({
+        'team_id': widget.teamId,
+        'player_id': playerId,
+        'invited_by': inviterId,
+      });
+      if (!mounted) return;
+      setState(() {
+        _processingInvitePlayerIds.remove(playerId);
+        _pendingInvitePlayerIds.add(playerId);
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Invite sent to $playerName')));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _processingInvitePlayerIds.remove(playerId));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not send invite: $error')));
     }
   }
 
@@ -88,7 +202,6 @@ class _TeamRejectedApplicationsPageState
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
-                filled: true,
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -97,27 +210,34 @@ class _TeamRejectedApplicationsPageState
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredApplications.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No rejected applications',
-                          style: textTheme.bodyLarge?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+                    ? ScrollableAppEmptyState(
+                        imageAsset: AppAssets.rejectedApplicationsEmpty,
+                        title: _applications.isEmpty
+                            ? 'No rejected applications'
+                            : 'No matching applications',
+                        subtitle: _applications.isEmpty
+                            ? 'Players you decline will appear here so you can invite them again later.'
+                            : 'Try a different name or username in your search.',
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: _filteredApplications.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final app = _filteredApplications[index];
                           final players =
                               app['players'] as Map<String, dynamic>?;
+                          final playerId = app['player_id']?.toString() ?? '';
                           final playerName = players?['player_name'] as String? ??
                               'Unknown';
                           final username =
                               players?['username'] as String? ?? '';
                           final imageUrl = players?['image_url'] as String?;
+                          final isPending = _pendingInvitePlayerIds.contains(
+                            playerId,
+                          );
+                          final isProcessing = _processingInvitePlayerIds
+                              .contains(playerId);
 
                           return Container(
                             padding: const EdgeInsets.all(12),
@@ -155,6 +275,36 @@ class _TeamRejectedApplicationsPageState
                                     ],
                                   ),
                                 ),
+                                FilledButton.tonalIcon(
+                                  onPressed:
+                                      (playerId.isEmpty || isPending || isProcessing)
+                                      ? null
+                                      : () => _inviteRejectedPlayer(
+                                          playerId: playerId,
+                                          playerName: playerName,
+                                        ),
+                                  icon: isProcessing
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Icon(
+                                          isPending
+                                              ? Icons.hourglass_top
+                                              : Icons.person_add_alt_1,
+                                          size: 18,
+                                        ),
+                                  label: Text(
+                                    isProcessing
+                                        ? 'Sending'
+                                        : isPending
+                                        ? 'Pending'
+                                        : 'Invite',
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -175,42 +325,11 @@ class _PlayerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final path = imageUrl;
-    if (path == null || path.isEmpty) {
-      return CircleAvatar(
-        radius: 24,
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.person,
-          color: colorScheme.onSurfaceVariant,
-          size: 28,
-        ),
-      );
-    }
-    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
-    final image = isNetwork
-        ? Image.network(
-            path,
-            fit: BoxFit.cover,
-            width: 48,
-            height: 48,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.person,
-              color: colorScheme.onSurfaceVariant,
-              size: 28,
-            ),
-          )
-        : Image.asset(
-            '${AppAssets.teamLogosPath}$path',
-            fit: BoxFit.cover,
-            width: 48,
-            height: 48,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.person,
-              color: colorScheme.onSurfaceVariant,
-              size: 28,
-            ),
-          );
-    return ClipOval(child: SizedBox(width: 48, height: 48, child: image));
+    return buildPlayerAvatar(
+      imagePath: imageUrl,
+      size: 48,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      iconColor: colorScheme.onSurfaceVariant,
+    );
   }
 }

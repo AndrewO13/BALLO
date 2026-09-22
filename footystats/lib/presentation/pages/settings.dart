@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../data/repositories/user_profile_repository.dart';
+import '../widgets/content_safety_sheets.dart';
+import 'account_email_page.dart';
+import 'change_password_page.dart';
+import 'edit_profile_page.dart';
 import 'welcome_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
-
-  void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label coming soon')),
-    );
-  }
 
   void _showInfoDialog(BuildContext context, String title, String message) {
     showDialog(
@@ -28,8 +29,37 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  Future<void> _openExternalUrl(BuildContext context, Uri uri) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $uri')),
+      );
+    }
+  }
+
+  Future<void> _openEditProfile(BuildContext context) async {
+    final pageContext = context;
+    final profile = await UserProfileRepository().getCurrentProfile();
+    if (!pageContext.mounted) return;
+    if (profile == null) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(content: Text('Sign in to edit your profile')),
+      );
+      return;
+    }
+    await Navigator.of(pageContext).push(
+      MaterialPageRoute(
+        builder: (_) => EditProfilePage(profile: profile),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final email = Supabase.instance.client.auth.currentUser?.email;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -48,52 +78,30 @@ class SettingsPage extends StatelessWidget {
               _SettingsItem(
                 icon: Icons.person_outline,
                 title: 'Edit Profile',
-                onTap: () {
-                  _showComingSoon(context, 'Edit profile');
-                },
+                subtitle: 'Name, photo, position, socials, delete account',
+                onTap: () => _openEditProfile(context),
               ),
               _SettingsItem(
                 icon: Icons.email_outlined,
                 title: 'Email',
-                subtitle: 'user@example.com',
+                subtitle: email ?? 'Not set',
                 onTap: () {
-                  _showComingSoon(context, 'Email settings');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AccountEmailPage(),
+                    ),
+                  );
                 },
               ),
               _SettingsItem(
                 icon: Icons.lock_outline,
                 title: 'Change Password',
                 onTap: () {
-                  _showComingSoon(context, 'Change password');
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _SettingsSection(
-            title: 'Preferences',
-            items: [
-              _SettingsItem(
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                onTap: () {
-                  _showComingSoon(context, 'Notifications');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.dark_mode_outlined,
-                title: 'Theme',
-                subtitle: 'System',
-                onTap: () {
-                  _showComingSoon(context, 'Theme settings');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.language_outlined,
-                title: 'Language',
-                subtitle: 'English',
-                onTap: () {
-                  _showComingSoon(context, 'Language settings');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ChangePasswordPage(),
+                    ),
+                  );
                 },
               ),
             ],
@@ -104,12 +112,12 @@ class SettingsPage extends StatelessWidget {
             items: [
               _SettingsItem(
                 icon: Icons.info_outline,
-                title: 'About FootyStats',
+                title: 'About Ballo',
                 onTap: () {
                   _showInfoDialog(
                     context,
-                    'About FootyStats',
-                    'FootyStats helps you track matches, player stats, '
+                    'About Ballo',
+                    'Ballo helps you track matches, player stats, '
                         'and league performance.',
                   );
                 },
@@ -117,35 +125,38 @@ class SettingsPage extends StatelessWidget {
               _SettingsItem(
                 icon: Icons.help_outline,
                 title: 'Help & Support',
-                onTap: () {
-                  _showInfoDialog(
-                    context,
-                    'Help & Support',
-                    'Reach out to support@footystats.app for assistance.',
+                subtitle: AppConstants.supportEmail,
+                onTap: () async {
+                  final uri = Uri(
+                    scheme: 'mailto',
+                    path: AppConstants.supportEmail,
+                    queryParameters: {'subject': 'Ballo support'},
                   );
+                  await launchUrl(uri);
                 },
               ),
               _SettingsItem(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
-                onTap: () {
-                  _showInfoDialog(
-                    context,
-                    'Privacy Policy',
-                    'Your data is handled securely. Full policy coming soon.',
-                  );
-                },
+                subtitle: AppConstants.privacyPolicyUri.toString(),
+                onTap: () => _openExternalUrl(
+                  context,
+                  AppConstants.privacyPolicyUri,
+                ),
               ),
               _SettingsItem(
                 icon: Icons.description_outlined,
                 title: 'Terms of Service',
-                onTap: () {
-                  _showInfoDialog(
-                    context,
-                    'Terms of Service',
-                    'Please use the app responsibly. Full terms coming soon.',
-                  );
-                },
+                subtitle: AppConstants.termsOfServiceUri.toString(),
+                onTap: () => _openExternalUrl(
+                  context,
+                  AppConstants.termsOfServiceUri,
+                ),
+              ),
+              _SettingsItem(
+                icon: Icons.gavel_outlined,
+                title: 'Community Guidelines',
+                onTap: () => showCommunityGuidelinesModal(context),
               ),
             ],
           ),
@@ -156,33 +167,34 @@ class SettingsPage extends StatelessWidget {
               _SettingsItem(
                 icon: Icons.logout_outlined,
                 title: 'Sign Out',
-                titleColor: Theme.of(context).colorScheme.error,
+                titleColor: colorScheme.error,
                 onTap: () {
+                  final pageContext = context;
                   showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
+                    context: pageContext,
+                    builder: (dialogContext) => AlertDialog(
                       title: const Text('Sign Out'),
                       content: const Text('Are you sure you want to sign out?'),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () => Navigator.of(dialogContext).pop(),
                           child: const Text('Cancel'),
                         ),
                         TextButton(
                           onPressed: () async {
-                            Navigator.of(context).pop();
+                            Navigator.of(dialogContext).pop();
                             try {
                               await Supabase.instance.client.auth.signOut();
-                              if (!context.mounted) return;
-                              Navigator.of(context).pushAndRemoveUntil(
+                              if (!pageContext.mounted) return;
+                              Navigator.of(pageContext).pushAndRemoveUntil(
                                 MaterialPageRoute(
                                   builder: (_) => const WelcomePage(),
                                 ),
                                 (route) => false,
                               );
                             } catch (error) {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              if (!pageContext.mounted) return;
+                              ScaffoldMessenger.of(pageContext).showSnackBar(
                                 SnackBar(
                                   content: Text(
                                     'Error signing out: ${error.toString()}',
@@ -194,7 +206,7 @@ class SettingsPage extends StatelessWidget {
                           child: Text(
                             'Sign Out',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                              color: Theme.of(pageContext).colorScheme.error,
                             ),
                           ),
                         ),
@@ -233,12 +245,16 @@ class _SettingsSection extends StatelessWidget {
             ),
           ),
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(28),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                items[i],
+              ],
+            ],
           ),
-          child: Column(children: items),
         ),
       ],
     );
@@ -262,30 +278,40 @@ class _SettingsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: titleColor ?? Theme.of(context).colorScheme.onSurface,
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: titleColor ?? Theme.of(context).colorScheme.onSurface,
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(28),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
         ),
+        leading: Icon(
+          icon,
+          color: titleColor ?? colorScheme.onSurface,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: titleColor ?? colorScheme.onSurface,
+          ),
+        ),
+        subtitle: subtitle != null
+            ? Text(
+                subtitle!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              )
+            : null,
+        trailing: Icon(
+          Icons.chevron_right,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        onTap: onTap,
       ),
-      subtitle: subtitle != null
-          ? Text(
-              subtitle!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            )
-          : null,
-      trailing: Icon(
-        Icons.chevron_right,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      onTap: onTap,
     );
   }
 }

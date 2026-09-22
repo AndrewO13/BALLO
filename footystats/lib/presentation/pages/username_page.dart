@@ -1,15 +1,18 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/constants/app_assets.dart';
-import 'onboarding_position_page.dart';
+import '../../core/constants/onboarding_steps.dart';
+import '../../core/utils/content_moderation_guards.dart';
+import '../../core/utils/username_rules.dart';
+import '../../data/repositories/username_repository.dart';
+import '../../domain/models/onboarding_draft.dart';
+import '../widgets/onboarding_step_scaffold.dart';
+import '../widgets/username_availability_field.dart';
+import 'onboarding_account_type_page.dart';
 
 class UsernamePage extends StatefulWidget {
-  const UsernamePage({super.key, required this.email});
+  const UsernamePage({super.key, required this.draft});
 
-  final String email;
+  final OnboardingDraft draft;
 
   @override
   State<UsernamePage> createState() => _UsernamePageState();
@@ -18,8 +21,10 @@ class UsernamePage extends StatefulWidget {
 class _UsernamePageState extends State<UsernamePage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
-
-  bool _isSubmitting = false;
+  UsernameCheckResult _availability = const UsernameCheckResult(
+    status: UsernameAvailability.idle,
+  );
+  bool _checkingModeration = false;
 
   @override
   void dispose() {
@@ -27,161 +32,66 @@ class _UsernamePageState extends State<UsernamePage> {
     super.dispose();
   }
 
-  Future<void> _onSubmit() async {
-    final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) return;
+  bool get _canContinue =>
+      !_checkingModeration &&
+      _availability.status == UsernameAvailability.available;
 
-    setState(() => _isSubmitting = true);
+  Future<void> _onContinue() async {
+    if (!_canContinue) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final username = _usernameController.text.trim();
+    final localError = UsernameRules.usernameError(username);
+    if (localError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(localError)),
+      );
+      return;
+    }
+
+    setState(() => _checkingModeration = true);
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user != null) {
-        await Supabase.instance.client.from('players').upsert({
-          'id': user.id,
-          'username': _usernameController.text.trim(),
-        });
-      }
-
+      await requireAllowedText(username, contentRef: 'username:$username');
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => OnboardingPositionPage(
-            email: widget.email,
-            username: _usernameController.text.trim(),
+          builder: (_) => OnboardingAccountTypePage(
+            draft: widget.draft.copyWith(username: username),
           ),
         ),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Bad state: ', ''))),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _checkingModeration = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+    return OnboardingStepScaffold(
+      step: OnboardingStep.username,
+      title: 'Choose your username',
+      subtitle:
+          'This is how others will find you on Ballo — on profiles, search and match reports.',
+      bottomBar: OnboardingContinueButton(
+        label: _checkingModeration ? 'Checking…' : 'Continue',
+        onPressed: _canContinue ? _onContinue : null,
       ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Image.asset(
-                AppAssets.onboardingBg,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.9),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: SingleChildScrollView(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color:
-                            colorScheme.surfaceContainerHigh.withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Choose your username',
-                            style: textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'This is how other players will see you on leaderboards and match reports.',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Form(
-                            key: _formKey,
-                            child: Column(
-                              children: [
-                                TextFormField(
-                                  controller: _usernameController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Username',
-                                    hintText: 'eg. TurfGeneral',
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Enter a username';
-                                    }
-                                    if (value.length < 3) {
-                                      return 'Username must be at least 3 characters';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 20),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton(
-                                    onPressed:
-                                        _isSubmitting ? null : _onSubmit,
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(28),
-                                      ),
-                                    ),
-                                    child: _isSubmitting
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text('Continue'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: Form(
+        key: _formKey,
+        child: UsernameAvailabilityField(
+          controller: _usernameController,
+          autofocus: true,
+          onFieldSubmitted: (_) => _onContinue(),
+          onAvailabilityChanged: (result) {
+            setState(() => _availability = result);
+          },
+        ),
       ),
     );
   }
 }
-

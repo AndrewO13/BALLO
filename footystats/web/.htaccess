@@ -1,0 +1,60 @@
+<IfModule mod_mime.c>
+
+  AddType application/wasm .wasm
+
+</IfModule>
+
+
+
+DirectoryIndex index.php index.html
+
+
+
+<IfModule LiteSpeed>
+
+CacheDisable public /
+
+</IfModule>
+
+
+
+RewriteEngine On
+
+RewriteBase /
+
+
+
+# AutoSSL must be able to fetch this over HTTP
+
+RewriteRule ^\.well-known/ - [L]
+
+
+
+# Clean legal URLs
+
+RewriteRule ^privacy/?$ privacy.html [L]
+
+RewriteRule ^terms/?$ terms.html [L]
+
+RewriteRule ^community-guidelines/?$ community-guidelines.html [L]
+
+
+
+# WhatsApp/iMessage crawlers get a thumbnail page. People still get Ballo.
+
+RewriteCond %{QUERY_STRING} (?:^|&)v=[0-9a-fA-F-]{36}
+
+RewriteCond %{QUERY_STRING} !(?:^|&)play=1(?:&|$)
+
+RewriteCond %{HTTP_USER_AGENT} WhatsApp|facebookexternalhit|Facebot|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Pinterest|Googlebot|bingbot|Applebot|Iframely|Embedly|SkypeUriPreview [NC]
+
+RewriteRule ^$ index.php [L,QSA]
+
+
+
+RewriteCond %{REQUEST_FILENAME} !-f
+
+RewriteCond %{REQUEST_FILENAME} !-d
+
+RewriteRule ^ index.html [L]
+

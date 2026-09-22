@@ -9,6 +9,11 @@ class UserProfile {
   final String? socialInstagram;
   final String? socialTiktok;
   final String? socialX;
+  final DateTime? deletedAt;
+  final String? accountType;
+  final String? staffRole;
+  final String? staffRoleOther;
+  final String? about;
 
   const UserProfile({
     required this.id,
@@ -21,7 +26,33 @@ class UserProfile {
     this.socialInstagram,
     this.socialTiktok,
     this.socialX,
+    this.deletedAt,
+    this.accountType,
+    this.staffRole,
+    this.staffRoleOther,
+    this.about,
   });
+
+  bool get isDeleted => deletedAt != null;
+
+  bool get isTechnicalStaff => accountType == 'technical_staff';
+
+  bool get isScout =>
+      isTechnicalStaff && staffRole == 'scout';
+
+  String get staffRoleLabel {
+    if (staffRole == 'other') {
+      final custom = staffRoleOther?.trim();
+      if (custom != null && custom.isNotEmpty) return custom;
+      return 'Technical staff';
+    }
+    return switch (staffRole) {
+      'coach' => 'Coach',
+      'scout' => 'Scout',
+      'agent' => 'Agent',
+      _ => 'Technical staff',
+    };
+  }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
@@ -35,6 +66,13 @@ class UserProfile {
       socialInstagram: json['social_instagram']?.toString(),
       socialTiktok: json['social_tiktok']?.toString(),
       socialX: json['social_x']?.toString(),
+      deletedAt: json['deleted_at'] != null
+          ? DateTime.tryParse(json['deleted_at'].toString())
+          : null,
+      accountType: json['account_type'] as String?,
+      staffRole: json['staff_role'] as String?,
+      staffRoleOther: json['staff_role_other'] as String?,
+      about: json['about'] as String?,
     );
   }
 
@@ -50,7 +88,11 @@ class UserProfile {
       'social_instagram': socialInstagram,
       'social_tiktok': socialTiktok,
       'social_x': socialX,
+      'deleted_at': deletedAt?.toIso8601String(),
+      'account_type': accountType,
+      'staff_role': staffRole,
+      'staff_role_other': staffRoleOther,
+      'about': about,
     };
   }
 }
-

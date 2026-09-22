@@ -1,21 +1,43 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import '../../core/adaptive/adaptive.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
+import '../../core/utils/scroll_to_top.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/media_placeholders.dart';
+import '../providers/main_nav_scroll_provider.dart';
+import '../widgets/app_search_page.dart';
 import '../../data/repositories/leaderboard_repository.dart';
 import '../../data/repositories/leagues_repository.dart';
 import '../../domain/models/leaderboard_entry.dart';
 import 'player_profile_page.dart';
 
-class LeaderboardPage extends StatefulWidget {
-  const LeaderboardPage({super.key});
+class LeaderboardPage extends ConsumerStatefulWidget {
+  const LeaderboardPage({
+    super.key,
+    /// When false (e.g. another bottom-nav tab is shown), periodic refresh pauses.
+    this.isCurrentNavTab = true,
+    /// Guests (fans) only see the overall board: the League and Teammates
+    /// tabs scope to the viewer's own memberships, which guests don't have.
+    this.isGuest = false,
+  });
+
+  final bool isCurrentNavTab;
+  final bool isGuest;
 
   @override
-  State<LeaderboardPage> createState() => _LeaderboardPageState();
+  ConsumerState<LeaderboardPage> createState() => _LeaderboardPageState();
 }
 
-class _LeaderboardPageState extends State<LeaderboardPage>
-    with SingleTickerProviderStateMixin {
+class _LeaderboardPageState extends ConsumerState<LeaderboardPage>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static const _autoRefreshInterval = Duration(seconds: 30);
+
   late final TabController _tabController;
   final _repo = LeaderboardRepository();
   final _leaguesRepo = LeaguesRepository();
@@ -25,22 +47,37 @@ class _LeaderboardPageState extends State<LeaderboardPage>
   bool _scopeLoading = true;
 
   final Map<int, List<LeaderboardEntry>> _entriesByTab = {};
-  final Map<int, String?> _emptyByTab = {};
+  final Map<int, _LeaderboardEmptyKind?> _emptyByTab = {};
   final Map<int, bool> _loadingByTab = {};
+
+  Timer? _autoRefreshTimer;
+  late final List<ScrollController> _listScrollControllers;
+
+  bool get _isGuest => widget.isGuest;
+
+  bool _bootstrapStarted = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
+    _tabController = TabController(length: _isGuest ? 1 : 3, vsync: this);
     _tabController.addListener(_handleTabChange);
-    _bootstrap();
+    _listScrollControllers = List.generate(_isGuest ? 1 : 3, (_) => ScrollController());
+    // IndexedStack mounts this page from app launch; defer all network work
+    // until the Leaderboard tab is actually shown.
+    if (widget.isCurrentNavTab) {
+      _bootstrap();
+    }
   }
 
   Future<void> _bootstrap() async {
+    if (_bootstrapStarted) return;
+    _bootstrapStarted = true;
     final user = Supabase.instance.client.auth.currentUser;
     String? leagueId;
     String? teamId;
-    if (user != null) {
+    if (!_isGuest && user != null) {
       final leagues = await _leaguesRepo.getLeaguesForUser(user.id);
       if (leagues.isNotEmpty) leagueId = leagues.first.id;
       teamId = await _repo.getPrimaryTeamId(user.id);
@@ -51,7 +88,11 @@ class _LeaderboardPageState extends State<LeaderboardPage>
       _teamId = teamId;
       _scopeLoading = false;
     });
-    await Future.wait([_fetchTab(0), _fetchTab(1), _fetchTab(2)]);
+    // Fetch only the visible sub-tab; the other sub-tabs load on first visit.
+    await _fetchTab(_tabController.index);
+    if (mounted && widget.isCurrentNavTab) {
+      _startAutoRefreshTimer();
+    }
   }
 
   void _handleTabChange() {
@@ -60,45 +101,54 @@ class _LeaderboardPageState extends State<LeaderboardPage>
     _fetchTab(idx);
   }
 
-  Future<void> _fetchTab(int index) async {
+  void _startAutoRefreshTimer() {
+    _autoRefreshTimer?.cancel();
+    if (!widget.isCurrentNavTab) return;
+    _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
+      if (!mounted || !widget.isCurrentNavTab || _scopeLoading) return;
+      _fetchTab(_tabController.index, showLoading: false);
+    });
+  }
+
+  void _stopAutoRefreshTimer() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = null;
+  }
+
+  Future<void> _fetchTab(int index, {bool showLoading = true}) async {
     if (_scopeLoading) return;
 
-    setState(() => _loadingByTab[index] = true);
+    if (showLoading) {
+      setState(() => _loadingByTab[index] = true);
+    }
 
-    String? emptyMsg;
+    _LeaderboardEmptyKind? emptyKind;
     List<LeaderboardEntry> list = [];
 
     switch (index) {
       case 0:
         list = await _repo.getOverall();
         if (list.isEmpty) {
-          emptyMsg =
-              'No points yet. Totals build from every finished match on the app.';
+          emptyKind = _LeaderboardEmptyKind.noOverallPoints;
         }
         break;
       case 1:
         if (_leagueId == null) {
-          emptyMsg =
-              'Join a league to see how you rank against others who play there. '
-              'Points still count all your matches app-wide.';
+          emptyKind = _LeaderboardEmptyKind.noLeagueJoined;
         } else {
           list = await _repo.getForLeague(_leagueId!);
           if (list.isEmpty) {
-            emptyMsg =
-                'No one has a finished match in this league yet. '
-                'Anyone who plays here will appear once they do.';
+            emptyKind = _LeaderboardEmptyKind.noLeagueActivity;
           }
         }
         break;
       case 2:
         if (_teamId == null) {
-          emptyMsg =
-              'Join a team to see your squad. Rankings use total points from all '
-              'your finished matches, not just one league.';
+          emptyKind = _LeaderboardEmptyKind.noTeamJoined;
         } else {
           list = await _repo.getForTeam(_teamId!);
           if (list.isEmpty) {
-            emptyMsg = 'No players on this team yet.';
+            emptyKind = _LeaderboardEmptyKind.noTeamPlayers;
           }
         }
         break;
@@ -107,15 +157,51 @@ class _LeaderboardPageState extends State<LeaderboardPage>
     if (!mounted) return;
     setState(() {
       _entriesByTab[index] = list;
-      _emptyByTab[index] = emptyMsg;
+      _emptyByTab[index] = emptyKind;
       _loadingByTab[index] = false;
     });
   }
 
   @override
+  void didUpdateWidget(covariant LeaderboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isCurrentNavTab != oldWidget.isCurrentNavTab) {
+      if (widget.isCurrentNavTab) {
+        if (!_bootstrapStarted) {
+          // First time the tab is opened: load scope + visible sub-tab.
+          _bootstrap();
+          return;
+        }
+        _startAutoRefreshTimer();
+        if (!_scopeLoading) {
+          // Refresh only the sub-tab that is actually visible.
+          _fetchTab(_tabController.index, showLoading: false);
+        }
+      } else {
+        _stopAutoRefreshTimer();
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        mounted &&
+        widget.isCurrentNavTab &&
+        !_scopeLoading) {
+      _fetchTab(_tabController.index, showLoading: false);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopAutoRefreshTimer();
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    for (final controller in _listScrollControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -130,11 +216,22 @@ class _LeaderboardPageState extends State<LeaderboardPage>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(
+      mainNavScrollToTopProvider.select((m) => m[MainNavTab.leaderboard] ?? 0),
+      (previous, next) {
+        if (previous == next) return;
+        final index = _tabController.index.clamp(0, _listScrollControllers.length - 1);
+        animateScrollControllerToTop(_listScrollControllers[index]);
+      },
+    );
+
     final colorScheme = Theme.of(context).colorScheme;
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    // Guests have an anonymous auth id that never appears on the board, so
+    // skip the self-highlight entirely.
+    final currentUserId =
+        _isGuest ? null : Supabase.instance.client.auth.currentUser?.id;
     final activeTab = _tabController.index;
     final activeEntries = _entriesFor(activeTab);
-    final activeEmpty = _emptyByTab[activeTab];
     final activeLoading = _loadingByTab[activeTab] == true;
 
     if (_scopeLoading) {
@@ -144,50 +241,53 @@ class _LeaderboardPageState extends State<LeaderboardPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (_isGuest)
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppResponsive.horizontalInset(context),
+              4,
+              AppResponsive.horizontalInset(context),
+              12 * AppResponsive.layoutScaleOf(context),
+            ),
+            child: Text(
+              'The best players across all of Ballo',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          )
+        else
+          Material(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: colorScheme.onSurface,
+              indicatorColor: colorScheme.primary,
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(text: 'Overall'),
+                Tab(text: 'League'),
+                Tab(text: 'Teammates'),
+              ],
+            ),
+          ),
         _PodiumHeader(
           entries: activeEntries,
           loading: activeLoading,
-          emptyMessage: activeEmpty,
-        ),
-        Material(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: colorScheme.onSurface,
-            indicatorColor: colorScheme.primary,
-            indicatorWeight: 3,
-            tabs: const [
-              Tab(text: 'Overall'),
-              Tab(text: 'League'),
-              Tab(text: 'Teammates'),
-            ],
-          ),
         ),
         Expanded(
           child: TabBarView(
             controller: _tabController,
             children: [
-              _LeaderboardTabBody(
-                entries: _entriesFor(0),
-                emptyMessage: _emptyByTab[0],
-                loading: _loadingByTab[0] == true,
-                formatPts: _formatPoints,
-                currentUserId: currentUserId,
-              ),
-              _LeaderboardTabBody(
-                entries: _entriesFor(1),
-                emptyMessage: _emptyByTab[1],
-                loading: _loadingByTab[1] == true,
-                formatPts: _formatPoints,
-                currentUserId: currentUserId,
-              ),
-              _LeaderboardTabBody(
-                entries: _entriesFor(2),
-                emptyMessage: _emptyByTab[2],
-                loading: _loadingByTab[2] == true,
-                formatPts: _formatPoints,
-                currentUserId: currentUserId,
-              ),
+              for (var i = 0; i < (_isGuest ? 1 : 3); i++)
+                _LeaderboardTabBody(
+                  entries: _entriesFor(i),
+                  emptyKind: _emptyByTab[i],
+                  loading: _loadingByTab[i] == true,
+                  formatPts: _formatPoints,
+                  currentUserId: currentUserId,
+                  scrollController: _listScrollControllers[i],
+                ),
             ],
           ),
         ),
@@ -196,134 +296,269 @@ class _LeaderboardPageState extends State<LeaderboardPage>
   }
 }
 
-class _LeaderboardTabBody extends StatelessWidget {
+enum _LeaderboardEmptyKind {
+  noOverallPoints,
+  noLeagueJoined,
+  noLeagueActivity,
+  noTeamJoined,
+  noTeamPlayers,
+}
+
+extension _LeaderboardEmptyKindCopy on _LeaderboardEmptyKind {
+  String get title => switch (this) {
+        _LeaderboardEmptyKind.noOverallPoints => 'No rankings yet',
+        _LeaderboardEmptyKind.noLeagueJoined => 'Join a league first',
+        _LeaderboardEmptyKind.noLeagueActivity => 'No league rankings yet',
+        _LeaderboardEmptyKind.noTeamJoined => 'Join a team first',
+        _LeaderboardEmptyKind.noTeamPlayers => 'No teammates ranked yet',
+      };
+
+  String get subtitle => switch (this) {
+        _LeaderboardEmptyKind.noOverallPoints =>
+          'Points build from every finished match on the app. Play a match to start climbing the board.',
+        _LeaderboardEmptyKind.noLeagueJoined =>
+          'League rankings compare you with others in the same league. Search for a league to see where you stand.',
+        _LeaderboardEmptyKind.noLeagueActivity =>
+          'Players will appear here once someone finishes a match in your league and earns points.',
+        _LeaderboardEmptyKind.noTeamJoined =>
+          'Teammate rankings show how your squad stacks up. Search for a team to see your place among them.',
+        _LeaderboardEmptyKind.noTeamPlayers =>
+          'Teammates will show up here once they have points from finished matches.',
+      };
+
+  String? get actionLabel => switch (this) {
+        _LeaderboardEmptyKind.noLeagueJoined ||
+        _LeaderboardEmptyKind.noTeamJoined =>
+          'Search',
+        _ => null,
+      };
+}
+
+class _LeaderboardTabBody extends StatefulWidget {
   const _LeaderboardTabBody({
     required this.entries,
-    required this.emptyMessage,
+    required this.emptyKind,
     required this.loading,
     required this.formatPts,
     required this.currentUserId,
+    this.scrollController,
   });
 
   final List<LeaderboardEntry> entries;
-  final String? emptyMessage;
+  final _LeaderboardEmptyKind? emptyKind;
   final bool loading;
   final String Function(double) formatPts;
   final String? currentUserId;
+  final ScrollController? scrollController;
+
+  @override
+  State<_LeaderboardTabBody> createState() => _LeaderboardTabBodyState();
+}
+
+class _LeaderboardTabBodyState extends State<_LeaderboardTabBody> {
+  double _scrollOffset = 0;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final next = notification.metrics.pixels.clamp(0.0, double.infinity);
+    if ((next - _scrollOffset).abs() > 0.5) {
+      setState(() => _scrollOffset = next);
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final entries = widget.entries;
+    final emptyKind = widget.emptyKind;
+    final loading = widget.loading;
+    final formatPts = widget.formatPts;
+    final currentUserId = widget.currentUserId;
 
     if (loading && entries.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (emptyMessage != null && entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            emptyMessage!,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
+      return ListView(
+        controller: widget.scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(
+            height: 240,
+            child: Center(child: CircularProgressIndicator()),
           ),
-        ),
+        ],
       );
     }
 
-    if (entries.isEmpty) {
-      return Center(
-        child: Text(
-          'No data yet.',
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
+    if (emptyKind != null && entries.isEmpty) {
+      return ListView(
+        controller: widget.scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.55,
+            child: Center(
+              child: AppEmptyState(
+                imageAsset: AppAssets.searchEmpty,
+                title: emptyKind.title,
+                subtitle: emptyKind.subtitle,
+                actionLabel: emptyKind.actionLabel,
+                onAction: emptyKind.actionLabel != null
+                    ? () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const AppSearchPage(),
+                          ),
+                        );
+                      }
+                    : null,
+              ),
+            ),
           ),
-        ),
+        ],
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: colorScheme.outlineVariant,
-              width: 1.2,
+    final blurOpacity = (_scrollOffset / 24).clamp(0.0, 1.0);
+    final background = Theme.of(context).scaffoldBackgroundColor;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ListView(
+            controller: widget.scrollController,
+            padding: EdgeInsets.fromLTRB(
+              AppResponsive.horizontalInset(context),
+              16 * AppResponsive.layoutScaleOf(context),
+              AppResponsive.horizontalInset(context),
+              24 * AppResponsive.layoutScaleOf(context),
             ),
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: colorScheme.outlineVariant,
+                    width: 1.2,
+                  ),
+                  borderRadius: BorderRadius.circular(28),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    SizedBox(
-                      width: 36,
-                      child: Text(
-                        'Pos',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 36,
+                            child: Text(
+                              'Pos',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 32,
+                            child: Text(
+                              '',
+                              style: textTheme.bodySmall,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              'Player',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 44,
+                            child: Text(
+                              'GW',
+                              textAlign: TextAlign.center,
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 52,
+                            child: Text(
+                              'Pts',
+                              textAlign: TextAlign.center,
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        '',
-                        style: textTheme.bodySmall,
+                    for (final e in entries)
+                      _LeaderboardRow(
+                        entry: e,
+                        formatPts: formatPts,
+                        highlight:
+                            currentUserId != null && e.playerId == currentUserId,
                       ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'Player',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      child: Text(
-                        'GW',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 52,
-                      child: Text(
-                        'Pts',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
-              for (final e in entries)
-                _LeaderboardRow(
-                  entry: e,
-                  formatPts: formatPts,
-                  highlight: currentUserId != null && e.playerId == currentUserId,
-                ),
             ],
           ),
-        ),
-      ],
+          if (blurOpacity > 0)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 56,
+              child: IgnorePointer(
+                child: ShaderMask(
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: const [
+                        Colors.white,
+                        Colors.white,
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.35, 1.0],
+                    ).createShader(bounds);
+                  },
+                  blendMode: BlendMode.dstIn,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: 5 * blurOpacity,
+                      sigmaY: 5 * blurOpacity,
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            background.withValues(alpha: 0.72 * blurOpacity),
+                            background.withValues(alpha: 0.32 * blurOpacity),
+                            background.withValues(alpha: 0),
+                          ],
+                          stops: const [0.0, 0.45, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -332,12 +567,10 @@ class _PodiumHeader extends StatelessWidget {
   const _PodiumHeader({
     required this.entries,
     required this.loading,
-    this.emptyMessage,
   });
 
   final List<LeaderboardEntry> entries;
   final bool loading;
-  final String? emptyMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -360,34 +593,14 @@ class _PodiumHeader extends StatelessWidget {
           return SizedBox(
             height: 180,
             width: double.infinity,
-            child: Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                Positioned.fill(
-                  child: Image.asset(
-                    AppAssets.leaderboardBg,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    emptyMessage ?? 'No players to show yet.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                          shadows: const [
-                            Shadow(blurRadius: 8, color: Colors.black54),
-                          ],
-                        ),
-                  ),
-                ),
-              ],
+            child: Image.asset(
+              AppAssets.leaderboardBg,
+              fit: BoxFit.cover,
             ),
           );
         }
 
-        final first = entries.length > 0 ? entries[0] : null;
+        final first = entries.isNotEmpty ? entries[0] : null;
         final second = entries.length > 1 ? entries[1] : null;
         final third = entries.length > 2 ? entries[2] : null;
         final maxPts = [
@@ -414,8 +627,10 @@ class _PodiumHeader extends StatelessWidget {
                   fit: BoxFit.cover,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -515,32 +730,24 @@ class _LeaderboardRow extends StatelessWidget {
     if (url != null &&
         (url.startsWith('http://') || url.startsWith('https://'))) {
       avatar = CircleAvatar(
-        radius: 16,
         backgroundColor: colorScheme.surfaceContainerHighest,
         child: ClipOval(
-          child: Image.network(
-            url,
+          child: Image(
+            image: appCachedImageProvider(url),
             width: 32,
             height: 32,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Image.asset(
-              AppAssets.playerImage,
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
-            ),
+            errorBuilder: (_, _, _) => playerAvatarPlaceholder(size: 32),
           ),
         ),
       );
     } else if (url != null &&
         (url.startsWith('lib/assets/') || url.startsWith('assets/'))) {
       avatar = CircleAvatar(
-        radius: 16,
         backgroundImage: AssetImage(url),
       );
     } else {
       avatar = CircleAvatar(
-        radius: 16,
         backgroundColor: colorScheme.surfaceContainerHighest,
         child: Text(
           entry.playerName.isNotEmpty
@@ -660,17 +867,13 @@ class _LeaderboardBar extends StatelessWidget {
     if (url != null &&
         (url.startsWith('http://') || url.startsWith('https://'))) {
       img = ClipOval(
-        child: Image.network(
-          url,
+        child: Image(
+          image: appCachedImageProvider(url),
           width: avatarSize,
           height: avatarSize,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Image.asset(
-            AppAssets.playerImage,
-            width: avatarSize,
-            height: avatarSize,
-            fit: BoxFit.cover,
-          ),
+          errorBuilder: (_, _, _) =>
+              playerAvatarPlaceholder(size: avatarSize),
         ),
       );
     } else if (url != null &&
@@ -681,23 +884,12 @@ class _LeaderboardBar extends StatelessWidget {
           width: avatarSize,
           height: avatarSize,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Image.asset(
-            AppAssets.playerImage,
-            width: avatarSize,
-            height: avatarSize,
-            fit: BoxFit.cover,
-          ),
+          errorBuilder: (_, _, _) =>
+              playerAvatarPlaceholder(size: avatarSize),
         ),
       );
     } else {
-      img = ClipOval(
-        child: Image.asset(
-          AppAssets.playerImage,
-          width: avatarSize,
-          height: avatarSize,
-          fit: BoxFit.cover,
-        ),
-      );
+      img = playerAvatarPlaceholder(size: avatarSize);
     }
 
     final ptsLabel = (points - points.round()).abs() < 0.05

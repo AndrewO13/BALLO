@@ -1,4 +1,4 @@
--- FootyStats schema updates (run manually in Supabase SQL Editor)
+-- Ballo schema updates (run manually in Supabase SQL Editor)
 -- Safe to re-run: uses IF NOT EXISTS / ON CONFLICT where possible.
 
 -- 1) New tables for league workflows
@@ -9,7 +9,8 @@
 -- 2) League default venue columns (used when creating matches)
 alter table public.leagues
   add column if not exists default_venue text,
-  add column if not exists default_venue_image_url text;
+  add column if not exists default_venue_image_url text,
+  add column if not exists country text;
 
 -- 3) Optional odds columns for matches (if not already present)
 alter table public.matches
@@ -18,7 +19,13 @@ alter table public.matches
   add column if not exists away_odds numeric,
   add column if not exists venue_image_url text;
 
+-- 4) Teams captain_id column (for team admin delegation)
+alter table public.teams
+  add column if not exists captain_id uuid references public.players(id) on delete set null;
 
+-- 4b) Team favourite count (maintained by team_favourites trigger)
+alter table public.teams
+  add column if not exists favourite_count integer not null default 0;
 
 -- 5) Helpful indexes
 create index if not exists matches_match_date_idx on public.matches (match_date);

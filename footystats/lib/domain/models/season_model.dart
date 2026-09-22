@@ -3,25 +3,25 @@ class SeasonModel {
     required this.id,
     required this.leagueId,
     required this.seasonName,
-    required this.startDate,
-    required this.endDate,
+    this.startDate,
+    this.endDate,
     required this.status,
   });
 
   final String id;
   final String leagueId;
   final String seasonName;
-  final DateTime startDate;
-  final DateTime endDate;
+  final DateTime? startDate;
+  final DateTime? endDate;
   final String status;
 
   factory SeasonModel.fromJson(Map<String, dynamic> json) {
-    DateTime parseDate(dynamic value) {
+    DateTime? parseDate(dynamic value) {
       if (value is String) {
-        return DateTime.tryParse(value) ?? DateTime.now();
+        return DateTime.tryParse(value);
       }
       if (value is DateTime) return value;
-      return DateTime.now();
+      return null;
     }
 
     return SeasonModel(

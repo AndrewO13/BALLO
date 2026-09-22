@@ -6,7 +6,8 @@ import '../../domain/models/leaderboard_entry.dart';
 ///
 /// `total_points` and `gw_points` always reflect all finished matches on the app.
 /// [getForLeague] / [getForTeam] only change which players are included in the list.
-/// See `20250327000000_leaderboard_points.sql`.
+/// `total_points` includes earned profile badge bonuses (`player_badge_bonus_points`).
+/// See `20250327000000_leaderboard_points.sql` and `20260601150000_player_badge_leaderboard_points.sql`.
 class LeaderboardRepository {
   LeaderboardRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;

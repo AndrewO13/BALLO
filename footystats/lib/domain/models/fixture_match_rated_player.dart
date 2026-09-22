@@ -10,6 +10,7 @@ class FixtureMatchRatedPlayer {
     this.imageUrl,
     this.position,
     this.teamShortForm,
+    this.teamTeamName,
   });
 
   final String playerId;
@@ -19,6 +20,8 @@ class FixtureMatchRatedPlayer {
   final String? imageUrl;
   final String? position;
   final String? teamShortForm;
+  /// From `teams.team_name` when loading ratings (fixture match may omit full name).
+  final String? teamTeamName;
 
   String teamLogoPath(MatchModel match) {
     if (teamId == match.teamA.id) return match.teamA.logoPath;
@@ -27,8 +30,16 @@ class FixtureMatchRatedPlayer {
   }
 
   String teamDisplayName(MatchModel match) {
-    if (teamId == match.teamA.id) return match.teamA.displayName;
-    if (teamId == match.teamB.id) return match.teamB.displayName;
+    final t = teamId == match.teamA.id
+        ? match.teamA
+        : teamId == match.teamB.id
+            ? match.teamB
+            : null;
+    final fromMatch = t?.teamName?.trim();
+    if (fromMatch != null && fromMatch.isNotEmpty) return fromMatch;
+    final fromRow = teamTeamName?.trim();
+    if (fromRow != null && fromRow.isNotEmpty) return fromRow;
+    if (t != null) return t.displayName;
     return '—';
   }
 

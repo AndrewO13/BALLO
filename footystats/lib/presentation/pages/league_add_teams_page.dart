@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/media_placeholders.dart';
 import '../../domain/models/team_model.dart';
 import '../providers/league_teams_provider.dart';
 import '../providers/teams_provider.dart';
@@ -120,7 +122,6 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -140,7 +141,6 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
-                filled: true,
               ),
               autofocus: true,
             ),
@@ -149,28 +149,23 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
             child: _isSearching
                 ? const Center(child: CircularProgressIndicator())
                 : !_hasSearched
-                    ? Center(
-                        child: Text(
-                          'Type to search teams in the database',
-                          style: textTheme.bodyLarge?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                    ? const ScrollableAppEmptyState(
+                        imageAsset: AppAssets.addTeamsEmpty,
+                        title: 'Add teams to your league',
+                        subtitle:
+                            'Search by team name to find teams and add them to this league.',
                       )
                     : _searchResults.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No teams found',
-                              style: textTheme.bodyLarge?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
+                        ? const ScrollableAppEmptyState(
+                            imageAsset: AppAssets.addTeamsEmpty,
+                            title: 'No teams found',
+                            subtitle:
+                                'Try a different team name, or check the spelling.',
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             itemCount: _searchResults.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            separatorBuilder: (_, _) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final team = _searchResults[index];
                               final isProcessing = _processingIds.contains(team.id);
@@ -265,49 +260,18 @@ class _TeamLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final path = _resolvePath(logoId);
-    final isNetwork =
-        path.startsWith('http://') || path.startsWith('https://');
-
     return ClipOval(
       child: SizedBox(
         width: 48,
         height: 48,
-        child: isNetwork
-            ? Image.network(
-                path,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.groups,
-                  color: colorScheme.onSurfaceVariant,
-                  size: 28,
-                ),
-              )
-            : Image.asset(
-                path,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.groups,
-                  color: colorScheme.onSurfaceVariant,
-                  size: 28,
-                ),
-              ),
+        child: buildTeamLogo(
+          _resolvePath(logoId),
+          size: 48,
+          placeholderIconColor: colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }
 
-  String _resolvePath(String? logoId) {
-    final lid = logoId?.trim();
-    if (lid == null || lid.isEmpty) {
-      return AppAssets.leftersLogo;
-    }
-    if (lid.startsWith('http://') || lid.startsWith('https://')) {
-      return lid;
-    }
-    if (lid.startsWith('lib/') || lid.startsWith('assets/')) {
-      return lid;
-    }
-    final name = lid.contains('.') ? lid : '$lid.png';
-    return '${AppAssets.teamLogosPath}$name';
-  }
+  String? _resolvePath(String? logoId) => resolveTeamLogoPath(logoId);
 }

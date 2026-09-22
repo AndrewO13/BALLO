@@ -9,10 +9,10 @@ import '../../domain/services/fixture_generator.dart';
 
 /// Fetches matches from Supabase matches table with teamA/teamB embedded.
 /// Table columns: id, created_at, match_date, match_time, status, teamA_score,
-/// teamB_score, teamA, teamB, gameweek. Teams: id, logo_id, short_form.
+/// teamB_score, teamA, teamB, gameweek. Teams: id, logo_id, short_form, team_name.
 class MatchesRepository {
   MatchesRepository({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -20,22 +20,34 @@ class MatchesRepository {
   Future<MatchModel?> getMatchById(String id) async {
     if (id.isEmpty) return null;
     try {
-      final res = await _client.from('matches').select('''
-        id, match_date, match_time, status, teamA_score, teamB_score,
+      final res = await _client
+          .from('matches')
+          .select('''
+        id, match_date, match_time, status, teamA_score, teamB_score, venue_image_url, league_id,
+        half_duration_minutes,
         gameweek:gameweeks(week),
-        league:leagues(league_name),
-        teamA:teams!teamA(id, logo_id, short_form),
-        teamB:teams!teamB(id, logo_id, short_form)
-      ''').eq('id', id).maybeSingle();
+        league:leagues(league_name, country, logo_id),
+        teamA:teams!teamA(id, logo_id, short_form, team_name),
+        teamB:teams!teamB(id, logo_id, short_form, team_name)
+      ''')
+          .eq('id', id)
+          .maybeSingle();
       if (res == null) return null;
       return MatchModel.fromJson(Map<String, dynamic>.from(res));
     } catch (_) {
-      final fallback = await _client.from('matches').select(
-        'id, match_date, match_time, status, teamA, teamB, '
-        'teamA_score, teamB_score, gameweek, league_id',
-      ).eq('id', id).maybeSingle();
+      final fallback = await _client
+          .from('matches')
+          .select(
+            'id, match_date, match_time, status, teamA, teamB, '
+            'teamA_score, teamB_score, gameweek, league_id, venue_image_url, '
+            'half_duration_minutes',
+          )
+          .eq('id', id)
+          .maybeSingle();
       if (fallback == null) return null;
-      final list = await _matchesWithTeamsFetched([Map<String, dynamic>.from(fallback)]);
+      final list = await _matchesWithTeamsFetched([
+        Map<String, dynamic>.from(fallback),
+      ]);
       return list.isNotEmpty ? list.single : null;
     }
   }
@@ -46,7 +58,14 @@ class MatchesRepository {
     final weekday = now.weekday; // 1=Mon, 7=Sun
     final monday = DateTime(now.year, now.month, now.day - (weekday - 1));
     final sunday = monday.add(const Duration(days: 6));
-    final sundayEnd = DateTime(sunday.year, sunday.month, sunday.day, 23, 59, 59);
+    final sundayEnd = DateTime(
+      sunday.year,
+      sunday.month,
+      sunday.day,
+      23,
+      59,
+      59,
+    );
     return (monday, sundayEnd);
   }
 
@@ -58,22 +77,30 @@ class MatchesRepository {
     final sundayStr = sundayEnd.toIso8601String().split('T').first;
 
     try {
-      final res = await _client.from('matches').select('''
-        id, match_date, match_time, status, teamA_score, teamB_score,
+      final res = await _client
+          .from('matches')
+          .select('''
+        id, match_date, match_time, status, teamA_score, teamB_score, venue_image_url, league_id,
         gameweek:gameweeks(week),
-        league:leagues(league_name),
-        teamA:teams!teamA(id, logo_id, short_form),
-        teamB:teams!teamB(id, logo_id, short_form)
-      ''').gte('match_date', mondayStr).lte('match_date', sundayStr)
+        league:leagues(league_name, country, logo_id),
+        teamA:teams!teamA(id, logo_id, short_form, team_name),
+        teamB:teams!teamB(id, logo_id, short_form, team_name)
+      ''')
+          .gte('match_date', mondayStr)
+          .lte('match_date', sundayStr)
           .order('match_date', ascending: true)
           .order('match_time', ascending: true);
       final list = List<Map<String, dynamic>>.from(res as List);
       return list.map((e) => MatchModel.fromJson(e)).toList();
     } catch (_) {
-      final fallback = await _client.from('matches').select(
-        'id, match_date, match_time, status, teamA, teamB, '
-        'teamA_score, teamB_score, gameweek, league_id',
-      ).gte('match_date', mondayStr).lte('match_date', sundayStr)
+      final fallback = await _client
+          .from('matches')
+          .select(
+            'id, match_date, match_time, status, teamA, teamB, '
+            'teamA_score, teamB_score, gameweek, league_id, venue_image_url',
+          )
+          .gte('match_date', mondayStr)
+          .lte('match_date', sundayStr)
           .order('match_date', ascending: true)
           .order('match_time', ascending: true);
       final list = List<Map<String, dynamic>>.from(fallback as List);
@@ -100,7 +127,9 @@ class MatchesRepository {
 
     final teamsMap = <String, Map<String, dynamic>>{};
     if (teamIds.isNotEmpty) {
-      final teamsRes = await _client.from('teams').select('id, logo_id, short_form')
+      final teamsRes = await _client
+          .from('teams')
+          .select('id, logo_id, short_form, team_name')
           .inFilter('id', teamIds.toList());
       for (final t in List<Map<String, dynamic>>.from(teamsRes as List)) {
         final id = t['id']?.toString();
@@ -108,19 +137,29 @@ class MatchesRepository {
       }
     }
 
-    final leaguesMap = <String, String>{};
+    final leaguesMap = <String, Map<String, String>>{};
     if (leagueIds.isNotEmpty) {
-      final leaguesRes = await _client.from('leagues').select('id, league_name')
+      final leaguesRes = await _client
+          .from('leagues')
+          .select('id, league_name, country, logo_id')
           .inFilter('id', leagueIds.toList());
       for (final l in List<Map<String, dynamic>>.from(leaguesRes as List)) {
         final id = l['id']?.toString();
-        if (id != null) leaguesMap[id] = l['league_name']?.toString() ?? '—';
+        if (id != null) {
+          leaguesMap[id] = {
+            'league_name': l['league_name']?.toString() ?? '—',
+            'country': l['country']?.toString() ?? '',
+            'logo_id': l['logo_id']?.toString() ?? '',
+          };
+        }
       }
     }
 
     final gameweeksMap = <String, int>{};
     if (gameweekIds.isNotEmpty) {
-      final gwsRes = await _client.from('gameweeks').select('id, week')
+      final gwsRes = await _client
+          .from('gameweeks')
+          .select('id, week')
           .inFilter('id', gameweekIds.toList());
       for (final g in List<Map<String, dynamic>>.from(gwsRes as List)) {
         final id = g['id']?.toString();
@@ -134,30 +173,42 @@ class MatchesRepository {
       json['teamA'] = teamsMap[row['teamA']?.toString() ?? ''];
       json['teamB'] = teamsMap[row['teamB']?.toString() ?? ''];
       final lid = row['league_id']?.toString();
-      if (lid != null) json['league'] = {'league_name': leaguesMap[lid] ?? '—'};
+      if (lid != null) {
+        json['league'] = leaguesMap[lid] ??
+            {'league_name': '—', 'country': '', 'logo_id': ''};
+      }
       final gwid = row['gameweek']?.toString();
       if (gwid != null) json['gameweek'] = {'week': gameweeksMap[gwid]};
       return MatchModel.fromJson(json);
     }).toList();
   }
 
-  /// Fetches all matches ordered by date and time.
+  /// Fetches matches ordered by date and time.
   /// Filters by participation: leagueIds, seasonIds, gameweekId, teamIds (matches
   /// where teamA or teamB is in teamIds). RLS already restricts to user's matches.
+  ///
+  /// [fromDate]/[toDate] bound the fetch to a date window and [limit] caps the
+  /// row count, so callers avoid downloading a full multi-season history.
   Future<List<MatchModel>> getMatches({
     String? gameweek,
     List<String>? leagueIds,
     List<String>? seasonIds,
     List<String>? teamIds,
+    DateTime? fromDate,
+    DateTime? toDate,
+    int? limit,
+    bool ascending = true,
   }) async {
+    final fromDateStr = fromDate?.toIso8601String().split('T').first;
+    final toDateStr = toDate?.toIso8601String().split('T').first;
     List<Map<String, dynamic>> list;
     try {
       var query = _client.from('matches').select('''
-        id, match_date, match_time, status, teamA_score, teamB_score,
+        id, match_date, match_time, status, teamA_score, teamB_score, venue_image_url, league_id,
         gameweek:gameweeks(week),
-        league:leagues(league_name),
-        teamA:teams!teamA(id, logo_id, short_form),
-        teamB:teams!teamB(id, logo_id, short_form)
+        league:leagues(league_name, country, logo_id),
+        teamA:teams!teamA(id, logo_id, short_form, team_name),
+        teamB:teams!teamB(id, logo_id, short_form, team_name)
       ''');
       if (gameweek != null && gameweek.isNotEmpty) {
         query = query.eq('gameweek', gameweek);
@@ -168,9 +219,24 @@ class MatchesRepository {
       if (seasonIds != null && seasonIds.isNotEmpty) {
         query = query.inFilter('season_id', seasonIds);
       }
-      final res = await query
-          .order('match_date', ascending: true)
-          .order('match_time', ascending: true);
+      if (fromDateStr != null) {
+        query = query.gte('match_date', fromDateStr);
+      }
+      if (toDateStr != null) {
+        query = query.lte('match_date', toDateStr);
+      }
+      if (teamIds != null && teamIds.isNotEmpty) {
+        query = query.or(
+          'teamA.in.(${teamIds.join(',')}),teamB.in.(${teamIds.join(',')})',
+        );
+      }
+      var ordered = query
+          .order('match_date', ascending: ascending)
+          .order('match_time', ascending: ascending);
+      if (limit != null && limit > 0) {
+        ordered = ordered.limit(limit);
+      }
+      final res = await ordered;
       list = List<Map<String, dynamic>>.from(res as List);
       if (teamIds != null && teamIds.isNotEmpty) {
         final teamSet = teamIds.toSet();
@@ -183,10 +249,12 @@ class MatchesRepository {
         }).toList();
       }
     } catch (_) {
-      var fallback = _client.from('matches').select(
-        'id, match_date, match_time, status, teamA, teamB, '
-        'teamA_score, teamB_score, gameweek, league_id, season_id',
-      );
+      var fallback = _client
+          .from('matches')
+          .select(
+            'id, match_date, match_time, status, teamA, teamB, '
+            'teamA_score, teamB_score, gameweek, league_id, season_id, venue_image_url',
+          );
       if (gameweek != null && gameweek.isNotEmpty) {
         fallback = fallback.eq('gameweek', gameweek);
       }
@@ -196,9 +264,24 @@ class MatchesRepository {
       if (seasonIds != null && seasonIds.isNotEmpty) {
         fallback = fallback.inFilter('season_id', seasonIds);
       }
-      final res = await fallback
-          .order('match_date', ascending: true)
-          .order('match_time', ascending: true);
+      if (fromDateStr != null) {
+        fallback = fallback.gte('match_date', fromDateStr);
+      }
+      if (toDateStr != null) {
+        fallback = fallback.lte('match_date', toDateStr);
+      }
+      if (teamIds != null && teamIds.isNotEmpty) {
+        fallback = fallback.or(
+          'teamA.in.(${teamIds.join(',')}),teamB.in.(${teamIds.join(',')})',
+        );
+      }
+      var orderedFallback = fallback
+          .order('match_date', ascending: ascending)
+          .order('match_time', ascending: ascending);
+      if (limit != null && limit > 0) {
+        orderedFallback = orderedFallback.limit(limit);
+      }
+      final res = await orderedFallback;
       list = List<Map<String, dynamic>>.from(res as List);
       if (teamIds != null && teamIds.isNotEmpty) {
         final teamSet = teamIds.toSet();
@@ -212,6 +295,79 @@ class MatchesRepository {
     }
 
     return list.map((e) => MatchModel.fromJson(e)).toList();
+  }
+
+  DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  /// Next upcoming / live fixture without downloading full history.
+  Future<MatchModel?> getNextUpcomingMatch({
+    List<String>? teamIds,
+    List<String>? leagueIds,
+  }) async {
+    final matches = await getMatches(
+      teamIds: teamIds,
+      leagueIds: leagueIds,
+      fromDate: _today(),
+      limit: 20,
+    );
+    final live = matches.where(
+      (m) =>
+          m.status == MatchStatus.ongoing || m.status == MatchStatus.halfTime,
+    );
+    if (live.isNotEmpty) return live.first;
+    final upcoming = matches.where((m) => m.status == MatchStatus.upcoming);
+    if (upcoming.isNotEmpty) return upcoming.first;
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  /// Most recent completed results, newest first.
+  Future<List<MatchModel>> getRecentCompletedMatches({
+    List<String>? teamIds,
+    List<String>? leagueIds,
+    int limit = 6,
+  }) async {
+    final matches = await getMatches(
+      teamIds: teamIds,
+      leagueIds: leagueIds,
+      toDate: _today(),
+      limit: limit * 4,
+      ascending: false,
+    );
+    return matches
+        .where(
+          (m) =>
+              m.status == MatchStatus.fullTime &&
+              m.teamAScore != null &&
+              m.teamBScore != null,
+        )
+        .take(limit)
+        .toList();
+  }
+
+  /// [playedCount]: `fullTime` matches. [totalCount]: all fixtures for league + season.
+  Future<SeasonFixtureProgress> getSeasonFixtureProgress({
+    required String leagueId,
+    required String seasonId,
+  }) async {
+    if (leagueId.isEmpty || seasonId.isEmpty) {
+      return const SeasonFixtureProgress(playedCount: 0, totalCount: 0);
+    }
+    final res = await _client
+        .from('matches')
+        .select('status')
+        .eq('league_id', leagueId)
+        .eq('season_id', seasonId);
+    final rows = List<Map<String, dynamic>>.from(res as List);
+    var played = 0;
+    for (final r in rows) {
+      if (r['status']?.toString() == 'fullTime') {
+        played++;
+      }
+    }
+    return SeasonFixtureProgress(playedCount: played, totalCount: rows.length);
   }
 
   /// Gets or creates a gameweek for the given season and week number.
@@ -231,10 +387,7 @@ class MatchesRepository {
     }
     final res = await _client
         .from('gameweeks')
-        .insert({
-          'season_id': seasonId,
-          'week': week,
-        })
+        .insert({'season_id': seasonId, 'week': week})
         .select('id')
         .single();
     return res['id']?.toString() ?? '';
@@ -450,11 +603,85 @@ class MatchesRepository {
   }
 
   /// Updates the status of a match in the database.
+  /// Also handles timestamp tracking for timer synchronization:
+  /// - When status changes to "ongoing": sets started_at to now
+  /// - When status changes to "halfTime": sets halftime_paused_at to now
+  /// - When status changes back to "ongoing": updates resumed_from_halftime_at and increments total_paused_duration_seconds
   Future<void> updateMatchStatus(String id, MatchStatus status) async {
     if (id.isEmpty) return;
+
+    final now = DateTime.now().toUtc().toIso8601String();
+    final updateData = <String, dynamic>{'status': status.dbValue};
+
+    // Handle timestamp tracking based on status transition
+    if (status == MatchStatus.ongoing) {
+      // Check if this is initial start or resumption from halftime
+      final existingMatch = await _client
+          .from('matches')
+          .select(
+            'started_at, halftime_paused_at, total_paused_duration_seconds',
+          )
+          .eq('id', id)
+          .maybeSingle();
+
+      if (existingMatch != null) {
+        if (existingMatch['started_at'] == null) {
+          // First time starting the match
+          updateData['started_at'] = now;
+        } else if (existingMatch['halftime_paused_at'] != null) {
+          // Resuming from halftime - calculate pause duration
+          final haltimePausedAt = DateTime.parse(
+            existingMatch['halftime_paused_at'] as String,
+          );
+          final pausedSeconds = DateTime.now()
+              .toUtc()
+              .difference(haltimePausedAt)
+              .inSeconds;
+          final previousTotal =
+              (existingMatch['total_paused_duration_seconds'] as int?) ?? 0;
+
+          updateData['resumed_from_halftime_at'] = now;
+          updateData['total_paused_duration_seconds'] =
+              previousTotal + pausedSeconds;
+        }
+      }
+    } else if (status == MatchStatus.halfTime) {
+      // Match entering halftime
+      updateData['halftime_paused_at'] = now;
+    }
+
+    await _client.from('matches').update(updateData).eq('id', id);
+
+    if (status == MatchStatus.fullTime) {
+      await _syncSeasonStatusForEndedMatch(id);
+    }
+  }
+
+  /// Returns the configured half duration for a match, or null if unset.
+  Future<int?> getMatchHalfDurationMinutes(String matchId) async {
+    if (matchId.isEmpty) return null;
+    try {
+      final row = await _client
+          .from('matches')
+          .select('half_duration_minutes')
+          .eq('id', matchId)
+          .maybeSingle();
+      final raw = row?['half_duration_minutes'];
+      if (raw == null) return null;
+      return int.tryParse(raw.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Persists the configured half duration for a match (1–120 minutes per half).
+  Future<void> setMatchHalfDurationMinutes(String matchId, int minutes) async {
+    if (matchId.isEmpty) return;
+    final clamped = minutes.clamp(1, 120);
     await _client
         .from('matches')
-        .update({'status': status.dbValue}).eq('id', id);
+        .update({'half_duration_minutes': clamped})
+        .eq('id', matchId);
   }
 
   /// Records a goal via RPC (inserts match_events, updates stats, match score).
@@ -517,7 +744,10 @@ class MatchesRepository {
   Future<void> initializeMatchStatsViaRpc(String matchId) async {
     if (matchId.isEmpty) return;
     try {
-      await _client.rpc('initialize_match_stats', params: {'p_match_id': matchId});
+      await _client.rpc(
+        'initialize_match_stats',
+        params: {'p_match_id': matchId},
+      );
     } catch (_) {}
   }
 
@@ -526,7 +756,43 @@ class MatchesRepository {
     if (matchId.isEmpty) return;
     try {
       await _client.rpc('finalize_match', params: {'p_match_id': matchId});
+      await _syncSeasonStatusForEndedMatch(matchId);
     } catch (_) {}
+  }
+
+  /// When a match in a new season is ended, move season status from
+  /// `upcoming` to `ongoing`.
+  Future<void> _syncSeasonStatusForEndedMatch(String matchId) async {
+    if (matchId.isEmpty) return;
+    try {
+      final matchRow = await _client
+          .from('matches')
+          .select('season_id, status')
+          .eq('id', matchId)
+          .maybeSingle();
+      if (matchRow == null) return;
+      final matchStatus = matchRow['status']?.toString();
+      final seasonId = matchRow['season_id']?.toString();
+      if (seasonId == null || seasonId.isEmpty || matchStatus != 'fullTime') {
+        return;
+      }
+
+      final seasonRow = await _client
+          .from('seasons')
+          .select('status')
+          .eq('id', seasonId)
+          .maybeSingle();
+      if (seasonRow == null) return;
+      final seasonStatus = seasonRow['status']?.toString() ?? '';
+      if (seasonStatus == 'upcoming') {
+        await _client
+            .from('seasons')
+            .update({'status': 'ongoing'})
+            .eq('id', seasonId);
+      }
+    } catch (_) {
+      // Keep match finalization/status change resilient even if season sync fails.
+    }
   }
 
   /// Records a generic match event (shot, corner, tackle, save, substitution).
@@ -559,26 +825,25 @@ class MatchesRepository {
   /// Voids (undoes) a match event. Reverses stat updates and marks event deleted.
   Future<void> voidMatchEventViaRpc(String eventId) async {
     if (eventId.isEmpty) return;
-    try {
-      await _client.rpc(
-        'void_match_event',
-        params: {'p_event_id': eventId},
-      );
-    } catch (_) {}
+    await _client.rpc('void_match_event', params: {'p_event_id': eventId});
   }
 
   /// Players with non-null [rating] for this match, highest first (PotM + top rated).
-  Future<List<FixtureMatchRatedPlayer>> getMatchPlayerRatingsRanked(String matchId) async {
+  Future<List<FixtureMatchRatedPlayer>> getMatchPlayerRatingsRanked(
+    String matchId,
+  ) async {
     if (matchId.isEmpty) return <FixtureMatchRatedPlayer>[];
     try {
-      final res = await _client.from('match_player_stats').select('''
+      final res = await _client
+          .from('match_player_stats')
+          .select('''
             player_id, team_id, rating,
             player:players!match_player_stats_player_id_fkey(player_name, image_url, position),
-            team:teams!match_player_stats_team_id_fkey(short_form)
-          ''').eq('match_id', matchId).not('rating', 'is', null).order(
-            'rating',
-            ascending: false,
-          );
+            team:teams!match_player_stats_team_id_fkey(short_form, team_name)
+          ''')
+          .eq('match_id', matchId)
+          .not('rating', 'is', null)
+          .order('rating', ascending: false);
       final list = List<Map<String, dynamic>>.from(res as List);
       final out = <FixtureMatchRatedPlayer>[];
       for (final row in list) {
@@ -589,11 +854,15 @@ class MatchesRepository {
         final player = row['player'];
         final playerMap = player is Map<String, dynamic>
             ? player
-            : (player is Map ? Map<String, dynamic>.from(player) : <String, dynamic>{});
+            : (player is Map
+                  ? Map<String, dynamic>.from(player)
+                  : <String, dynamic>{});
         final team = row['team'];
         final teamMap = team is Map<String, dynamic>
             ? team
-            : (team is Map ? Map<String, dynamic>.from(team) : <String, dynamic>{});
+            : (team is Map
+                  ? Map<String, dynamic>.from(team)
+                  : <String, dynamic>{});
         out.add(
           FixtureMatchRatedPlayer(
             playerId: playerId,
@@ -603,6 +872,7 @@ class MatchesRepository {
             imageUrl: playerMap['image_url']?.toString(),
             position: playerMap['position']?.toString(),
             teamShortForm: teamMap['short_form']?.toString(),
+            teamTeamName: teamMap['team_name']?.toString(),
           ),
         );
       }
@@ -674,11 +944,15 @@ class MatchesRepository {
   Future<List<Map<String, dynamic>>> getMatchEvents(String matchId) async {
     if (matchId.isEmpty) return [];
     try {
-      final res = await _client.from('match_events').select('''
-        id, event_type, event_minute, event_second, team_id, player_id, secondary_player_id,
+      final res = await _client
+          .from('match_events')
+          .select('''
+        id, created_at, event_type, event_minute, event_second, team_id, player_id, secondary_player_id,
         scorer:players!match_events_player_id_fkey(player_name),
         assister:players!match_events_secondary_player_id_fkey(player_name)
-      ''').eq('match_id', matchId).eq('is_deleted', false)
+      ''')
+          .eq('match_id', matchId)
+          .eq('is_deleted', false)
           .order('event_minute', ascending: true)
           .order('event_second', ascending: true);
       return List<Map<String, dynamic>>.from(res as List);
@@ -686,7 +960,9 @@ class MatchesRepository {
       try {
         final fallback = await _client
             .from('match_events')
-            .select('id, event_type, event_minute, event_second, team_id, player_id, secondary_player_id')
+            .select(
+              'id, created_at, event_type, event_minute, event_second, team_id, player_id, secondary_player_id',
+            )
             .eq('match_id', matchId)
             .eq('is_deleted', false)
             .order('event_minute', ascending: true)
@@ -698,6 +974,43 @@ class MatchesRepository {
     }
   }
 
+  /// Sets both team scores directly (e.g. league-owner correction).
+  Future<void> updateMatchScores(
+    String id, {
+    required int teamAScore,
+    required int teamBScore,
+  }) async {
+    if (id.isEmpty) return;
+    await _client
+        .from('matches')
+        .update({
+          'teamA_score': teamAScore.clamp(0, 99),
+          'teamB_score': teamBScore.clamp(0, 99),
+        })
+        .eq('id', id);
+  }
+
+  /// Updates match date and kick-off time.
+  Future<void> updateMatchSchedule(
+    String id, {
+    required DateTime matchDate,
+    required String matchTime,
+  }) async {
+    if (id.isEmpty) return;
+    final date =
+        '${matchDate.year}-${matchDate.month.toString().padLeft(2, '0')}-${matchDate.day.toString().padLeft(2, '0')}';
+    await _client
+        .from('matches')
+        .update({'match_date': date, 'match_time': matchTime})
+        .eq('id', id);
+  }
+
+  /// Permanently removes a match row.
+  Future<void> deleteMatch(String id) async {
+    if (id.isEmpty) return;
+    await _client.from('matches').delete().eq('id', id);
+  }
+
   /// Increments team A or team B score by 1 (uses current row; null scores treated as 0).
   Future<void> incrementMatchScore(String id, {required bool forTeamA}) async {
     if (id.isEmpty) return;
@@ -705,10 +1018,10 @@ class MatchesRepository {
     if (match == null) return;
     final a = (match.teamAScore ?? 0) + (forTeamA ? 1 : 0);
     final b = (match.teamBScore ?? 0) + (forTeamA ? 0 : 1);
-    await _client.from('matches').update({
-      'teamA_score': a,
-      'teamB_score': b,
-    }).eq('id', id);
+    await _client
+        .from('matches')
+        .update({'teamA_score': a, 'teamB_score': b})
+        .eq('id', id);
   }
 
   /// Records a goal: match score +1, match_player_stats (scorer goals, assister assists),
@@ -790,7 +1103,9 @@ class MatchesRepository {
           : int.tryParse(row['goals']?.toString() ?? '0') ?? 0;
       await _client
           .from('match_player_stats')
-          .update({'goals': g + 1}).eq('match_id', matchId).eq('player_id', playerId);
+          .update({'goals': g + 1})
+          .eq('match_id', matchId)
+          .eq('player_id', playerId);
     } else {
       final insert = Map<String, dynamic>.from(_matchPlayerStatsDefaults)
         ..['match_id'] = matchId
@@ -818,7 +1133,9 @@ class MatchesRepository {
           : int.tryParse(row['assists']?.toString() ?? '0') ?? 0;
       await _client
           .from('match_player_stats')
-          .update({'assists': a + 1}).eq('match_id', matchId).eq('player_id', playerId);
+          .update({'assists': a + 1})
+          .eq('match_id', matchId)
+          .eq('player_id', playerId);
     } else {
       final insert = Map<String, dynamic>.from(_matchPlayerStatsDefaults)
         ..['match_id'] = matchId
@@ -887,24 +1204,34 @@ class MatchesRepository {
 
     final teamsRes = await _client
         .from('teams')
-        .select('id, logo_id, short_form')
+        .select('id, logo_id, short_form, team_name')
         .inFilter('id', teamIds.toList());
     final teamsList = List<Map<String, dynamic>>.from(teamsRes as List);
     final teamsMap = {for (final t in teamsList) t['id']?.toString(): t};
 
-    final leaguesMap = <String, String>{};
+    final leaguesMap = <String, Map<String, String>>{};
     if (leagueIds.isNotEmpty) {
-      final leaguesRes = await _client.from('leagues').select('id, league_name')
+      final leaguesRes = await _client
+          .from('leagues')
+          .select('id, league_name, country, logo_id')
           .inFilter('id', leagueIds.toList());
       for (final l in List<Map<String, dynamic>>.from(leaguesRes as List)) {
         final id = l['id']?.toString();
-        if (id != null) leaguesMap[id] = l['league_name']?.toString() ?? '—';
+        if (id != null) {
+          leaguesMap[id] = {
+            'league_name': l['league_name']?.toString() ?? '—',
+            'country': l['country']?.toString() ?? '',
+            'logo_id': l['logo_id']?.toString() ?? '',
+          };
+        }
       }
     }
 
     final gameweeksMap = <String, int>{};
     if (gameweekIds.isNotEmpty) {
-      final gwsRes = await _client.from('gameweeks').select('id, week')
+      final gwsRes = await _client
+          .from('gameweeks')
+          .select('id, week')
           .inFilter('id', gameweekIds.toList());
       for (final g in List<Map<String, dynamic>>.from(gwsRes as List)) {
         final id = g['id']?.toString();
@@ -920,10 +1247,166 @@ class MatchesRepository {
         ..['teamA'] = teamsMap[aId]
         ..['teamB'] = teamsMap[bId];
       final lid = row['league_id']?.toString();
-      if (lid != null) json['league'] = {'league_name': leaguesMap[lid] ?? '—'};
+      if (lid != null) {
+        json['league'] = leaguesMap[lid] ??
+            {'league_name': '—', 'country': '', 'logo_id': ''};
+      }
       final gwid = row['gameweek']?.toString();
       if (gwid != null) json['gameweek'] = {'week': gameweeksMap[gwid]};
       return MatchModel.fromJson(json);
     }).toList();
   }
+
+  /// Fetch match timing data needed for server-synced clock and timeline.
+  /// Returns timing fields or null if match not found.
+  Future<Map<String, dynamic>?> getMatchTimingData(String matchId) async {
+    if (matchId.isEmpty) return null;
+    try {
+      final response = await _client
+          .from('matches')
+          .select(
+            'started_at, halftime_paused_at, resumed_from_halftime_at, '
+            'half_duration_minutes, total_paused_duration_seconds, status',
+          )
+          .eq('id', matchId)
+          .maybeSingle();
+      return response;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Record that a match was started (sets started_at if not already set)
+  Future<void> recordMatchStart(String matchId) async {
+    if (matchId.isEmpty) return;
+    try {
+      // Check if started_at is already set
+      final existing = await _client
+          .from('matches')
+          .select('started_at')
+          .eq('id', matchId)
+          .maybeSingle();
+
+      if (existing != null && existing['started_at'] == null) {
+        // Only update if not already set
+        await _client
+            .from('matches')
+            .update({'started_at': DateTime.now().toUtc().toIso8601String()})
+            .eq('id', matchId);
+      }
+    } catch (_) {}
+  }
+
+  /// Record pause duration when transitioning between halves
+  Future<void> recordPauseDuration(String matchId, int pausedSeconds) async {
+    if (matchId.isEmpty || pausedSeconds <= 0) return;
+    try {
+      final row = await _client
+          .from('matches')
+          .select('total_paused_duration_seconds')
+          .eq('id', matchId)
+          .maybeSingle();
+
+      if (row != null) {
+        final current = (row['total_paused_duration_seconds'] as int?) ?? 0;
+        await _client
+            .from('matches')
+            .update({'total_paused_duration_seconds': current + pausedSeconds})
+            .eq('id', matchId);
+      }
+    } catch (_) {}
+  }
+
+  static const _matchFavouriteSelect = '''
+        id, match_date, match_time, status, teamA_score, teamB_score, venue_image_url, league_id,
+        half_duration_minutes,
+        gameweek:gameweeks(week),
+        league:leagues(league_name, country, logo_id),
+        teamA:teams!teamA(id, logo_id, short_form, team_name),
+        teamB:teams!teamB(id, logo_id, short_form, team_name)
+      ''';
+
+  /// Favourited matches for the signed-in user (including guests).
+  Future<List<MatchModel>> getFavouritedMatchesForUser(String userId) async {
+    if (userId.isEmpty) return [];
+    final res = await _client
+        .from('match_favourites')
+        .select('matches($_matchFavouriteSelect)')
+        .eq('user_id', userId)
+        .order('sort_order', ascending: true)
+        .order('created_at', ascending: false);
+    final out = <MatchModel>[];
+    for (final row in res as List) {
+      final matchRaw = row['matches'];
+      if (matchRaw is Map) {
+        out.add(MatchModel.fromJson(Map<String, dynamic>.from(matchRaw)));
+      }
+    }
+    return out;
+  }
+
+  Future<void> addMatchFavourite(String matchId) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null || matchId.isEmpty) return;
+    final nextOrder = await _nextMatchFavouriteSortOrder(uid);
+    await _client.from('match_favourites').insert({
+      'user_id': uid,
+      'match_id': matchId,
+      'sort_order': nextOrder,
+    });
+  }
+
+  Future<int> _nextMatchFavouriteSortOrder(String userId) async {
+    final res = await _client
+        .from('match_favourites')
+        .select('sort_order')
+        .eq('user_id', userId)
+        .order('sort_order', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    if (res == null) return 0;
+    final current = res['sort_order'];
+    if (current is int) return current + 1;
+    if (current is num) return current.toInt() + 1;
+    return 0;
+  }
+
+  Future<void> updateMatchFavouritesOrder(List<String> matchIdsInOrder) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null || matchIdsInOrder.isEmpty) return;
+    for (var i = 0; i < matchIdsInOrder.length; i++) {
+      final matchId = matchIdsInOrder[i];
+      if (matchId.isEmpty) continue;
+      await _client
+          .from('match_favourites')
+          .update({'sort_order': i})
+          .eq('user_id', uid)
+          .eq('match_id', matchId);
+    }
+  }
+
+  Future<void> removeMatchFavourite(String matchId) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null || matchId.isEmpty) return;
+    await _client
+        .from('match_favourites')
+        .delete()
+        .eq('user_id', uid)
+        .eq('match_id', matchId);
+  }
+}
+
+/// Fixture completion counts for season progress UI.
+class SeasonFixtureProgress {
+  const SeasonFixtureProgress({
+    required this.playedCount,
+    required this.totalCount,
+  });
+
+  final int playedCount;
+  final int totalCount;
+
+  /// 0..1 when [totalCount] > 0; otherwise 0.
+  double get progress01 =>
+      totalCount > 0 ? (playedCount / totalCount).clamp(0.0, 1.0) : 0.0;
 }

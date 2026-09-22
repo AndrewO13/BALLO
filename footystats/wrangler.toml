@@ -1,0 +1,8 @@
+name = "ballo-share-og"
+main = "web/_worker.js"
+compatibility_date = "2025-09-16"
+
+# If app.ballonetwork.com is Cloudflare Pages, flutter build web already
+# copies web/_worker.js into the deploy folder and this file is unused.
+# If the hostname is only proxied by Cloudflare, deploy this worker and
+# add a route app.ballonetwork.com/* in the dashboard.

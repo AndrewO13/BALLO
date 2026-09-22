@@ -7,6 +7,7 @@ class LeagueModel {
     required this.createdAt,
     this.defaultVenue,
     this.defaultVenueImageUrl,
+    this.country,
   });
 
   final String id;
@@ -16,6 +17,7 @@ class LeagueModel {
   final DateTime createdAt;
   final String? defaultVenue;
   final String? defaultVenueImageUrl;
+  final String? country;
 
   factory LeagueModel.fromJson(Map<String, dynamic> json) {
     final createdRaw = json['created_at'];
@@ -31,6 +33,7 @@ class LeagueModel {
       createdAt: createdAt,
       defaultVenue: json['default_venue']?.toString(),
       defaultVenueImageUrl: json['default_venue_image_url']?.toString(),
+      country: json['country']?.toString(),
     );
   }
 }

@@ -1,4 +1,4 @@
-name: footystats
+name: ballo
 description: "Play like an amateur, Track like a pro."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   google_fonts: ^8.0.0
   flutter_svg: ^2.0.7
   fl_chart: ^1.1.1
@@ -46,14 +48,27 @@ dependencies:
   riverpod: ^3.2.0
   image_picker: ^1.0.7
   path: ^1.9.0
-  beep_sound: ^0.0.3
   audioplayers: ^6.1.0
   cached_video_player_plus: ^4.1.0
   video_thumbnail: ^0.5.6
   uuid: ^4.5.1
   dotted_border: ^2.1.0
-  font_awesome_flutter: ^10.8.0
+  font_awesome_flutter: ^11.0.0
+  app_links: ^7.0.0
   url_launcher: ^6.3.1
+  share_plus: ^13.3.0
+  web: ^1.1.1
+  flutter_cache_manager: ^3.4.1
+  shared_preferences: ^2.5.5
+  table_calendar: ^3.2.0
+  shimmer: ^3.0.0
+  google_sign_in: ^7.2.0
+  cached_network_image: ^4.0.0
+  connectivity_plus: ^6.1.4
+  video_compress: ^3.1.4
+  palette_generator: ^0.3.3+7
+  # 13.x requires Android SDK 37, which this toolchain does not resolve.
+  permission_handler: ^12.0.3
 
 dev_dependencies:
   flutter_test:
@@ -65,6 +80,32 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  riverpod_lint: ^3.1.3
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: lib/assets/icons/app_icon.png
+  remove_alpha_ios: true
+  web:
+    generate: true
+    background_color: "#000000"
+    theme_color: "#000000"
+  windows:
+    generate: true
+  macos:
+    generate: true
+
+flutter_native_splash:
+  color: "#000000"
+  image: lib/assets/icons/splash_center_icon.png
+  fullscreen: true
+  android_12:
+    color: "#000000"
+    image: lib/assets/icons/splash_center_icon.png
+    icon_background_color: "#000000"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -78,13 +119,19 @@ flutter:
   uses-material-design: true
 
   assets:
+
+    # Branding
+    - lib/assets/icons/app_icon.png
+    - lib/assets/icons/splash_center_icon.png
+    - lib/assets/images/splash_screen.png
+
     # Icons (SVG)
     - lib/assets/icons/position.svg
     - lib/assets/icons/match goal.svg
     - lib/assets/icons/tackle.svg
     - lib/assets/icons/assist.svg
-    - lib/assets/icons/challenge.svg
     - lib/assets/icons/team compare.svg
+    - lib/assets/icons/ballo logo.svg
     - lib/assets/icons/match control icons/goal.svg
     - lib/assets/icons/match control icons/miss.svg
     - lib/assets/icons/match control icons/red card.svg
@@ -95,24 +142,19 @@ flutter:
     - lib/assets/icons/badges/Master.svg
     - lib/assets/icons/badges/Pro.svg
     - lib/assets/icons/squad/assist.svg
-    - lib/assets/icons/squad/yellow card.svg
-    - lib/assets/icons/squad/red card.svg
     - lib/assets/icons/squad/pitch.svg
     - lib/assets/icons/squad/sub in.svg
     - lib/assets/icons/squad/sub out.svg
-    - lib/assets/icons/squad/cpt arm band.svg
-    - lib/assets/icons/squad/goal.svg
     - lib/assets/icons/squad/bench.svg
-    - lib/assets/icons/squad/back.svg
     - lib/assets/icons/squad/name.svg
+    - lib/assets/icons/onboarding/mid left.svg
+    - lib/assets/icons/onboarding/mid right.svg
+    - lib/assets/icons/onboarding/fox bg.svg
+    - lib/assets/icons/onboarding/goal tag.svg
+    - lib/assets/icons/onboarding/track.svg
+    - lib/assets/icons/ballo logo2.svg
 
     # Images
-    - lib/assets/images/team logos/Dragons.png
-    - lib/assets/images/team logos/End Career FC.png
-    - lib/assets/images/team logos/Galacticos.png
-    - lib/assets/images/team logos/La Famille.png
-    - lib/assets/images/team logos/Lefters.png
-    - lib/assets/images/team logos/The Shield.png
     - lib/assets/images/avatars/3d_avatar_13.png
     - lib/assets/images/avatars/3d_avatar_18.png
     - lib/assets/images/avatars/3d_avatar_20.png
@@ -120,8 +162,6 @@ flutter:
     - lib/assets/images/avatars/3d_avatar_6.png
     - lib/assets/images/avatars/3d_avatar_8.png
     - lib/assets/images/avatars/3d_avatar_10.png
-    - lib/assets/images/avatars/3d_avatar_13.png
-    - lib/assets/images/avatars/3d_avatar_20.png
     - lib/assets/images/avatars/3d_avatar_19.png
     - lib/assets/images/avatars/3d_avatar_21.png
     - lib/assets/images/avatars/3d_avatar_23.png
@@ -130,23 +170,43 @@ flutter:
     - lib/assets/images/avatars/3d_avatar_28.png
     - lib/assets/images/avatars/3d_avatar_29.png
     - lib/assets/images/avatars/3d_avatar_24.png
-    - lib/assets/images/trophies/budo league.png
-    - lib/assets/images/trophies/bugujju league.png
-    - lib/assets/images/trophies/inter uni league.png
-    - lib/assets/images/trophies/turf champi.png
-    - lib/assets/images/bg overlay.png
-    - lib/assets/images/onboarding bg.png
-    - lib/assets/images/highlight_placeholder.jpg
-    - lib/assets/images/fixture bg.png
     - lib/assets/images/leaderboard bg.png
-    - lib/assets/images/player.png
-    - lib/assets/images/team banner.JPG
     - lib/assets/images/clean sheet.png
     - lib/assets/images/pitch bg.png
-    # Videos
-    - lib/assets/videos/
+    - lib/assets/images/onboarding bg.png
+    - lib/assets/images/fox.png
+    - lib/assets/images/ball.png
+    - lib/assets/images/emoji.png
+    - lib/assets/images/slide 1.png
+    - lib/assets/images/slide 2.png
+    - lib/assets/images/slide 3.png
+    - lib/assets/images/empty states/404.png
+    - lib/assets/images/empty states/connection.png
+    - lib/assets/images/empty states/no matches.png
+    - lib/assets/images/empty states/create team.png
+    - lib/assets/images/empty states/create league.png
+    - lib/assets/images/empty states/join league.png
+    - lib/assets/images/empty states/no stats.png
+    - lib/assets/images/empty states/no standings.png
+    - lib/assets/images/empty states/season.png
+    - lib/assets/images/empty states/videos.png
+    - lib/assets/images/empty states/videos2.png
+    - lib/assets/images/empty states/search.png
+    - lib/assets/images/empty states/no player stats.png
+    - lib/assets/images/empty states/no invites.png
+    - lib/assets/images/empty states/no history.png
+    - lib/assets/images/empty states/empty mail.png
+    - lib/assets/images/empty states/rejected.png
+    - lib/assets/images/empty states/approved.png
+    - lib/assets/images/empty states/add teams.png
+    - lib/assets/images/empty states/two teams.png
+    - lib/assets/images/empty states/add players.png
+
+
+
+
     # Sounds (add referee_whistle.mp3 for stoppage-time whistle)
-    - lib/assets/sounds/
+    - lib/assets/sounds/referee_whistle.mp3
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

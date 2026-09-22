@@ -1,8 +1,7 @@
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../core/adaptive/adaptive.dart';
 
-import '../../core/constants/app_assets.dart';
 import '../../data/repositories/user_profile_repository.dart';
 import 'home_page.dart';
 
@@ -71,44 +70,22 @@ class _PlayerNamePageState extends State<PlayerNamePage> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       extendBodyBehindAppBar: true,
       appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Image.asset(
-                AppAssets.onboardingBg,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.9),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
+      body: SafeArea(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppResponsive.horizontalInset(context, design: 24),
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: SingleChildScrollView(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh.withOpacity(
-                          0.95,
+                        color: colorScheme.surfaceContainerHigh.withValues(
+                          alpha: 0.95,
                         ),
                         borderRadius: BorderRadius.circular(28),
                       ),
@@ -120,7 +97,7 @@ class _PlayerNamePageState extends State<PlayerNamePage> {
                           Text('Player name', style: textTheme.headlineSmall),
                           const SizedBox(height: 8),
                           Text(
-                            'Give us the name you want on your FootyStats card. This can be your real name or something for the turf.',
+                            'Give us the name you want on your Ballo card. This can be your real name or something for the turf.',
                             style: textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -182,8 +159,6 @@ class _PlayerNamePageState extends State<PlayerNamePage> {
                 ),
               ),
             ),
-          ),
-        ],
       ),
     );
   }

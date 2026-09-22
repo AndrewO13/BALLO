@@ -1,13 +1,22 @@
-import 'dart:ui';
-
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
+import '../../core/adaptive/adaptive.dart';
+import '../../core/widgets/media_placeholders.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
-import 'onboarding_country_page.dart';
+import '../../core/constants/onboarding_steps.dart';
+import '../../core/onboarding/onboarding_completion.dart';
+import '../../core/utils/content_moderation_guards.dart';
+import '../../data/repositories/onboarding_repository.dart';
+import '../../domain/models/onboarding_draft.dart';
+import '../widgets/onboarding_progress_app_bar.dart';
+import '../widgets/media_access_sheet.dart';
+import 'home_page.dart';
+import 'onboarding_join_team_page.dart';
 
 /// Avatars available for selection (app assets). User can add more.
 const List<String> _avatarAssets = [
@@ -31,14 +40,10 @@ const List<String> _avatarAssets = [
 class OnboardingProfileImagePage extends StatefulWidget {
   const OnboardingProfileImagePage({
     super.key,
-    required this.email,
-    required this.username,
-    this.position,
+    required this.draft,
   });
 
-  final String email;
-  final String username;
-  final String? position;
+  final OnboardingDraft draft;
 
   @override
   State<OnboardingProfileImagePage> createState() =>
@@ -48,18 +53,22 @@ class OnboardingProfileImagePage extends StatefulWidget {
 class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage> {
   String? _imageUrl;
   bool _isUploading = false;
+  bool _isFinishing = false;
   final _imagePicker = ImagePicker();
+  final _onboardingRepository = OnboardingRepository();
 
   /// _imageUrl can be: network URL (uploaded), or asset path (e.g. lib/assets/images/avatars/3d_avatar_13.png)
   bool get _hasSelection => _imageUrl != null && _imageUrl!.isNotEmpty;
 
   Future<void> _pickImage(ImageSource source) async {
+    if (!await ensureMediaAccessForImageSource(context, source)) return;
+    if (!mounted) return;
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: source,
-        imageQuality: 85,
-        maxWidth: 512,
-        maxHeight: 512,
+        imageQuality: 90,
+        maxWidth: 2048,
+        maxHeight: 2048,
       );
       if (image == null) return;
 
@@ -81,6 +90,7 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
       const folderName = 'avatars';
       final filePath = '$folderName/$fileName';
       final fileBytes = await image.readAsBytes();
+      await requireAllowedImage(fileBytes, contentRef: 'avatar:${user.id}');
 
       await supabase.storage.from('Profile images').uploadBinary(filePath, fileBytes);
       final url = supabase.storage.from('Profile images').getPublicUrl(filePath);
@@ -92,6 +102,13 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
     } catch (error) {
       if (!mounted) return;
       setState(() => _isUploading = false);
+      if (await presentMediaAccessSheetIfNeeded(
+        context,
+        error,
+        mediaAccessKindForImageSource(source),
+      )) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error uploading: $error')),
       );
@@ -145,22 +162,48 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
       ),
     ).then((skip) {
       if (skip == true && mounted) {
-        _goNext(imageUrl: null);
+        _finish();
       }
     });
   }
 
-  void _goNext({String? imageUrl}) {
-    Navigator.of(context).push(
+  Future<void> _finish({String? imageUrl}) async {
+    if (_isFinishing) return;
+
+    setState(() => _isFinishing = true);
+    try {
+      final resolvedImage = imageUrl ?? _imageUrl;
+      if (resolvedImage != null && resolvedImage.isNotEmpty) {
+        await _onboardingRepository.saveDraftProfile(
+          widget.draft,
+          imageUrl: resolvedImage,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving profile picture: $error')),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    if (widget.draft.isTechnicalStaff) {
+      await OnboardingCompletion.markComplete();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+        (route) => false,
+      );
+      return;
+    }
+    await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => OnboardingCountryPage(
-          email: widget.email,
-          username: widget.username,
-          position: widget.position,
-          imageUrl: imageUrl ?? _imageUrl,
-        ),
+        builder: (_) => OnboardingJoinTeamPage(draft: widget.draft),
       ),
     );
+
+    if (mounted) setState(() => _isFinishing = false);
   }
 
   @override
@@ -170,9 +213,9 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+      appBar: OnboardingProgressAppBar(
+        step: OnboardingStep.profileImage,
+        accountType: widget.draft.accountType,
         actions: [
           TextButton(
             onPressed: _onSkip,
@@ -180,200 +223,200 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Image.asset(AppAssets.onboardingBg, fit: BoxFit.cover),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppResponsive.horizontalInset(context, design: 24),
             ),
-          ),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.9),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: SvgPicture.asset(
+                        AppAssets.balloLogo,
+                        height: 36,
+                        semanticsLabel: 'Ballo',
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Choose profile picture',
+                      style: textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Choose a photo that represents you!',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      height: 200,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          DottedBorder(
+                            borderType: BorderType.Circle,
+                            dashPattern: const [8, 4],
+                            color: colorScheme.outline.withValues(alpha: 0.6),
+                            strokeWidth: 2,
+                            child: Container(
+                              width: 160,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: colorScheme.surfaceContainerHigh
+                                    .withValues(alpha: 0.3),
+                              ),
+                              child: ClipOval(
+                                child: _hasSelection
+                                    ? _buildImage()
+                                    : Icon(
+                                        Icons.person_outline,
+                                        size: 80,
+                                        color: colorScheme.onSurfaceVariant
+                                            .withValues(alpha: 0.6),
+                                      ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 20,
+                            top: 20,
+                            child: Material(
+                              color: colorScheme.primary,
+                              shape: const CircleBorder(),
+                              elevation: 4,
+                              child: InkWell(
+                                onTap:
+                                    _isUploading ? null : _showImageSourceDialog,
+                                customBorder: const CircleBorder(),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  alignment: Alignment.center,
+                                  child: _isUploading
+                                      ? SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: colorScheme.onPrimary,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.add,
+                                          color: colorScheme.onPrimary,
+                                          size: 28,
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Or choose an avatar:',
+                      style: textTheme.titleSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: _avatarAssets.map((assetPath) {
+                        final isSelected = _imageUrl == assetPath;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() => _imageUrl = assetPath);
+                          },
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: colorScheme.primary
+                                            .withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                assetPath,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 40),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _hasSelection && !_isFinishing
+                            ? () => _finish()
+                            : null,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                        ),
+                        child: _isFinishing
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colorScheme.onPrimary,
+                                ),
+                              )
+                            : const Text('Finish'),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
           ),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 16),
-                        Text(
-                          'Choose profile picture',
-                          style: textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Choose a photo that represents you!',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: Colors.white70,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 32),
-                        SizedBox(
-                          height: 200,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              DottedBorder(
-                                borderType: BorderType.Circle,
-                                dashPattern: const [8, 4],
-                                color: colorScheme.outline.withOpacity(0.6),
-                                strokeWidth: 2,
-                                child: Container(
-                                  width: 160,
-                                  height: 160,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: colorScheme.surfaceContainerHigh.withOpacity(0.3),
-                                  ),
-                                  child: ClipOval(
-                                  child: _hasSelection
-                                      ? _buildImage()
-                                      : Icon(
-                                          Icons.person_outline,
-                                          size: 80,
-                                          color: colorScheme.onSurfaceVariant.withOpacity(0.6),
-                                        ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                right: 20,
-                                top: 20,
-                                child: Material(
-                                  color: colorScheme.primary,
-                                  shape: const CircleBorder(),
-                                  elevation: 4,
-                                  child: InkWell(
-                                    onTap: _isUploading ? null : _showImageSourceDialog,
-                                    customBorder: const CircleBorder(),
-                                    child: Container(
-                                      width: 44,
-                                      height: 44,
-                                      alignment: Alignment.center,
-                                      child: _isUploading
-                                          ? SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: colorScheme.onPrimary,
-                                              ),
-                                            )
-                                          : Icon(Icons.add, color: colorScheme.onPrimary, size: 28),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Or choose an avatar:',
-                          style: textTheme.titleSmall?.copyWith(
-                            color: Colors.white,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: _avatarAssets.map((assetPath) {
-                            final isSelected = _imageUrl == assetPath;
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() => _imageUrl = assetPath);
-                              },
-                              child: Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? colorScheme.primary
-                                        : Colors.transparent,
-                                    width: 3,
-                                  ),
-                                  boxShadow: isSelected
-                                      ? [
-                                          BoxShadow(
-                                            color: colorScheme.primary.withOpacity(0.3),
-                                            blurRadius: 8,
-                                            spreadRadius: 1,
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                                child: ClipOval(
-                                  child: Image.asset(
-                                    assetPath,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 40),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: _hasSelection
-                                ? () => _goNext()
-                                : null,
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28),
-                              ),
-                            ),
-                            child: const Text('Next'),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildImage() {
     if (_imageUrl!.startsWith('http://') || _imageUrl!.startsWith('https://')) {
-      return Image.network(
-        _imageUrl!,
+      return Image(
+        image: appCachedImageProvider(_imageUrl!),
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Icon(
+        errorBuilder: (_, _, _) => Icon(
           Icons.person_outline,
           size: 80,
           color: Theme.of(context).colorScheme.onSurfaceVariant,

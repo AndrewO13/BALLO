@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/repositories/matches_repository.dart';
 import '../../domain/models/fixture_match_rated_player.dart';
 import 'matches_provider.dart';
 

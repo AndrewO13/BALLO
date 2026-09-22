@@ -62,7 +62,7 @@ class SocialsSectionCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     Widget circleButton({
-      required IconData icon,
+      required FaIconData icon,
       required String? url,
     }) {
       final enabled = url != null;
@@ -76,8 +76,8 @@ class SocialsSectionCard extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: colorScheme.surfaceContainerHighest.withOpacity(
-                enabled ? 1.0 : 0.45,
+              color: colorScheme.surfaceContainerHighest.withValues(
+                alpha: enabled ? 1.0 : 0.45,
               ),
             ),
             child: Center(
@@ -86,7 +86,7 @@ class SocialsSectionCard extends StatelessWidget {
                 size: 22,
                 color: enabled
                     ? colorScheme.onSurface
-                    : colorScheme.onSurfaceVariant.withOpacity(0.35),
+                    : colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
               ),
             ),
           ),

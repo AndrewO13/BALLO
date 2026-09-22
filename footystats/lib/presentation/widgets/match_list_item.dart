@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../core/widgets/media_placeholders.dart';
 
 import '../../domain/models/match_model.dart';
 import '../pages/fixture.dart';
 import '../pages/matches.dart';
+import 'match_list_score_pill.dart';
 
 /// Compact match list item (home team | score/time | away team) for carousels
 /// and lists. Tapping navigates to [FixturePage].
@@ -22,7 +24,6 @@ class MatchListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
     final label = statusText ?? match.statusText;
 
     return InkWell(
@@ -73,27 +74,10 @@ class MatchListItem extends StatelessWidget {
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: hasVideo && match.status == MatchStatus.fullTime
-                            ? Border.all(
-                                color: Colors.greenAccent.shade400,
-                                width: 2,
-                              )
-                            : null,
-                      ),
-                      child: Text(
-                        match.scoreText ?? '–',
-                        style: textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    MatchListScorePill(
+                      scoreText: match.scoreText ?? '–',
+                      hasVideo:
+                          hasVideo && match.status == MatchStatus.fullTime,
                     ),
                     const SizedBox(height: 4),
                     Row(
@@ -156,17 +140,17 @@ class _TeamLogo extends StatelessWidget {
       width: size,
       height: size,
       child: isNetwork
-          ? Image.network(
-              path,
+          ? Image(
+              image: appCachedImageProvider(path),
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
             )
           : Image.asset(
               path,
               width: size,
               height: size,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => SizedBox(
+              errorBuilder: (_, _, _) => SizedBox(
                 width: size,
                 height: size,
                 child: Icon(

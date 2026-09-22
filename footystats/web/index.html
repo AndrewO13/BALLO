@@ -1,6 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
+<!DOCTYPE html><html><head>
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
@@ -18,21 +16,187 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Now you know.">
+  <meta property="og:site_name" content="Ballo">
+  <meta property="og:title" content="Ballo">
+  <meta property="og:description" content="Now you know.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://app.ballonetwork.com/">
+  <meta property="og:image" content="https://app.ballonetwork.com/icons/Icon-512.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ballo">
+  <meta name="twitter:description" content="Now you know.">
+  <meta name="twitter:image" content="https://app.ballonetwork.com/icons/Icon-512.png">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="footystats">
+  <meta name="apple-mobile-web-app-title" content="Ballo">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png">
 
-  <title>footystats</title>
+  <title>Ballo</title>
   <link rel="manifest" href="manifest.json">
+  
+  
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <style id="splash-screen-style">
+    html {
+      height: 100%
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      background-color: #000000;
+          background-size: 100% 100%;
+    }
+
+    .center {
+      margin: 0;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      -ms-transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%);
+    }
+
+    .contain {
+      display:block;
+      width:100%; height:100%;
+      object-fit: contain;
+    }
+
+    .stretch {
+      display:block;
+      width:100%; height:100%;
+    }
+
+    .cover {
+      display:block;
+      width:100%; height:100%;
+      object-fit: cover;
+    }
+
+    .bottom {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      -ms-transform: translate(-50%, 0);
+      transform: translate(-50%, 0);
+    }
+
+    .bottomLeft {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+    }
+
+    .bottomRight {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+    }
+  </style>
+  <script id="splash-screen-script">
+    function removeSplashFromWeb() {
+      document.getElementById("splash")?.remove();
+      document.getElementById("splash-branding")?.remove();
+      if (!document.getElementById("share-boot")) {
+        document.body.style.background = "transparent";
+      }
+    }
+  </script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
-</body>
-</html>
+  <picture id="splash">
+      <source srcset="splash/img/light-1x.png 1x, splash/img/light-2x.png 2x, splash/img/light-3x.png 3x, splash/img/light-4x.png 4x" media="(prefers-color-scheme: light)">
+      <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
+      <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
+  </picture>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <div id="share-boot" hidden style="position:fixed;inset:0;z-index:2147483646;background:#000;">
+    <img id="share-boot-img" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
+    <video id="share-boot-video" playsinline webkit-playsinline muted autoplay preload="auto"
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;"></video>
+  </div>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var id = params.get('v');
+      if (!id) return;
+      document.getElementById('splash')?.remove();
+      var boot = document.getElementById('share-boot');
+      var img = document.getElementById('share-boot-img');
+      var video = document.getElementById('share-boot-video');
+      if (boot) {
+        boot.hidden = false;
+        boot.addEventListener('click', function () {
+          if (!video) return;
+          video.muted = false;
+          video.play().catch(function () {});
+        });
+      }
+      function startShare(d) {
+        if (!d) return;
+        if (img && d.thumbnail_url) img.src = d.thumbnail_url;
+        if (video && d.video_url) {
+          if (d.thumbnail_url) video.poster = d.thumbnail_url;
+          video.src = d.video_url;
+          video.play().catch(function () {});
+        }
+      }
+      if (window.__BALLO_SHARE) {
+        startShare(window.__BALLO_SHARE);
+        return;
+      }
+      fetch('https://dcpltazuzyyhxtkpbuiu.supabase.co/functions/v1/share?v=' + encodeURIComponent(id) + '&format=json')
+        .then(function (r) { return r.json(); })
+        .then(startShare)
+        .catch(function () {});
+    })();
+  </script>
+  <script src="flutter_bootstrap.js" async=""></script>
+
+
+</body></html>

@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
 
 class GameweekHeader extends StatelessWidget {
-  const GameweekHeader({super.key, required this.gameweek});
+  const GameweekHeader({
+    super.key,
+    required this.gameweek,
+    this.onPreviousGameweek,
+    this.onNextGameweek,
+    this.canGoToPreviousGameweek = false,
+    this.canGoToNextGameweek = false,
+    this.onCustomizeTargets,
+  });
 
   final String gameweek;
+  final VoidCallback? onPreviousGameweek;
+  final VoidCallback? onNextGameweek;
+  final bool canGoToPreviousGameweek;
+  final bool canGoToNextGameweek;
+  final VoidCallback? onCustomizeTargets;
 
   @override
   Widget build(BuildContext context) {
@@ -19,17 +32,18 @@ class GameweekHeader extends StatelessWidget {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.chevron_left),
-                    onPressed: () {
-                      // navigate to previous week (placeholder)
-                    },
+                    onPressed: canGoToPreviousGameweek
+                        ? onPreviousGameweek
+                        : null,
                     tooltip: 'Previous',
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: const Icon(Icons.chevron_right),
-                    onPressed: null, // disabled but visible
-                    tooltip: 'Next (disabled)',
+                    onPressed:
+                        canGoToNextGameweek ? onNextGameweek : null,
+                    tooltip: 'Next',
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(),
                   ),
@@ -38,8 +52,8 @@ class GameweekHeader extends StatelessWidget {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () {},
-                tooltip: 'Edit',
+                onPressed: onCustomizeTargets,
+                tooltip: 'Customize Targets',
                 visualDensity: VisualDensity.compact,
                 constraints: const BoxConstraints(),
               ),

@@ -1,12 +1,12 @@
-# FootyStats App – Architectural Structure Diagram
+# Ballo App – Architectural Structure Diagram
 
-This document describes the high-level architecture of the FootyStats Flutter app.
+This document describes the high-level architecture of the Ballo Flutter app.
 
 ---
 
 ## Overview
 
-FootyStats is a Flutter app that uses **Riverpod** for state management and **Supabase** as the backend (auth + PostgreSQL). The architecture follows a layered approach: **Presentation → Domain → Data**.
+Ballo is a Flutter app that uses **Riverpod** for state management and **Supabase** as the backend (auth + PostgreSQL). The architecture follows a layered approach: **Presentation → Domain → Data**.
 
 ---
 
@@ -226,7 +226,7 @@ flowchart TB
 ## Folder Structure
 
 ```
-footystats/lib/
+lib/
 ├── main.dart                 # Entry point, Supabase init, AuthGate
 ├── core/                     # Shared infrastructure
 │   ├── constants/            # app_constants.dart, app_assets.dart
@@ -281,7 +281,7 @@ footystats/lib/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         FOOTYSTATS APP                               │
+│                         BALLO APP                                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │  PRESENTATION                                                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐  │

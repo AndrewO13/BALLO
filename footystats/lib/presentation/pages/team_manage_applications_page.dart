@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/media_placeholders.dart';
 
 class TeamManageApplicationsPage extends StatefulWidget {
   const TeamManageApplicationsPage({super.key, required this.teamId});
@@ -139,7 +141,6 @@ class _TeamManageApplicationsPageState
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
-                filled: true,
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -148,18 +149,19 @@ class _TeamManageApplicationsPageState
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredApplications.isEmpty
-                ? Center(
-                    child: Text(
-                      'No applications yet',
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                ? ScrollableAppEmptyState(
+                    imageAsset: AppAssets.approvedApplicationsEmpty,
+                    title: _applications.isEmpty
+                        ? 'No pending applications'
+                        : 'No matching applications',
+                    subtitle: _applications.isEmpty
+                        ? 'When players apply to join your team, you can review and approve them here.'
+                        : 'Try a different name or username in your search.',
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _filteredApplications.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final app = _filteredApplications[index];
                       final requestId = app['id']?.toString() ?? '';
@@ -244,42 +246,11 @@ class _PlayerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final path = imageUrl;
-    if (path == null || path.isEmpty) {
-      return CircleAvatar(
-        radius: 24,
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.person,
-          color: colorScheme.onSurfaceVariant,
-          size: 28,
-        ),
-      );
-    }
-    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
-    final image = isNetwork
-        ? Image.network(
-            path,
-            fit: BoxFit.cover,
-            width: 48,
-            height: 48,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.person,
-              color: colorScheme.onSurfaceVariant,
-              size: 28,
-            ),
-          )
-        : Image.asset(
-            '${AppAssets.teamLogosPath}$path',
-            fit: BoxFit.cover,
-            width: 48,
-            height: 48,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.person,
-              color: colorScheme.onSurfaceVariant,
-              size: 28,
-            ),
-          );
-    return ClipOval(child: SizedBox(width: 48, height: 48, child: image));
+    return buildPlayerAvatar(
+      imagePath: imageUrl,
+      size: 48,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      iconColor: colorScheme.onSurfaceVariant,
+    );
   }
 }

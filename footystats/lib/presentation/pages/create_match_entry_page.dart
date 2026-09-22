@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_assets.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/media_placeholders.dart';
 import 'create_team_league_page.dart';
 import 'league_create_matches_page.dart';
 
@@ -67,33 +70,20 @@ class _CreateMatchEntryPageState extends State<CreateMatchEntryPage> {
           ? const Center(child: CircularProgressIndicator())
           : _leagues.isEmpty
               ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Create a league first to add matches.',
-                          style: textTheme.bodyLarge?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
+                  child: AppEmptyState(
+                    imageAsset: AppAssets.createLeagueEmpty,
+                    title: 'Create a league first',
+                    subtitle:
+                        'You need a league you manage before you can schedule matches.',
+                    actionLabel: 'Create league',
+                    onAction: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const CreateLeaguePage(),
                         ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const CreateTeamOrLeaguePage(),
-                              ),
-                            );
-                            _loadLeagues();
-                          },
-                          icon: const Icon(Icons.emoji_events_outlined),
-                          label: const Text('Create league'),
-                        ),
-                      ],
-                    ),
+                      );
+                      _loadLeagues();
+                    },
                   ),
                 )
               : RefreshIndicator(
@@ -124,13 +114,12 @@ class _CreateMatchEntryPageState extends State<CreateMatchEntryPage> {
                             child: Row(
                               children: [
                                 CircleAvatar(
-                                  radius: 24,
                                   backgroundColor:
                                       colorScheme.surfaceContainerHighest,
                                   backgroundImage: logoUrl != null &&
                                           (logoUrl.startsWith('http://') ||
                                               logoUrl.startsWith('https://'))
-                                      ? NetworkImage(logoUrl)
+                                      ? appCachedImageProvider(logoUrl)
                                       : null,
                                   child: logoUrl == null ||
                                           (!logoUrl.startsWith('http') &&

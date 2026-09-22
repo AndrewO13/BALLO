@@ -1,6 +1,6 @@
-# footystats
+# Ballo
 
-A new Flutter project.
+Now you know.
 
 ## Getting Started
 

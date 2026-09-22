@@ -1,15 +1,26 @@
-import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/constants/app_assets.dart';
-import 'username_page.dart';
+import '../../core/constants/onboarding_steps.dart';
+import '../../core/utils/auth_helpers.dart';
+import '../../data/repositories/onboarding_repository.dart';
+import '../../domain/models/onboarding_draft.dart';
+import '../widgets/onboarding_step_scaffold.dart';
+import '../widgets/content_safety_sheets.dart';
+import 'onboarding_player_name_page.dart';
+import 'onboarding_profile_image_page.dart';
 
 class VerifyCodePage extends StatefulWidget {
-  const VerifyCodePage({super.key, required this.email});
+  const VerifyCodePage({
+    super.key,
+    required this.email,
+    required this.draft,
+  });
 
   final String email;
+  final OnboardingDraft draft;
 
   @override
   State<VerifyCodePage> createState() => _VerifyCodePageState();
@@ -18,13 +29,62 @@ class VerifyCodePage extends StatefulWidget {
 class _VerifyCodePageState extends State<VerifyCodePage> {
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
+  final _onboardingRepository = OnboardingRepository();
 
   bool _isSubmitting = false;
+  bool _emailConfirmed = false;
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (!mounted || _emailConfirmed) return;
+      if (data.event == AuthChangeEvent.signedIn && data.session != null) {
+        unawaited(_completeVerification());
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _authSubscription.cancel();
     _codeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _completeVerification() async {
+    if (_emailConfirmed || !mounted) return;
+    _emailConfirmed = true;
+
+    try {
+      await showCommunityGuidelinesModal(context, requireAccept: true);
+      if (!mounted) return;
+
+      if (widget.draft.hasPreAuthProfileData) {
+        await _onboardingRepository.saveDraftProfile(widget.draft);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => OnboardingProfileImagePage(draft: widget.draft),
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const OnboardingPlayerNamePage()),
+        (route) => false,
+      );
+    } catch (error) {
+      _emailConfirmed = false;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save your profile: $error')),
+      );
+    }
   }
 
   Future<void> _onSubmit() async {
@@ -40,22 +100,21 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
         type: OtpType.signup,
       );
 
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => UsernamePage(email: widget.email),
-        ),
-      );
+      await _completeVerification();
     } on AuthException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong while verifying your code.'),
+        SnackBar(
+          content: Text(
+            error is AuthException
+                ? error.message
+                : 'Something went wrong while verifying your code.',
+          ),
         ),
       );
     } finally {
@@ -65,172 +124,74 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
     }
   }
 
+  Future<void> _resendCode() async {
+    try {
+      await resendSignupVerification(widget.email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification code resent.')),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not resend the code.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Stack(
+    return OnboardingStepScaffold(
+      step: OnboardingStep.verifyEmail,
+      accountType: widget.draft.accountType,
+      title: 'Verify your email',
+      subtitle:
+          "We've sent a link and code to ${widget.email}. Tap Confirm account in the email, or enter the code below.",
+      bottomBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Image.asset(
-                AppAssets.onboardingBg,
-                fit: BoxFit.cover,
-              ),
-            ),
+          OnboardingContinueButton(
+            label: 'Continue',
+            isLoading: _isSubmitting,
+            onPressed: _isSubmitting ? null : _onSubmit,
           ),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.9),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: SingleChildScrollView(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color:
-                            colorScheme.surfaceContainerHigh.withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Verify your email',
-                            style: textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "We've sent a code to '${widget.email}'. Enter it below to continue.",
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Form(
-                            key: _formKey,
-                            child: Column(
-                              children: [
-                                TextFormField(
-                                  controller: _codeController,
-                                  keyboardType: TextInputType.text,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Verification code',
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Enter the code';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton(
-                                    onPressed:
-                                        _isSubmitting ? null : _onSubmit,
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(28),
-                                      ),
-                                    ),
-                                    child: _isSubmitting
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text('Continue'),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextButton(
-                                  onPressed: _isSubmitting
-                                      ? null
-                                      : () async {
-                                          try {
-                                            final supabase =
-                                                Supabase.instance.client;
-                                            await supabase.auth.resend(
-                                              type: OtpType.signup,
-                                              email: widget.email,
-                                            );
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Verification code resent.',
-                                                ),
-                                              ),
-                                            );
-                                          } on AuthException catch (error) {
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(error.message),
-                                              ),
-                                            );
-                                          } catch (_) {
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Could not resend the code.',
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                  child: const Text('Resend code'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+          const SizedBox(height: 4),
+          Center(
+            child: TextButton(
+              onPressed: _isSubmitting ? null : _resendCode,
+              child: const Text('Resend code'),
             ),
           ),
         ],
       ),
+      child: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _codeController,
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.done,
+          enabled: !_isSubmitting,
+          decoration: const InputDecoration(
+            labelText: 'Verification code',
+          ),
+          textAlign: TextAlign.center,
+          onFieldSubmitted: (_) {
+            if (!_isSubmitting) _onSubmit();
+          },
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Enter the code';
+            }
+            return null;
+          },
+        ),
+      ),
     );
   }
 }
-

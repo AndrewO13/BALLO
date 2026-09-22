@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/constants/app_assets.dart';
+import '../../core/widgets/media_placeholders.dart';
 import '../pages/league_detail_page.dart';
 import '../pages/team_detail_page.dart';
 
@@ -107,7 +107,7 @@ class _MatchesSearchAnchorState extends State<MatchesSearchAnchor> {
               id: (e['id'] ?? '').toString(),
               label: (e['league_name'] ?? '').toString(),
               type: 'League',
-              logoPath: _resolveLogoPath(e['logo_id']?.toString()),
+              logoPath: resolveTeamLogoPath(e['logo_id']?.toString()),
             ),
           )
           .where((item) => item.label.isNotEmpty)
@@ -118,7 +118,7 @@ class _MatchesSearchAnchorState extends State<MatchesSearchAnchor> {
               id: (e['id'] ?? '').toString(),
               label: (e['team_name'] ?? '').toString(),
               type: 'Team',
-              logoPath: _resolveLogoPath(e['logo_id']?.toString()),
+              logoPath: resolveTeamLogoPath(e['logo_id']?.toString()),
             ),
           )
           .where((item) => item.label.isNotEmpty)
@@ -232,14 +232,6 @@ class _SearchItem {
   final String? logoPath;
 }
 
-String? _resolveLogoPath(String? logoId) {
-  final id = logoId?.trim();
-  if (id == null || id.isEmpty) return null;
-  if (id.startsWith('http://') || id.startsWith('https://')) return id;
-  if (id.startsWith('lib/assets/') || id.startsWith('assets/')) return id;
-  final name = id.contains('.') ? id : '$id.png';
-  return '${AppAssets.teamLogosPath}$name';
-}
 
 class _SearchLogo extends StatelessWidget {
   const _SearchLogo({this.logoPath, required this.fallbackIcon});
@@ -265,12 +257,12 @@ class _SearchLogo extends StatelessWidget {
         ? Image.network(
             path,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           )
         : Image.asset(
             path,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           );
     return CircleAvatar(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,

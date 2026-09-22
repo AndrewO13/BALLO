@@ -1,7 +1,9 @@
-import 'stoppage_alert_stub.dart'
-    if (dart.library.io) 'stoppage_alert_mobile.dart' as impl;
+import 'package:flutter/services.dart';
 
-/// Plays a beep and haptics when the pill turns red (stoppage time).
-void playStoppageAlert() {
-  impl.playStoppageAlert();
+import 'referee_whistle_player.dart';
+
+/// Plays the bundled referee whistle and haptics (half-time / stoppage time).
+Future<void> playStoppageAlert() async {
+  await RefereeWhistlePlayer.instance.play();
+  await HapticFeedback.heavyImpact();
 }

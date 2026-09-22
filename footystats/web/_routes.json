@@ -1,0 +1,32 @@
+{
+
+  "version": 1,
+
+  "include": ["/*"],
+
+  "exclude": [
+
+    "/assets/*",
+
+    "/canvaskit/*",
+
+    "/icons/*",
+
+    "/splash/*",
+
+    "/privacy",
+
+    "/privacy.html",
+
+    "/terms",
+
+    "/terms.html",
+
+    "/community-guidelines",
+
+    "/community-guidelines.html"
+
+  ]
+
+}
+

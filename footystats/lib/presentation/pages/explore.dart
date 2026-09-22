@@ -1,59 +1,161 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../core/adaptive/adaptive.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../../core/constants/app_assets.dart';
-import 'league_detail_page.dart';
-import 'team_detail_page.dart';
+import '../../core/utils/app_video_cache.dart';
+import '../../core/utils/connection_error.dart';
+import '../../core/utils/explore_video_controller.dart';
+import '../../core/utils/network_quality.dart';
+import '../../core/utils/scroll_to_top.dart';
+import '../../core/utils/video_share.dart';
+import '../../core/widgets/app_empty_state.dart';
+import '../../core/widgets/app_error_state.dart';
+import '../../core/widgets/media_placeholders.dart';
+import 'fixture.dart';
+import 'league_video_player_page.dart';
+import 'player_profile_page.dart';
+import '../providers/main_nav_scroll_provider.dart';
+import '../widgets/app_search_page.dart';
+import '../widgets/content_safety_sheets.dart';
+import '../widgets/guest_account_sheet.dart';
 
 class ExplorePage extends StatelessWidget {
-  const ExplorePage({super.key});
+  const ExplorePage({super.key, this.isActiveTab = true});
+
+  /// When false (another bottom-nav tab is shown), the feed does not fetch or
+  /// preload anything. Data is loaded the first time the tab becomes active.
+  final bool isActiveTab;
 
   @override
   Widget build(BuildContext context) {
     // Single explore feed page (no tabs)
-    return const _ExploreTabContent(title: 'For you');
+    return _ExploreTabContent(title: 'For you', isActiveTab: isActiveTab);
   }
 }
 
-class _ExploreTabContent extends StatefulWidget {
+class _ExploreTabContent extends ConsumerStatefulWidget {
   final String title;
-  const _ExploreTabContent({required this.title});
+  final bool isActiveTab;
+  const _ExploreTabContent({required this.title, required this.isActiveTab});
 
   @override
-  State<_ExploreTabContent> createState() => _ExploreTabContentState();
+  ConsumerState<_ExploreTabContent> createState() => _ExploreTabContentState();
 }
 
-class _ExploreTabContentState extends State<_ExploreTabContent> {
-  late Future<List<_ExploreVideoItem>> _future;
+class _ExploreTabContentState extends ConsumerState<_ExploreTabContent> {
+  static const int _pageSize = 30;
+
+  final ScrollController _scrollController = ScrollController();
+
+  final List<_ExploreVideoItem> _items = [];
+  final Set<String> _seenVideoIds = {};
+  bool _hasLoadedOnce = false;
+  bool _isInitialLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  Object? _error;
+  int _nextOffset = 0;
   bool _didPrecacheThumbnails = false;
 
   /// Overrides follow state per poster (when user toggles). Shared across all videos by same poster.
   final Map<String, bool> _followOverrides = {};
 
   /// Session ID for feed interaction logging (recommendation system).
-  late String _sessionId;
+  String _sessionId = const Uuid().v4();
 
   @override
   void initState() {
     super.initState();
-    _sessionId = const Uuid().v4();
-    _future = _fetchExploreVideos(_sessionId);
+    // Only fetch when the Explore tab is actually shown; IndexedStack keeps
+    // this widget mounted from app launch, and eager fetching wastes data.
+    if (widget.isActiveTab) {
+      unawaited(_loadInitial());
+    }
   }
 
-  Future<void> _refresh() async {
-    setState(() {
-      _sessionId = const Uuid().v4();
-      _future = _fetchExploreVideos(_sessionId);
-      _didPrecacheThumbnails = false;
-      _followOverrides.clear();
-    });
-    await _future;
+  @override
+  void didUpdateWidget(covariant _ExploreTabContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActiveTab && !oldWidget.isActiveTab && !_hasLoadedOnce) {
+      unawaited(_loadInitial());
+    }
   }
+
+  Future<void> _loadInitial() async {
+    if (_isInitialLoading) return;
+    setState(() {
+      _hasLoadedOnce = true;
+      _isInitialLoading = true;
+      _error = null;
+    });
+    final sessionId = const Uuid().v4();
+    try {
+      final page = await _fetchExploreVideos(
+        sessionId,
+        limit: _pageSize,
+        offset: 0,
+      );
+      if (!mounted) return;
+      setState(() {
+        _sessionId = sessionId;
+        _items
+          ..clear()
+          ..addAll(page);
+        _seenVideoIds
+          ..clear()
+          ..addAll(page.map((e) => e.videoId));
+        _nextOffset = page.length;
+        _hasMore = page.length >= _pageSize;
+        _isInitialLoading = false;
+        _didPrecacheThumbnails = false;
+        _followOverrides.clear();
+      });
+      unawaited(_ExploreVideoPreloadCache.instance.preloadThumbnails(page));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _isInitialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || _isInitialLoading || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final page = await _fetchExploreVideos(
+        _sessionId,
+        limit: _pageSize,
+        offset: _nextOffset,
+      );
+      if (!mounted) return;
+      final fresh = page
+          .where((e) => e.videoId.isNotEmpty && _seenVideoIds.add(e.videoId))
+          .toList();
+      setState(() {
+        _items.addAll(fresh);
+        _nextOffset += page.length;
+        _hasMore = page.length >= _pageSize;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Keep already-loaded items; allow retrying on further scroll.
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
+  Future<void> _refresh() => _loadInitial();
 
   void _onFollowChanged(String? posterUserId, bool isFollowing) {
     if (posterUserId == null || posterUserId.isEmpty) return;
@@ -69,67 +171,108 @@ class _ExploreTabContentState extends State<_ExploreTabContent> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen<int>(
+      mainNavScrollToTopProvider.select((m) => m[MainNavTab.explore] ?? 0),
+      (previous, next) {
+        if (previous == next) return;
+        animateScrollControllerToTop(_scrollController);
+      },
+    );
+
+    if (!_hasLoadedOnce || (_isInitialLoading && _items.isEmpty)) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _items.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: 560,
+              child: Center(
+                child: AppConnectionErrorState(
+                  title: isConnectionError(_error)
+                      ? 'No connection'
+                      : 'Could not load videos',
+                  subtitle: isConnectionError(_error)
+                      ? 'Check your internet connection and try again.'
+                      : 'Something went wrong while loading the feed.',
+                  onRetry: _refresh,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(
+              height: 560,
+              child: Center(
+                child: AppEmptyState(
+                  imageAsset: AppAssets.videosEmpty,
+                  title: 'No videos to explore yet',
+                  subtitle:
+                      'Fresh highlights from players and teams will show up here soon.',
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (!_didPrecacheThumbnails) {
+      _didPrecacheThumbnails = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _precacheThumbnails(context, _items);
+      });
+    }
+    final items = List<_ExploreVideoItem>.unmodifiable(_items);
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: FutureBuilder<List<_ExploreVideoItem>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !(snapshot.hasData && snapshot.data!.isNotEmpty)) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      'Could not load videos',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
-          final items = snapshot.data ?? const [];
-          if (items.isEmpty) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      'No videos yet',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
-          if (!_didPrecacheThumbnails) {
-            _didPrecacheThumbnails = true;
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: items.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= items.length) {
+            // Loading tile at the end triggers the next page.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _precacheThumbnails(context, items);
+              if (mounted) _loadMore();
+            });
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          // Fetch the next page slightly before the user reaches the end.
+          if (_hasMore && index >= items.length - 3) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _loadMore();
             });
           }
-          return ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _ExploreFeedItem(
-                item: item,
-                sessionId: _sessionId,
-                effectiveIsFollowing: _effectiveIsFollowing(item),
-                onFollowChanged: _onFollowChanged,
-              );
-            },
+          final item = items[index];
+          return _ExploreFeedItem(
+            item: item,
+            feedItems: items,
+            sessionId: _sessionId,
+            effectiveIsFollowing: _effectiveIsFollowing(item),
+            onFollowChanged: _onFollowChanged,
           );
         },
       ),
@@ -138,24 +281,31 @@ class _ExploreTabContentState extends State<_ExploreTabContent> {
 }
 
 void _precacheThumbnails(BuildContext context, List<_ExploreVideoItem> items) {
-  final count = items.length < 8 ? items.length : 8;
-  for (var i = 0; i < count; i++) {
-    final url = items[i].thumbnailUrl;
-    if (url == null || url.isEmpty) continue;
-    precacheImage(NetworkImage(url), context);
-  }
+  unawaited(() async {
+    final wifi = await NetworkQuality.allowsVideoAutoplay;
+    if (!context.mounted) return;
+    final cap = wifi ? 8 : 1;
+    final count = items.length < cap ? items.length : cap;
+    for (var i = 0; i < count; i++) {
+      final url = items[i].thumbnailUrl;
+      if (url == null || url.isEmpty) continue;
+      precacheImage(CachedNetworkImageProvider(url), context);
+    }
+  }());
 }
 
 /// Single feed item with event logging for recommendation system.
 class _ExploreFeedItem extends StatefulWidget {
   const _ExploreFeedItem({
     required this.item,
+    required this.feedItems,
     required this.sessionId,
     required this.effectiveIsFollowing,
     required this.onFollowChanged,
   });
 
   final _ExploreVideoItem item;
+  final List<_ExploreVideoItem> feedItems;
   final String sessionId;
   final bool effectiveIsFollowing;
   final void Function(String? posterUserId, bool isFollowing) onFollowChanged;
@@ -166,6 +316,88 @@ class _ExploreFeedItem extends StatefulWidget {
 
 class _ExploreFeedItemState extends State<_ExploreFeedItem> {
   String? _impressionId;
+  VideoPlayerController? _seededControllerFromFeed;
+  VideoPlayerController? _seededControllerFromPreload;
+
+  @override
+  void initState() {
+    super.initState();
+    _seededControllerFromPreload =
+        _ExploreVideoPreloadCache.instance.take(widget.item.videoId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExploreFeedItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.videoId != widget.item.videoId) {
+      _seededControllerFromPreload =
+          _ExploreVideoPreloadCache.instance.take(widget.item.videoId);
+    }
+  }
+
+  Future<void> _openContinuousFeed(VideoPlayerController? seededController) async {
+    final videos = <LeagueVideoItem>[];
+    for (final item in widget.feedItems) {
+      if (item.videoUrl.isEmpty) continue;
+      videos.add(
+        LeagueVideoItem(
+          videoId: item.videoId,
+          videoUrl: item.videoUrl,
+          thumbnailUrl: item.thumbnailUrl,
+          durationSeconds: item.durationSeconds,
+          teamAShort: item.teamAShort,
+          teamBShort: item.teamBShort,
+          teamALogo: item.teamALogo,
+          teamBLogo: item.teamBLogo,
+          teamAScore: item.teamAScore,
+          teamBScore: item.teamBScore,
+          matchStatus: item.statusText,
+          uploaderName: item.uploaderName,
+          uploaderAvatar: item.uploaderAvatar,
+          uploaderUserId: item.uploaderUserId,
+          isLiked: item.isLiked,
+          isFollowing: item.isFollowing,
+          isUploaderDeleted: item.isUploaderDeleted,
+          likeCount: item.likeCount,
+        ),
+      );
+    }
+    if (videos.isEmpty) return;
+    var initialIndex = videos.indexWhere((v) => v.videoId == widget.item.videoId);
+    if (initialIndex < 0) initialIndex = 0;
+    final handoff = await Navigator.of(context).push<VideoControllerHandoff>(
+      MaterialPageRoute(
+        builder: (_) => LeagueVideoPlayerPage(
+          videos: videos,
+          initialIndex: initialIndex,
+          seededController: seededController,
+          seededVideoId: widget.item.videoId,
+        ),
+      ),
+    );
+    if (!mounted || handoff == null) return;
+    if (handoff.videoId == widget.item.videoId) {
+      setState(() {
+        _seededControllerFromFeed = handoff.controller;
+      });
+    }
+  }
+
+  void _openMatchDetails() {
+    final matchId = widget.item.matchId;
+    if (matchId == null || matchId.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => FixturePage(matchId: matchId)),
+    );
+  }
+
+  void _openPosterProfile() {
+    final posterId = widget.item.uploaderUserId;
+    if (posterId == null || posterId.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PlayerProfilePage(playerId: posterId)),
+    );
+  }
 
   Future<void> _logImpression() async {
     final client = Supabase.instance.client;
@@ -200,11 +432,11 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
         'update_feed_interaction',
         params: {
           'p_id': _impressionId,
-          if (watchSeconds != null) 'p_watch_seconds': watchSeconds,
-          if (swipedFast != null) 'p_swiped_fast': swipedFast,
-          if (liked != null) 'p_liked': liked,
-          if (shared != null) 'p_shared': shared,
-          if (followedUploader != null) 'p_followed_uploader': followedUploader,
+          'p_watch_seconds': ?watchSeconds,
+          'p_swiped_fast': ?swipedFast,
+          'p_liked': ?liked,
+          'p_shared': ?shared,
+          'p_followed_uploader': ?followedUploader,
         },
       );
     } catch (_) {}
@@ -228,6 +460,7 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
           league: widget.item.leagueName,
           status: widget.item.statusText,
           result: widget.item.resultText,
+          onTap: _openMatchDetails,
         ),
         _VideoPlayerSection(
           videoUrl: widget.item.videoUrl,
@@ -241,12 +474,18 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
               swipedFast: swipedFast,
             );
           },
+          onSurfaceTap: _openContinuousFeed,
+          seededController: _seededControllerFromFeed ?? _seededControllerFromPreload,
         ),
         _PosterInfoSection(
           videoId: widget.item.videoId,
           posterName: widget.item.uploaderName ?? 'Unknown',
           posterAvatar: widget.item.uploaderAvatar,
           posterUserId: widget.item.uploaderUserId,
+          posterDeleted: widget.item.isUploaderDeleted,
+          thumbnailUrl: widget.item.thumbnailUrl,
+          shareLabel:
+              '${widget.item.teamAShort} vs ${widget.item.teamBShort}',
           isLiked: widget.item.isLiked,
           likeCount: widget.item.likeCount,
           isFollowing: widget.effectiveIsFollowing,
@@ -254,6 +493,7 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
           onLiked: () => _updateInteraction(liked: true),
           onShared: () => _updateInteraction(shared: true),
           onFollowed: () => _updateInteraction(followedUploader: true),
+          onPosterTap: _openPosterProfile,
         ),
       ],
     );
@@ -271,7 +511,6 @@ class _TeamLogoAvatar extends StatelessWidget {
     final path = logoPath?.trim();
     if (path == null || path.isEmpty) {
       return CircleAvatar(
-        radius: 31.5,
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
         child: Icon(
           Icons.groups,
@@ -280,37 +519,14 @@ class _TeamLogoAvatar extends StatelessWidget {
         ),
       );
     }
-    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
     return CircleAvatar(
-      radius: 31.5,
       backgroundColor: Colors.transparent,
       child: ClipOval(
         child: SizedBox(
           width: 63,
           height: 63,
-          child: isNetwork
-              ? Image.network(
-                  path,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _buildFallback(context),
-                )
-              : Image.asset(
-                  path,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _buildFallback(context),
-                ),
+          child: buildTeamLogo(path, size: 63),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFallback(BuildContext context) {
-    return Container(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: Icon(
-        Icons.groups,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-        size: 36,
       ),
     );
   }
@@ -322,6 +538,7 @@ class _MatchInfoCard extends StatelessWidget {
   final String league;
   final String status;
   final String result;
+  final VoidCallback? onTap;
 
   const _MatchInfoCard({
     required this.team1,
@@ -329,22 +546,29 @@ class _MatchInfoCard extends StatelessWidget {
     required this.league,
     required this.status,
     required this.result,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(28),
+        topRight: Radius.circular(28),
       ),
-      child: Column(
-        children: [
+      child: Container(
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(28),
+            topRight: Radius.circular(28),
+          ),
+        ),
+        child: Column(
+          children: [
           Text(
             league,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -425,7 +649,8 @@ class _MatchInfoCard extends StatelessWidget {
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -447,6 +672,8 @@ class _VideoPlayerSection extends StatelessWidget {
   final int durationSeconds;
   final VoidCallback? onImpressionShown;
   final void Function(double watchSeconds, bool swipedFast)? onWatchEnded;
+  final ValueChanged<VideoPlayerController?>? onSurfaceTap;
+  final VideoPlayerController? seededController;
 
   const _VideoPlayerSection({
     this.videoUrl,
@@ -455,6 +682,8 @@ class _VideoPlayerSection extends StatelessWidget {
     this.durationSeconds = 0,
     this.onImpressionShown,
     this.onWatchEnded,
+    this.onSurfaceTap,
+    this.seededController,
   });
 
   @override
@@ -470,6 +699,8 @@ class _VideoPlayerSection extends StatelessWidget {
             durationSeconds: durationSeconds,
             onImpressionShown: onImpressionShown,
             onWatchEnded: onWatchEnded,
+            onSurfaceTap: onSurfaceTap,
+            seededController: seededController,
           ),
         ),
       );
@@ -477,23 +708,16 @@ class _VideoPlayerSection extends StatelessWidget {
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.5,
       child: thumbnailUrl != null && thumbnailUrl!.isNotEmpty
-          ? Image.network(thumbnailUrl!, fit: BoxFit.cover)
+          ? Image(
+              image: CachedNetworkImageProvider(thumbnailUrl!),
+              fit: BoxFit.cover,
+            )
           : Container(color: Colors.black),
     );
   }
 }
 
-/// Resolves image path for avatars/logos - bare filenames (e.g. "Lefters.png")
-/// become full asset paths.
-String? _resolveImagePath(String? raw) {
-  final id = raw?.trim();
-  if (id == null || id.isEmpty) return null;
-  if (id.startsWith('http://') || id.startsWith('https://')) return id;
-  if (id.startsWith('lib/assets/') || id.startsWith('assets/')) return id;
-  // Bare filename: assume team logos folder (used for player placeholders too)
-  final name = id.contains('.') ? id : '$id.png';
-  return '${AppAssets.teamLogosPath}$name';
-}
+String? _resolveImagePath(String? raw) => resolvePlayerImagePath(raw);
 
 /// Circular avatar for poster - supports asset paths and network URLs (e.g. Supabase image_url).
 class _PosterAvatar extends StatelessWidget {
@@ -510,10 +734,11 @@ class _PosterAvatar extends StatelessWidget {
         hasImage && (path.startsWith('http://') || path.startsWith('https://'));
 
     return CircleAvatar(
-      radius: 12,
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       backgroundImage: hasImage
-          ? (isNetwork ? NetworkImage(path) : AssetImage(path))
+          ? (isNetwork
+                ? CachedNetworkImageProvider(path) as ImageProvider
+                : AssetImage(path))
           : null,
       child: !hasImage
           ? Text(
@@ -581,8 +806,8 @@ class _AnimatedLikeButtonState extends State<_AnimatedLikeButton>
       child: InkWell(
         onTap: widget.onTap != null ? _handleTap : null,
         borderRadius: BorderRadius.circular(24),
-        splashColor: Colors.red.withOpacity(0.2),
-        highlightColor: Colors.red.withOpacity(0.1),
+        splashColor: Colors.red.withValues(alpha: 0.2),
+        highlightColor: Colors.red.withValues(alpha: 0.1),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: AnimatedBuilder(
@@ -625,6 +850,9 @@ class _PosterInfoSection extends StatefulWidget {
     required this.posterName,
     this.posterAvatar,
     this.posterUserId,
+    this.posterDeleted = false,
+    this.shareLabel,
+    this.thumbnailUrl,
     required this.isLiked,
     required this.likeCount,
     required this.isFollowing,
@@ -632,12 +860,16 @@ class _PosterInfoSection extends StatefulWidget {
     this.onLiked,
     this.onShared,
     this.onFollowed,
+    this.onPosterTap,
   });
 
   final String videoId;
   final String posterName;
   final String? posterAvatar;
   final String? posterUserId;
+  final bool posterDeleted;
+  final String? shareLabel;
+  final String? thumbnailUrl;
   final bool isLiked;
   final int likeCount;
   final bool isFollowing;
@@ -645,6 +877,7 @@ class _PosterInfoSection extends StatefulWidget {
   final VoidCallback? onLiked;
   final VoidCallback? onShared;
   final VoidCallback? onFollowed;
+  final VoidCallback? onPosterTap;
 
   @override
   State<_PosterInfoSection> createState() => _PosterInfoSectionState();
@@ -679,13 +912,23 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
 
   bool get _showFollowButton =>
       !_isViewerPoster &&
+      !widget.posterDeleted &&
       widget.posterUserId != null &&
       widget.posterUserId!.isNotEmpty;
 
   Future<void> _toggleFollow() async {
     final client = Supabase.instance.client;
-    final currentUserId = client.auth.currentUser?.id;
-    if (currentUserId == null || widget.posterUserId == null) return;
+    final currentUser = client.auth.currentUser;
+    if (currentUser == null || widget.posterUserId == null) return;
+    if (currentUser.isAnonymous) {
+      await showGuestAccountSheet(
+        context,
+        message: 'Create a free Ballo account to follow players and '
+            'keep up with their highlights.',
+      );
+      return;
+    }
+    final currentUserId = currentUser.id;
 
     final newFollowing = !widget.isFollowing;
     widget.onFollowChanged(widget.posterUserId, newFollowing);
@@ -715,8 +958,18 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
 
   Future<void> _toggleLike() async {
     final client = Supabase.instance.client;
-    final currentUserId = client.auth.currentUser?.id;
-    if (currentUserId == null) return;
+    final currentUser = client.auth.currentUser;
+    if (currentUser == null) return;
+    if (currentUser.isAnonymous) {
+      await showGuestAccountSheet(
+        context,
+        message:
+            'Create a free Ballo account to like videos and support '
+            'the players behind them.',
+      );
+      return;
+    }
+    final currentUserId = currentUser.id;
 
     setState(() {
       _isLiked = !_isLiked;
@@ -753,7 +1006,10 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppResponsive.horizontalInset(context),
+        vertical: 12 * AppResponsive.layoutScaleOf(context),
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.only(
@@ -763,15 +1019,26 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
       ),
       child: Row(
         children: [
-          _PosterAvatar(
-            posterAvatar: widget.posterAvatar,
-            posterName: widget.posterName,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            widget.posterName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
+          InkWell(
+            onTap: widget.onPosterTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+              child: Row(
+                children: [
+                  _PosterAvatar(
+                    posterAvatar: widget.posterAvatar,
+                    posterName: widget.posterName,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    widget.posterName,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (_showFollowButton) ...[
@@ -809,19 +1076,52 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
           ),
           // Share button
           IconButton(
-            onPressed: () {
-              const shareUrl = 'https://footystats.app';
-              Clipboard.setData(const ClipboardData(text: shareUrl));
-              widget.onShared?.call();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Share link copied')),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final outcome = await VideoShare.share(
+                videoId: widget.videoId,
+                matchLabel: widget.shareLabel,
+                thumbnailUrl: widget.thumbnailUrl,
               );
+              if (outcome == VideoShareOutcome.dismissed) return;
+              widget.onShared?.call();
+              if (outcome == VideoShareOutcome.copied) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Link copied')),
+                );
+              }
             },
             icon: Icon(
               Icons.share_outlined,
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
+          if (!_isViewerPoster)
+            IconButton(
+              tooltip: 'Report',
+              onPressed: () async {
+                final user = Supabase.instance.client.auth.currentUser;
+                if (user == null || user.isAnonymous) {
+                  await showGuestAccountSheet(
+                    context,
+                    message:
+                        'Create a free Ballo account to report content and '
+                        'help keep the community safe.',
+                  );
+                  return;
+                }
+                await showReportContentSheet(
+                  context,
+                  videoId: widget.videoId,
+                  uploaderUserId: widget.posterUserId,
+                  uploaderName: widget.posterName,
+                );
+              },
+              icon: Icon(
+                Icons.flag_outlined,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
         ],
       ),
     );
@@ -836,6 +1136,8 @@ class _VideoPlayerWidget extends StatefulWidget {
   final int durationSeconds;
   final VoidCallback? onImpressionShown;
   final void Function(double watchSeconds, bool swipedFast)? onWatchEnded;
+  final ValueChanged<VideoPlayerController?>? onSurfaceTap;
+  final VideoPlayerController? seededController;
 
   const _VideoPlayerWidget({
     required this.videoUrl,
@@ -844,6 +1146,8 @@ class _VideoPlayerWidget extends StatefulWidget {
     this.durationSeconds = 0,
     this.onImpressionShown,
     this.onWatchEnded,
+    this.onSurfaceTap,
+    this.seededController,
   });
 
   @override
@@ -859,11 +1163,46 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
   bool _impressionLogged = false;
   double _watchSeconds = 0;
   Timer? _watchTimer;
+  Timer? _disposeTimer;
+  double _visibleFraction = 0.0;
+  int _visibilityEventId = 0;
 
   final String _videoKey = 'video_${UniqueKey()}';
 
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false;
+
+  @override
+  void initState() {
+    super.initState();
+    final seeded = widget.seededController;
+    if (seeded != null && seeded.value.isInitialized) {
+      _controller = seeded;
+      _isInitialized = true;
+      _isPlaying = seeded.value.isPlaying;
+    }
+    // No eager initialization here: the controller is created lazily by the
+    // VisibilityDetector callback once the card actually scrolls into view,
+    // so off-screen videos never start buffering (saves mobile data).
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoPlayerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final seeded = widget.seededController;
+    if (seeded != null &&
+        !identical(seeded, _controller) &&
+        seeded.value.isInitialized) {
+      _cancelScheduledDispose();
+      _controller = seeded;
+      _isInitialized = true;
+      _isPlaying = seeded.value.isPlaying;
+      if (_visibleFraction > 0.65) {
+        _playVideo();
+      }
+      if (mounted) setState(() {});
+    }
+  }
 
   void _startWatchTimer() {
     _watchTimer?.cancel();
@@ -885,16 +1224,19 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
     if (_isInitializing || _controller != null) return;
 
     _isInitializing = true;
+    _cancelScheduledDispose();
 
     try {
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.videoUrl),
+      final controller = await createExploreVideoController(
+        videoUrl: widget.videoUrl,
+        videoId: widget.videoId,
+        cacheManager: _ExploreVideoPreloadCache.instance.cacheManager,
       );
 
       await controller.initialize();
       await controller.setLooping(true);
 
-      if (!mounted) {
+      if (!mounted || _visibleFraction <= 0.01) {
         await controller.dispose();
         return;
       }
@@ -914,90 +1256,207 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
     }
   }
 
+  bool _controllerUsable(VideoPlayerController? controller) {
+    if (controller == null || !_isInitialized) return false;
+    try {
+      return controller.value.isInitialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _playVideo() {
     final controller = _controller;
-    if (controller == null || !_isInitialized) return;
+    if (!_controllerUsable(controller)) return;
 
-    controller.play();
-    if (mounted) {
-      setState(() => _isPlaying = true);
+    try {
+      controller!.play();
+      if (mounted) setState(() => _isPlaying = true);
+    } catch (_) {
+      _detachController(disposeNow: true);
     }
   }
 
   void _pauseVideo() {
     final controller = _controller;
-    if (controller == null || !_isInitialized) return;
+    if (!_controllerUsable(controller)) return;
 
-    controller.pause();
-    if (mounted) {
-      setState(() => _isPlaying = false);
+    try {
+      controller!.pause();
+      if (mounted) setState(() => _isPlaying = false);
+    } catch (_) {
+      _detachController(disposeNow: true);
+    }
+  }
+
+  /// Detach [VideoPlayer] before dispose so listeners are not called on a
+  /// disposed controller (common when scrolling Explore cards off-screen).
+  void _detachController({
+    bool disposeNow = false,
+    bool handoff = false,
+  }) {
+    final controller = _controller;
+    _controller = null;
+    _isInitialized = false;
+    _isPlaying = false;
+    if (mounted) setState(() {});
+    if (controller == null || handoff) return;
+
+    void disposeController() {
+      try {
+        controller.dispose();
+      } catch (_) {}
+    }
+
+    if (disposeNow) {
+      disposeController();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => disposeController());
     }
   }
 
   void _scheduleDispose() {
+    _disposeTimer?.cancel();
     _stopWatchTimerAndReport();
+    _disposeTimer = Timer(const Duration(seconds: 2), () {
+      if (_visibleFraction > 0.01) return;
+      _detachController();
+    });
   }
 
   void _cancelScheduledDispose() {
-    // Timer keeps running while visible
+    _disposeTimer?.cancel();
+    _disposeTimer = null;
+  }
+
+  void _handleSurfaceTap() {
+    final callback = widget.onSurfaceTap;
+    if (callback == null) return;
+
+    final controller = _controller;
+    if (_controllerUsable(controller)) {
+      _cancelScheduledDispose();
+      _watchTimer?.cancel();
+      _watchTimer = null;
+      _detachController(handoff: true);
+      callback(controller);
+      return;
+    }
+
+    callback(null);
   }
 
   @override
   void dispose() {
     _watchTimer?.cancel();
-    _controller?.dispose();
+    _disposeTimer?.cancel();
+    final controller = _controller;
+    _controller = null;
+    try {
+      controller?.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final controller = _controller;
+    final showPlayer = _controllerUsable(controller);
 
     return VisibilityDetector(
       key: Key(_videoKey),
       onVisibilityChanged: (info) async {
         final visible = info.visibleFraction;
+        _visibleFraction = visible;
+        final eventId = ++_visibilityEventId;
 
-        if (visible > 0.30) {
+        // Init and play only when most of the card is on screen. On cellular
+        // we keep the thumbnail and wait for an explicit tap (Wi-Fi-only autoplay).
+        if (visible > 0.65 && _controller == null) {
+          final allowAutoplay = await NetworkQuality.allowsVideoAutoplay;
+          if (!mounted || eventId != _visibilityEventId) return;
+          if (_visibleFraction <= 0.65) {
+            _pauseVideo();
+            _scheduleDispose();
+            return;
+          }
+          if (allowAutoplay) {
+            _cancelScheduledDispose();
+            await _initializeVideo();
+            if (!mounted || eventId != _visibilityEventId) return;
+            if (_visibleFraction <= 0.65) {
+              _pauseVideo();
+              _scheduleDispose();
+              return;
+            }
+          }
+        }
+
+        if (visible > 0.65) {
           if (!_impressionLogged) {
             _impressionLogged = true;
             widget.onImpressionShown?.call();
           }
           _startWatchTimer();
 
-          if (_controller == null) {
-            await _initializeVideo();
+          if (!mounted || eventId != _visibilityEventId) return;
+          if (_visibleFraction <= 0.65) {
+            _pauseVideo();
+            _scheduleDispose();
+            return;
           }
 
-          if (visible > 0.65) {
-            _playVideo();
-          } else {
-            _pauseVideo();
-          }
+          _playVideo();
         } else {
           _pauseVideo();
           _scheduleDispose();
         }
       },
       child: ClipRect(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleSurfaceTap,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
             // Always show the thumbnail/placeholder; video overlays when ready.
             _buildPlaceholder(),
 
-            if (_isInitialized && _controller != null)
+            if (showPlayer)
               SizedBox.expand(
                 child: FittedBox(
                   fit: BoxFit.cover,
                   child: SizedBox(
-                    width: _controller!.value.size.width,
-                    height: _controller!.value.size.height,
-                    child: VideoPlayer(_controller!),
+                    width: controller!.value.size.width,
+                    height: controller.value.size.height,
+                    child: VideoPlayer(controller),
                   ),
                 ),
               ),
-            if (_isInitialized)
+            if (!showPlayer)
+              Center(
+                child: GestureDetector(
+                  onTap: () async {
+                    await _initializeVideo();
+                    if (mounted && _visibleFraction > 0.01) _playVideo();
+                  },
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                ),
+              ),
+            if (showPlayer)
               Center(
                 child: GestureDetector(
                   onTap: () {
@@ -1011,7 +1470,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.45),
+                      color: Colors.black.withValues(alpha: 0.45),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -1022,7 +1481,8 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1031,12 +1491,12 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
   Widget _buildPlaceholder() {
     if (widget.thumbnailUrl != null && widget.thumbnailUrl!.isNotEmpty) {
       return SizedBox.expand(
-        child: Image.network(
-          widget.thumbnailUrl!,
+        child: Image(
+          image: CachedNetworkImageProvider(widget.thumbnailUrl!),
           fit: BoxFit.cover,
           gaplessPlayback: true,
           filterQuality: FilterQuality.low,
-          errorBuilder: (_, __, ___) {
+          errorBuilder: (_, _, _) {
             return Container(color: Colors.black);
           },
         ),
@@ -1051,6 +1511,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
 class _ExploreVideoItem {
   const _ExploreVideoItem({
     required this.videoId,
+    required this.matchId,
     required this.videoUrl,
     required this.durationSeconds,
     required this.teamALogo,
@@ -1069,9 +1530,11 @@ class _ExploreVideoItem {
     required this.isLiked,
     required this.likeCount,
     required this.isFollowing,
+    this.isUploaderDeleted = false,
   });
 
   final String videoId;
+  final String? matchId;
   final String videoUrl;
   final int? durationSeconds;
   final String teamALogo;
@@ -1090,17 +1553,22 @@ class _ExploreVideoItem {
   final bool isLiked;
   final int likeCount;
   final bool isFollowing;
+  final bool isUploaderDeleted;
 }
 
-Future<List<_ExploreVideoItem>> _fetchExploreVideos(String sessionId) async {
+Future<List<_ExploreVideoItem>> _fetchExploreVideos(
+  String sessionId, {
+  required int limit,
+  required int offset,
+}) async {
   final client = Supabase.instance.client;
   final currentUserId = client.auth.currentUser?.id;
 
   List<Map<String, dynamic>> videos;
   try {
     final params = <String, dynamic>{
-      'p_limit': 500,
-      'p_offset': 0,
+      'p_limit': limit,
+      'p_offset': offset,
       'p_exploration_rate': 0.12,
     };
     if (currentUserId != null) params['p_user_id'] = currentUserId;
@@ -1118,9 +1586,35 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(String sessionId) async {
         .select(
           'id, match_id, uploader_user_id, duration_seconds, video_url, thumbnail_url',
         )
+        .neq('moderation_status', 'rejected')
         .order('created_at', ascending: false)
-        .limit(500);
+        .range(offset, offset + limit - 1);
     videos = List<Map<String, dynamic>>.from(fallbackRes as List);
+  }
+  if (videos.isEmpty) return const [];
+
+  if (currentUserId != null) {
+    try {
+      final blocked = await client
+          .from('user_blocks')
+          .select('blocked_user_id')
+          .eq('blocker_user_id', currentUserId);
+      final blockedIds = {
+        for (final row in List<Map<String, dynamic>>.from(blocked as List))
+          if (row['blocked_user_id'] != null)
+            row['blocked_user_id'].toString(),
+      };
+      if (blockedIds.isNotEmpty) {
+        videos = videos.where((v) {
+          final uid = v['uploader_user_id']?.toString() ??
+              v['uploaderUserId']?.toString();
+          // RPC shape uses uploader_user_id; mapped shape uses same later.
+          final mapped = v['uploader_user_id']?.toString();
+          final id = mapped ?? uid;
+          return id == null || id.isEmpty || !blockedIds.contains(id);
+        }).toList();
+      }
+    } catch (_) {}
   }
   if (videos.isEmpty) return const [];
 
@@ -1170,7 +1664,7 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(String sessionId) async {
   if (uploaderIds.isNotEmpty) {
     final uploadersRes = await client
         .from('players')
-        .select('id, player_name, image_url')
+        .select('id, player_name, image_url, deleted_at')
         .inFilter('id', uploaderIds.toList());
     for (final p in List<Map<String, dynamic>>.from(uploadersRes as List)) {
       final id = p['id']?.toString();
@@ -1194,24 +1688,40 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(String sessionId) async {
     } catch (_) {}
   }
 
-  // Fetch like status and counts per video
+  // Aggregated like counts (one row per video) instead of the full likes table.
   final likedVideoIds = <String>{};
   final likeCountMap = <String, int>{};
   if (videoIds.isNotEmpty) {
     try {
-      final likesRes = await client
-          .from('video_likes')
-          .select('video_id, user_id')
-          .inFilter('video_id', videoIds);
+      final likesRes = await client.rpc(
+        'get_video_like_stats',
+        params: {
+          'p_video_ids': videoIds,
+          'p_user_id': ?currentUserId,
+        },
+      );
       for (final l in List<Map<String, dynamic>>.from(likesRes as List)) {
         final vid = l['video_id']?.toString();
-        final uid = l['user_id']?.toString();
-        if (vid != null) {
-          likeCountMap[vid] = (likeCountMap[vid] ?? 0) + 1;
-          if (uid == currentUserId) likedVideoIds.add(vid);
-        }
+        if (vid == null) continue;
+        likeCountMap[vid] = (l['like_count'] as num?)?.toInt() ?? 0;
+        if (l['is_liked'] == true) likedVideoIds.add(vid);
       }
-    } catch (_) {}
+    } catch (_) {
+      // Fallback if the RPC is not deployed yet: current user's likes only.
+      if (currentUserId != null) {
+        try {
+          final mine = await client
+              .from('video_likes')
+              .select('video_id')
+              .eq('user_id', currentUserId)
+              .inFilter('video_id', videoIds);
+          for (final l in List<Map<String, dynamic>>.from(mine as List)) {
+            final vid = l['video_id']?.toString();
+            if (vid != null) likedVideoIds.add(vid);
+          }
+        } catch (_) {}
+      }
+    }
   }
 
   return videos.map((v) {
@@ -1250,17 +1760,15 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(String sessionId) async {
 
     final uploaderUserId = v['uploader_user_id']?.toString();
     final vid = v['id']?.toString() ?? '';
+    final isUploaderDeleted = uploader['deleted_at'] != null;
 
     return _ExploreVideoItem(
       videoId: vid,
+      matchId: v['match_id']?.toString(),
       videoUrl: v['video_url']?.toString() ?? '',
       durationSeconds: v['duration_seconds'] as int?,
-      teamALogo:
-          _resolveLogoPath(teamA['logo_id']?.toString()) ??
-          AppAssets.theShieldLogo,
-      teamBLogo:
-          _resolveLogoPath(teamB['logo_id']?.toString()) ??
-          AppAssets.laFamilleLogo,
+      teamALogo: _resolveLogoPath(teamA['logo_id']?.toString()) ?? '',
+      teamBLogo: _resolveLogoPath(teamB['logo_id']?.toString()) ?? '',
       teamAShort: teamA['short_form']?.toString() ?? 'Team A',
       teamBShort: teamB['short_form']?.toString() ?? 'Team B',
       teamAScore: teamAScore,
@@ -1274,290 +1782,70 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(String sessionId) async {
       thumbnailUrl: v['thumbnail_url']?.toString(),
       isLiked: likedVideoIds.contains(vid),
       likeCount: likeCountMap[vid] ?? 0,
-      isFollowing:
-          uploaderUserId != null && followsSet.contains(uploaderUserId),
+      isFollowing: !isUploaderDeleted &&
+          uploaderUserId != null &&
+          followsSet.contains(uploaderUserId),
+      isUploaderDeleted: isUploaderDeleted,
     );
   }).toList();
 }
 
-class ExploreSearchBar extends StatefulWidget {
+class ExploreSearchBar extends StatelessWidget {
   const ExploreSearchBar({super.key});
-
-  @override
-  State<ExploreSearchBar> createState() => _ExploreSearchBarState();
-}
-
-class _ExploreSearchBarState extends State<ExploreSearchBar> {
-  final Map<String, List<_SearchItem>> _cache = {};
-  final List<_SearchItem> _suggestions = [];
-  Timer? _debounce;
-  bool _isLoading = false;
-  String _lastQuery = '';
-  String? _errorMessage;
-  SearchController? _controller;
-  int _requestId = 0;
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _controller?.removeListener(_handleControllerChanged);
-    super.dispose();
-  }
-
-  void _handleControllerChanged() {
-    final controller = _controller;
-    if (controller == null) return;
-    _onQueryChanged(controller.text);
-  }
-
-  void _attachController(SearchController controller) {
-    if (_controller == controller) return;
-    _controller?.removeListener(_handleControllerChanged);
-    _controller = controller;
-    _controller?.addListener(_handleControllerChanged);
-  }
-
-  void _onQueryChanged(String query) {
-    final trimmed = query.trim();
-    _lastQuery = trimmed;
-    _debounce?.cancel();
-
-    if (trimmed.isEmpty) {
-      setState(() {
-        _suggestions.clear();
-        _isLoading = false;
-        _errorMessage = null;
-      });
-      _controller?.openView();
-      return;
-    }
-
-    if (trimmed.length < 2) {
-      setState(() {
-        _suggestions.clear();
-        _isLoading = false;
-        _errorMessage = null;
-      });
-      return;
-    }
-
-    if (_cache.containsKey(trimmed)) {
-      setState(() {
-        _suggestions
-          ..clear()
-          ..addAll(_cache[trimmed]!);
-        _isLoading = false;
-        _errorMessage = null;
-      });
-      _controller?.openView();
-      return;
-    }
-
-    _debounce = Timer(const Duration(milliseconds: 250), () {
-      _fetchSuggestions(trimmed);
-    });
-  }
-
-  Future<void> _fetchSuggestions(String query) async {
-    final requestId = ++_requestId;
-    setState(() => _isLoading = true);
-    try {
-      final supabase = Supabase.instance.client;
-      final leaguesRes = await supabase
-          .from('leagues')
-          .select('id, league_name, logo_id')
-          .ilike('league_name', '%$query%')
-          .limit(10);
-      final teamsRes = await supabase
-          .from('teams')
-          .select('id, team_name, logo_id')
-          .ilike('team_name', '%$query%')
-          .limit(10);
-
-      final leagues = (leaguesRes as List)
-          .map(
-            (e) => _SearchItem(
-              id: (e['id'] ?? '').toString(),
-              label: (e['league_name'] ?? '').toString(),
-              type: 'League',
-              logoPath: _resolveLogoPath(e['logo_id']?.toString()),
-            ),
-          )
-          .where((item) => item.label.isNotEmpty)
-          .toList();
-      final teams = (teamsRes as List)
-          .map(
-            (e) => _SearchItem(
-              id: (e['id'] ?? '').toString(),
-              label: (e['team_name'] ?? '').toString(),
-              type: 'Team',
-              logoPath: _resolveLogoPath(e['logo_id']?.toString()),
-            ),
-          )
-          .where((item) => item.label.isNotEmpty)
-          .toList();
-
-      final combined = [...leagues, ...teams];
-      _cache[query] = combined;
-      if (!mounted || _lastQuery != query || requestId != _requestId) return;
-      setState(() {
-        _suggestions
-          ..clear()
-          ..addAll(combined);
-        _isLoading = false;
-        _errorMessage = null;
-      });
-      _controller?.openView();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Search failed. Please try again.';
-      });
-      _controller?.openView();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: SearchAnchor(
-        builder: (BuildContext context, SearchController controller) {
-          _attachController(controller);
-          return SearchBar(
-            controller: controller,
-            padding: const WidgetStatePropertyAll<EdgeInsets>(
-              EdgeInsets.symmetric(horizontal: 16.0),
-            ),
-            onTap: () {
-              controller.openView();
-              if (controller.text.isNotEmpty) {
-                _onQueryChanged(controller.text);
-              }
-            },
-            onChanged: (_) {
-              controller.openView();
-              _onQueryChanged(controller.text);
-            },
-            leading: const Icon(Icons.search),
-            hintText: 'Search...',
-            hintStyle: WidgetStatePropertyAll(
-              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
+      margin: EdgeInsets.symmetric(
+        horizontal: AppResponsive.horizontalInset(context),
+      ),
+      child: SearchBar(
+        readOnly: true,
+        padding: const WidgetStatePropertyAll<EdgeInsets>(
+          EdgeInsets.symmetric(horizontal: 16.0),
+        ),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AppSearchPage()),
           );
         },
-        suggestionsBuilder:
-            (BuildContext context, SearchController controller) {
-              if (_isLoading) {
-                return [
-                  const ListTile(
-                    leading: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    title: Text('Searching...'),
-                  ),
-                ];
-              }
-              if (_errorMessage != null) {
-                return [ListTile(title: Text(_errorMessage!))];
-              }
-              if (_suggestions.isEmpty) {
-                return [const ListTile(title: Text('No results'))];
-              }
-              return _suggestions.map((item) {
-                return ListTile(
-                  leading: _SearchLogo(
-                    logoPath: item.logoPath,
-                    fallbackIcon: item.type == 'League'
-                        ? Icons.emoji_events
-                        : Icons.groups,
-                  ),
-                  title: Text(item.label),
-                  subtitle: Text(item.type),
-                  onTap: () {
-                    controller.closeView(item.label);
-                    if (item.type == 'League') {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => LeagueDetailPage(leagueId: item.id),
-                        ),
-                      );
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => TeamDetailPage(teamId: item.id),
-                        ),
-                      );
-                    }
-                  },
-                );
-              }).toList();
-            },
+        leading: const Icon(Icons.search),
+        hintText: 'Search...',
+        hintStyle: WidgetStatePropertyAll(
+          TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       ),
     );
   }
 }
 
-class _SearchItem {
-  const _SearchItem({
-    required this.id,
-    required this.label,
-    required this.type,
-    this.logoPath,
-  });
+String? _resolveLogoPath(String? logoId) => resolveTeamLogoPath(logoId);
 
-  final String id;
-  final String label;
-  final String type;
-  final String? logoPath;
-}
+class _ExploreVideoPreloadCache {
+  _ExploreVideoPreloadCache._();
+  static final _ExploreVideoPreloadCache instance = _ExploreVideoPreloadCache._();
 
-String? _resolveLogoPath(String? logoId) {
-  final id = logoId?.trim();
-  if (id == null || id.isEmpty) return null;
-  if (id.startsWith('http://') || id.startsWith('https://')) return id;
-  if (id.startsWith('lib/assets/') || id.startsWith('assets/')) return id;
-  // If a filename or key is provided, assume it sits under team logos
-  final name = id.contains('.') ? id : '$id.png';
-  return '${AppAssets.teamLogosPath}$name';
-}
+  final Map<String, VideoPlayerController> _controllers = {};
+  bool _isPreloading = false;
 
-class _SearchLogo extends StatelessWidget {
-  const _SearchLogo({this.logoPath, required this.fallbackIcon});
+  VideoPlayerController? take(String videoId) {
+    return _controllers.remove(videoId);
+  }
 
-  final String? logoPath;
-  final IconData fallbackIcon;
+  BaseCacheManager get cacheManager => AppVideoCache.instance.cacheManager;
 
-  @override
-  Widget build(BuildContext context) {
-    final path = logoPath;
-    if (path == null || path.isEmpty) {
-      return CircleAvatar(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-        child: Icon(
-          fallbackIcon,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      );
+  /// Drops leftover controllers. Thumbnails are precached separately;
+  /// full MP4s are never downloaded until the card is actually watched.
+  Future<void> preloadThumbnails(List<_ExploreVideoItem> items) async {
+    if (_isPreloading) return;
+    _isPreloading = true;
+    try {
+      for (final id in _controllers.keys.toList()) {
+        await _controllers[id]?.dispose();
+        _controllers.remove(id);
+      }
+    } finally {
+      _isPreloading = false;
     }
-    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
-    final image = isNetwork
-        ? Image.network(
-            path,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-          )
-        : Image.asset(
-            path,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-          );
-    return CircleAvatar(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: ClipOval(child: SizedBox(width: 36, height: 36, child: image)),
-    );
   }
 }

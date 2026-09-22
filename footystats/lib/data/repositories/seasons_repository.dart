@@ -94,18 +94,12 @@ class SeasonsRepository {
   Future<String> createSeason({
     required String leagueId,
     required String seasonName,
-    required DateTime startDate,
-    required DateTime endDate,
   }) async {
-    final startStr = startDate.toIso8601String().split('T').first;
-    final endStr = endDate.toIso8601String().split('T').first;
     final res = await _client
         .from('seasons')
         .insert({
           'league_id': leagueId,
           'season_name': seasonName,
-          'start_date': startStr,
-          'end_date': endStr,
           'status': 'upcoming',
         })
         .select('id')

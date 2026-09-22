@@ -1,24 +1,58 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:app_links/app_links.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/theme/theme.dart';
-import 'core/utils/util.dart';
-import 'presentation/pages/home_page.dart';
-import 'presentation/pages/welcome_page.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'core/adaptive/adaptive.dart';
+import 'core/config/env_config.dart';
+import 'core/onboarding/onboarding_completion.dart';
+import 'core/theme/theme.dart';
+import 'core/utils/pending_shared_video.dart';
+import 'core/utils/referee_whistle_player.dart';
+import 'core/utils/video_share.dart';
+import 'core/utils/util.dart';
+import 'domain/models/onboarding_draft.dart';
+import 'presentation/pages/home_page.dart';
+import 'presentation/pages/onboarding_intro_page.dart';
+import 'presentation/pages/onboarding_join_team_page.dart';
+import 'presentation/pages/shared_video_page.dart';
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
+  unawaited(RefereeWhistlePlayer.instance.warmUp());
+  EnvConfig.validate();
   await Supabase.initialize(
-    url: 'https://dcpltazuzyyhxtkpbuiu.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjcGx0YXp1enl5aHh0a3BidWl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3NzI2NzgsImV4cCI6MjA4NTM0ODY3OH0.7fAERtevC9DfpHaBLhXJfzb_DBCbkSbU6G505lrb_Iw',
+    url: EnvConfig.supabaseUrl,
+    anonKey: EnvConfig.supabaseAnonKey,
   );
+  _listenForSharedVideoLinks();
 
   runApp(
     const ProviderScope(
       child: MyApp(),
     ),
   );
+}
+
+void _listenForSharedVideoLinks() {
+  PendingSharedVideo.offer(VideoShare.incomingVideoId());
+  try {
+    final appLinks = AppLinks();
+    appLinks.getInitialLink().then((uri) {
+      if (uri != null) {
+        PendingSharedVideo.offer(VideoShare.incomingVideoId(uri));
+      }
+    });
+    appLinks.uriLinkStream.listen((uri) {
+      PendingSharedVideo.offer(VideoShare.incomingVideoId(uri));
+    });
+  } catch (_) {}
 }
 
 class MyApp extends ConsumerWidget {
@@ -28,32 +62,108 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brightness = View.of(context).platformDispatcher.platformBrightness;
 
-    // Use with Google Fonts package to use downloadable fonts
     TextTheme textTheme = createTextTheme(context, "Roboto", "Roboto");
 
     MaterialTheme theme = MaterialTheme(textTheme);
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'FootyStats',
+      title: 'Ballo',
       theme: brightness == Brightness.light ? theme.light() : theme.dark(),
-      home: const _AuthGate(),
+      builder: (context, child) {
+        return MobileResponsiveScope(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+      home: const _LaunchShell(),
     );
   }
 }
 
-/// Simple auth gate that decides whether to show the main app shell
-/// or the onboarding / auth flow.
+/// Opens a shared `?v=` highlight on top of the normal auth flow.
+class _LaunchShell extends StatefulWidget {
+  const _LaunchShell();
+
+  @override
+  State<_LaunchShell> createState() => _LaunchShellState();
+}
+
+class _LaunchShellState extends State<_LaunchShell> {
+  @override
+  void initState() {
+    super.initState();
+    PendingSharedVideo.id.addListener(_onPending);
+  }
+
+  @override
+  void dispose() {
+    PendingSharedVideo.id.removeListener(_onPending);
+    super.dispose();
+  }
+
+  void _onPending() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final videoId = PendingSharedVideo.id.value;
+    if (videoId != null) {
+      return SharedVideoPage(videoId: videoId);
+    }
+    return const _AuthGate();
+  }
+}
+
+/// Signed-out users start onboarding. Signed-in users only reach home after
+/// the join-team step marks onboarding complete.
 class _AuthGate extends StatelessWidget {
   const _AuthGate();
 
   @override
   Widget build(BuildContext context) {
-    final session = Supabase.instance.client.auth.currentSession;
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    if (session != null) {
-      return const HomePage();
-    }
+        final session = snapshot.data?.session;
 
-    return const WelcomePage();
+        if (session == null) {
+          return const OnboardingIntroPage();
+        }
+
+        if (session.user.isAnonymous) {
+          return const HomePage();
+        }
+
+        if (OnboardingCompletion.isCompleteFromUser(session.user)) {
+          return const HomePage();
+        }
+
+        return FutureBuilder<bool>(
+          future: OnboardingCompletion.isComplete(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (snapshot.data == true) {
+              return const HomePage();
+            }
+
+            return const OnboardingJoinTeamPage(
+              draft: OnboardingDraft(),
+            );
+          },
+        );
+      },
+    );
   }
 }
