@@ -10,6 +10,7 @@ import '../../core/utils/stoppage_alert.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
@@ -683,6 +684,34 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     }
   }
 
+  Widget? _buildFixtureFab(
+    BuildContext context,
+    MatchModel match,
+    bool isLeagueOwner,
+  ) {
+    if (isLeagueOwner) {
+      return _FixtureHintedFab(
+        prefsKey: 'fixture_officiate_fab_hint_seen',
+        message: 'Open match controls to start, pause, and log events.',
+        icon: Icons.sports,
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => _MatchControlsModal(matchId: match.id),
+          );
+        },
+      );
+    }
+    return _FixtureHintedFab(
+      prefsKey: 'fixture_add_video_fab_hint_seen',
+      message: 'Add a clip from this match.',
+      icon: Icons.videocam_outlined,
+      onPressed: () => _pickAndEnqueueMatchVideo(context, match),
+    );
+  }
+
   void _onFixtureMenuSelected(
     BuildContext context,
     MatchModel match,
@@ -1351,18 +1380,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       child: Scaffold(
         extendBodyBehindAppBar: false,
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => _MatchControlsModal(matchId: match.id),
-            );
-          },
-          elevation: 0,
-          child: const Icon(Icons.sports),
-        ),
+        floatingActionButton: leaguesAsync.isLoading
+            ? null
+            : _buildFixtureFab(context, match, isLeagueOwner),
         appBar: AppBar(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           elevation: 0,
@@ -1486,6 +1506,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                         top: Radius.circular(28),
                       ),
                       child: Stack(
+                        fit: StackFit.expand,
                         children: [
                           (((match.venueImageUrl ?? '').startsWith('http://') ||
                                       (match.venueImageUrl ?? '').startsWith('https://'))
@@ -1514,13 +1535,25 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                                                 ?.defaultVenueImageUrl ??
                                             '',
                                   ),
-                                  fit: BoxFit.fill,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.center,
                                   errorBuilder: (_, _, _) => Image.asset(
-                                    AppAssets.pitchBg,
-                                    fit: BoxFit.fill,
+                                    AppAssets.matchBg,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.center,
                                   ),
                                 )
-                              : Image.asset(AppAssets.pitchBg, fit: BoxFit.fill),
+                              : Image.asset(
+                                  AppAssets.matchBg,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.center,
+                                ),
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -3381,6 +3414,60 @@ class _MatchVideoPlayerPageState extends State<_MatchVideoPlayerPage>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// FAB that shows a one-time tooltip the first time this user lands on a fixture.
+class _FixtureHintedFab extends StatefulWidget {
+  const _FixtureHintedFab({
+    required this.prefsKey,
+    required this.message,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String prefsKey;
+  final String message;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  State<_FixtureHintedFab> createState() => _FixtureHintedFabState();
+}
+
+class _FixtureHintedFabState extends State<_FixtureHintedFab> {
+  final GlobalKey<TooltipState> _tooltipKey = GlobalKey<TooltipState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowHint());
+  }
+
+  Future<void> _maybeShowHint() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(widget.prefsKey) == true) return;
+      if (!mounted) return;
+      _tooltipKey.currentState?.ensureTooltipVisible();
+      await prefs.setBool(widget.prefsKey, true);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      key: _tooltipKey,
+      message: widget.message,
+      preferBelow: false,
+      waitDuration: Duration.zero,
+      showDuration: const Duration(seconds: 5),
+      child: FloatingActionButton(
+        onPressed: widget.onPressed,
+        elevation: 0,
+        child: Icon(widget.icon),
       ),
     );
   }

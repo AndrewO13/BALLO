@@ -18,6 +18,7 @@ import '../../core/widgets/media_placeholders.dart';
 import '../../data/repositories/league_applications_repository.dart';
 import '../../data/repositories/leagues_repository.dart';
 import '../../data/repositories/matches_repository.dart';
+import '../../domain/models/league_format.dart';
 import '../../domain/models/match_model.dart';
 import '../../domain/models/season_model.dart';
 import '../../data/repositories/teams_repository.dart';
@@ -38,7 +39,9 @@ import 'league_rejected_applications_page.dart';
 import 'league_video_player_page.dart';
 import '../widgets/create_season_bottom_sheet.dart';
 import '../widgets/home/home_section_empty_state.dart';
+import '../widgets/league_format_fields.dart';
 import '../widgets/match_date_picker_dialog.dart';
+import '../widgets/matches_filter_chips.dart';
 import '../widgets/match_list_score_pill.dart';
 import '../widgets/squad/team_player.dart';
 import 'team_detail_page.dart';
@@ -439,7 +442,7 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                   leading: const Icon(Icons.edit_outlined),
                   title: const Text('Edit league details'),
                   subtitle: const Text(
-                    'Name, country, logo and default match background',
+                    'Name, country, match format, logo and default match background',
                   ),
                   onTap: () async {
                     Navigator.of(ctx).pop();
@@ -458,6 +461,10 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                           initialSocialTiktok: league['social_tiktok']
                               ?.toString(),
                           initialSocialX: league['social_x']?.toString(),
+                          initialPlayersPerSide:
+                              (league['players_per_side'] as num?)?.toInt(),
+                          initialFormation: league['default_formation']
+                              ?.toString(),
                         ),
                       ),
                     );
@@ -603,7 +610,8 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
         body: const Center(
           child: AppNotFoundState(
             title: 'League not found',
-            subtitle: 'This league may have been removed or the link is incorrect.',
+            subtitle:
+                'This league may have been removed or the link is incorrect.',
           ),
         ),
       );
@@ -845,7 +853,9 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                                   gradient: RadialGradient(
                                     center: const Alignment(-0.85, -0.65),
                                     colors: [
-                                      colorScheme.primary.withValues(alpha: 0.22),
+                                      colorScheme.primary.withValues(
+                                        alpha: 0.22,
+                                      ),
                                       Colors.transparent,
                                     ],
                                   ),
@@ -884,7 +894,9 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color: colorScheme.outline
-                                                          .withValues(alpha: 0.32),
+                                                          .withValues(
+                                                            alpha: 0.32,
+                                                          ),
                                                     ),
                                                   ),
                                                   child:
@@ -892,7 +904,10 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                                                           logoUrl.isNotEmpty
                                                       ? ClipOval(
                                                           child: Image(
-                                                            image: appCachedImageProvider(logoUrl),
+                                                            image:
+                                                                appCachedImageProvider(
+                                                                  logoUrl,
+                                                                ),
                                                             width: 68,
                                                             height: 68,
                                                             fit: BoxFit.cover,
@@ -1912,8 +1927,7 @@ class _LeagueOverviewTab extends ConsumerWidget {
                         message: showOwnerActions
                             ? 'Create a season to organize fixtures and track progress for this league.'
                             : 'This league has not started a season yet.',
-                        actionLabel:
-                            showOwnerActions ? 'Go to Seasons' : null,
+                        actionLabel: showOwnerActions ? 'Go to Seasons' : null,
                         actionIcon: Icons.calendar_today_outlined,
                         onAction: showOwnerActions ? onOpenSeasonsTab : null,
                       )
@@ -2262,7 +2276,9 @@ class _PlayerOfSeasonSection extends StatelessWidget {
                                         teamLogo != null &&
                                             _isValidUrl(teamLogo)
                                         ? Image(
-                                            image: appCachedImageProvider(teamLogo),
+                                            image: appCachedImageProvider(
+                                              teamLogo,
+                                            ),
                                             width: 18,
                                             height: 18,
                                             fit: BoxFit.cover,
@@ -2419,7 +2435,7 @@ class _TeamOfTheWeekSection extends StatefulWidget {
 }
 
 class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
-  Map<String, List<Map<String, dynamic>>>? _data;
+  TeamOfTheWeekSelection? _data;
   bool _loading = true;
   RealtimeChannel? _matchesChannel;
 
@@ -2443,7 +2459,7 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
     if (widget.leagueId.isEmpty) {
       if (mounted) {
         setState(() {
-          _data = {};
+          _data = TeamOfTheWeekSelection.empty();
           _loading = false;
         });
       }
@@ -2460,7 +2476,7 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _data = {};
+        _data = TeamOfTheWeekSelection.empty();
         _loading = false;
       });
     }
@@ -2501,13 +2517,11 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
       );
     }
 
-    final data = _data ?? {};
-    final gk = data['Goalkeeper'] ?? [];
-    final def = data['Defender'] ?? [];
-    final mid = data['Midfielder'] ?? [];
-    final att = data['Attacker'] ?? [];
-    final hasPlayers =
-        gk.isNotEmpty || def.isNotEmpty || mid.isNotEmpty || att.isNotEmpty;
+    final data = _data ?? TeamOfTheWeekSelection.empty();
+    final lines = data.linesFromAttack
+        .where((line) => line.isNotEmpty)
+        .toList();
+    final hasPlayers = data.hasPlayers;
 
     return Container(
       decoration: BoxDecoration(
@@ -2523,7 +2537,15 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
               children: [
                 Icon(Icons.star_rounded, color: colorScheme.primary, size: 22),
                 const SizedBox(width: 8),
-                Text('Team of the Week', style: textTheme.titleSmall),
+                Expanded(
+                  child: Text('Team of the Week', style: textTheme.titleSmall),
+                ),
+                Text(
+                  data.format.formation,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2543,10 +2565,12 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
                 onAction: widget.showOwnerActions
                     ? widget.onCreateMatch
                     : widget.onOpenMatchesTab,
-                secondaryActionLabel:
-                    widget.showOwnerActions ? 'View matches' : null,
-                onSecondaryAction:
-                    widget.showOwnerActions ? widget.onOpenMatchesTab : null,
+                secondaryActionLabel: widget.showOwnerActions
+                    ? 'View matches'
+                    : null,
+                onSecondaryAction: widget.showOwnerActions
+                    ? widget.onOpenMatchesTab
+                    : null,
               ),
             )
           else
@@ -2555,12 +2579,7 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
                 bottomLeft: Radius.circular(28),
                 bottomRight: Radius.circular(28),
               ),
-              child: _TeamOfTheWeekPitch(
-                goalkeepers: gk,
-                defenders: def,
-                midfielders: mid,
-                attackers: att,
-              ),
+              child: _TeamOfTheWeekPitch(linesFromAttack: lines),
             ),
         ],
       ),
@@ -2569,17 +2588,9 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
 }
 
 class _TeamOfTheWeekPitch extends StatelessWidget {
-  const _TeamOfTheWeekPitch({
-    required this.goalkeepers,
-    required this.defenders,
-    required this.midfielders,
-    required this.attackers,
-  });
+  const _TeamOfTheWeekPitch({required this.linesFromAttack});
 
-  final List<Map<String, dynamic>> goalkeepers;
-  final List<Map<String, dynamic>> defenders;
-  final List<Map<String, dynamic>> midfielders;
-  final List<Map<String, dynamic>> attackers;
+  final List<List<Map<String, dynamic>>> linesFromAttack;
 
   @override
   Widget build(BuildContext context) {
@@ -2592,14 +2603,12 @@ class _TeamOfTheWeekPitch extends StatelessWidget {
         const playerWidth = _TeamOfTheWeekPlayer.kMarkerWidth;
         const playerHeight = _TeamOfTheWeekPlayer.kMarkerHeight;
 
-        // Divide pitch into 4 rows: ATT (top), MID, DEF, GK (bottom)
-        final rowHeight = pitchHeight / 4;
-        final rowCenters = [
-          pitchTop + rowHeight * 0.5, // Attackers
-          pitchTop + rowHeight * 1.5, // Midfielders
-          pitchTop + rowHeight * 2.5, // Defenders
-          pitchTop + rowHeight * 3.5, // Goalkeepers
-        ];
+        final rowCount = linesFromAttack.isEmpty ? 1 : linesFromAttack.length;
+        final rowHeight = pitchHeight / rowCount;
+        final rowCenters = List<double>.generate(
+          rowCount,
+          (i) => pitchTop + rowHeight * (i + 0.5),
+        );
 
         List<Positioned> buildRow(
           List<Map<String, dynamic>> players,
@@ -2618,8 +2627,9 @@ class _TeamOfTheWeekPitch extends StatelessWidget {
             double ratingVal = 0.0;
             if (rating is num) {
               ratingVal = rating.toDouble();
-            } else if (rating is String)
+            } else if (rating is String) {
               ratingVal = double.tryParse(rating) ?? 0;
+            }
 
             return Positioned(
               left: x,
@@ -2660,10 +2670,8 @@ class _TeamOfTheWeekPitch extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
               ),
-              ...buildRow(attackers, rowCenters[0]),
-              ...buildRow(midfielders, rowCenters[1]),
-              ...buildRow(defenders, rowCenters[2]),
-              ...buildRow(goalkeepers, rowCenters[3]),
+              for (var i = 0; i < linesFromAttack.length; i++)
+                ...buildRow(linesFromAttack[i], rowCenters[i]),
             ],
           ),
         );
@@ -2809,13 +2817,12 @@ class _FeaturedMatchSection extends StatelessWidget {
                   ? 'Highlight a fixture here once you schedule matches for this league.'
                   : 'No league matches to feature yet.',
               actionLabel: showOwnerActions ? 'Create match' : 'View matches',
-              actionIcon:
-                  showOwnerActions ? Icons.add : Icons.sports_soccer_outlined,
+              actionIcon: showOwnerActions
+                  ? Icons.add
+                  : Icons.sports_soccer_outlined,
               onAction: showOwnerActions ? onCreateMatch : onOpenMatchesTab,
-              secondaryActionLabel:
-                  showOwnerActions ? 'View matches' : null,
-              onSecondaryAction:
-                  showOwnerActions ? onOpenMatchesTab : null,
+              secondaryActionLabel: showOwnerActions ? 'View matches' : null,
+              onSecondaryAction: showOwnerActions ? onOpenMatchesTab : null,
             ),
           );
         }
@@ -4129,11 +4136,6 @@ class _LeagueMatchesTabState extends ConsumerState<_LeagueMatchesTab> {
     return map;
   }
 
-  static String _truncate(String text, [int max = 16]) {
-    if (text.length <= max) return text;
-    return '${text.substring(0, max)}…';
-  }
-
   String _dateToKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -4237,8 +4239,8 @@ class _LeagueMatchesTabState extends ConsumerState<_LeagueMatchesTab> {
                 floating: true,
                 snap: true,
                 automaticallyImplyLeading: false,
-                toolbarHeight: 164.0,
-                expandedHeight: 164.0,
+                toolbarHeight: 132.0,
+                expandedHeight: 132.0,
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                 surfaceTintColor: Colors.transparent,
                 flexibleSpace: Padding(
@@ -4247,105 +4249,84 @@ class _LeagueMatchesTabState extends ConsumerState<_LeagueMatchesTab> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 8),
-                      // Filter row
-                      SizedBox(
-                        height: 64,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(Icons.calendar_month_outlined),
-                                tooltip: 'Go to date',
-                                onPressed: _pickDateToJump,
-                              ),
-                              // Season filter
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedSeason ?? '',
-                                    label: const Text('Season'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All seasons',
-                                      ),
-                                      ..._seasons.map(
-                                        (s) => DropdownMenuEntry(
-                                          value: s.id,
-                                          label: _truncate(s.seasonName),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onSeasonChanged,
-                                  ),
-                                ),
-                              ),
-                              // Gameweek filter
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 100,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedGameweek ?? '',
-                                    label: const Text('GW'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All GW',
-                                      ),
-                                      ..._gameweeks.map((g) {
-                                        final id = g['id']?.toString() ?? '';
-                                        final week =
-                                            g['week']?.toString() ?? '?';
-                                        return DropdownMenuEntry(
-                                          value: id,
-                                          label: 'GW $week',
-                                        );
-                                      }),
-                                    ],
-                                    onSelected: _onGameweekChanged,
-                                  ),
-                                ),
-                              ),
-                              // Team filter
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedTeam ?? '',
-                                    label: const Text('Teams'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All teams',
-                                      ),
-                                      ..._teams.map(
-                                        (t) => DropdownMenuEntry(
-                                          value: t.id,
-                                          label: _truncate(t.displayName),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onTeamChanged,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                          ),
+                      MatchesFilterChipRow(
+                        leading: IconButton(
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          tooltip: 'Go to date',
+                          onPressed: _pickDateToJump,
+                          visualDensity: VisualDensity.compact,
                         ),
+                        chips: [
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'Season',
+                            selectedLabel: _seasons
+                                .where((s) => s.id == _selectedSeason)
+                                .map((s) => s.seasonName)
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All seasons',
+                              ),
+                              ..._seasons.map(
+                                (s) => MatchesFilterOption(
+                                  value: s.id,
+                                  label: s.seasonName,
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedSeason ?? '',
+                            onSelected: _onSeasonChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'GW',
+                            selectedLabel: _gameweeks
+                                .where(
+                                  (g) =>
+                                      (g['id']?.toString() ?? '') ==
+                                      _selectedGameweek,
+                                )
+                                .map((g) => 'GW ${g['week'] ?? '?'}')
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All GW',
+                              ),
+                              ..._gameweeks.map((g) {
+                                final id = g['id']?.toString() ?? '';
+                                final week = g['week']?.toString() ?? '?';
+                                return MatchesFilterOption(
+                                  value: id,
+                                  label: 'GW $week',
+                                );
+                              }),
+                            ],
+                            selectedValue: _selectedGameweek ?? '',
+                            onSelected: _onGameweekChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'Teams',
+                            selectedLabel: _teams
+                                .where((t) => t.id == _selectedTeam)
+                                .map((t) => t.displayName)
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All teams',
+                              ),
+                              ..._teams.map(
+                                (t) => MatchesFilterOption(
+                                  value: t.id,
+                                  label: t.displayName,
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedTeam ?? '',
+                            onSelected: _onTeamChanged,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       // Gameweek header
@@ -5438,7 +5419,9 @@ class _LeagueVideosTabState extends State<_LeagueVideosTab> {
       final enriched = await _enrichVideos(rawVideos);
       if (!mounted) return;
       setState(() {
-        final existing = {for (final v in _videos ?? <LeagueVideoItem>[]) v.videoId};
+        final existing = {
+          for (final v in _videos ?? <LeagueVideoItem>[]) v.videoId,
+        };
         _videos = [
           ...?_videos,
           ...enriched.where((v) => !existing.contains(v.videoId)),
@@ -6058,7 +6041,9 @@ class _FeedPosterAvatar extends StatelessWidget {
     return CircleAvatar(
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       backgroundImage: hasImage
-          ? (isNetwork ? appCachedImageProvider(avatarUrl!) : AssetImage(avatarUrl!))
+          ? (isNetwork
+                ? appCachedImageProvider(avatarUrl!)
+                : AssetImage(avatarUrl!))
           : null,
       child: !hasImage
           ? Text(
@@ -6083,6 +6068,8 @@ class _LeagueOwnerSettingsPage extends StatefulWidget {
     this.initialSocialInstagram,
     this.initialSocialTiktok,
     this.initialSocialX,
+    this.initialPlayersPerSide,
+    this.initialFormation,
   });
 
   final String leagueId;
@@ -6093,6 +6080,8 @@ class _LeagueOwnerSettingsPage extends StatefulWidget {
   final String? initialSocialInstagram;
   final String? initialSocialTiktok;
   final String? initialSocialX;
+  final int? initialPlayersPerSide;
+  final String? initialFormation;
 
   @override
   State<_LeagueOwnerSettingsPage> createState() =>
@@ -6112,6 +6101,8 @@ class _LeagueOwnerSettingsPageState extends State<_LeagueOwnerSettingsPage> {
   String? _logoUrl;
   String? _defaultBackgroundUrl;
   String? _countryCode;
+  late int _playersPerSide;
+  late String _formation;
 
   @override
   void initState() {
@@ -6120,6 +6111,12 @@ class _LeagueOwnerSettingsPageState extends State<_LeagueOwnerSettingsPage> {
     _logoUrl = widget.initialLogoUrl;
     _defaultBackgroundUrl = widget.initialDefaultVenueImageUrl;
     _countryCode = widget.initialCountry;
+    final format = LeagueFormat.fromStored(
+      playersPerSide: widget.initialPlayersPerSide,
+      formation: widget.initialFormation,
+    );
+    _playersPerSide = format.playersPerSide;
+    _formation = format.formation;
     _socialInstagramController.text = widget.initialSocialInstagram ?? '';
     _socialTiktokController.text = widget.initialSocialTiktok ?? '';
     _socialXController.text = widget.initialSocialX ?? '';
@@ -6152,10 +6149,7 @@ class _LeagueOwnerSettingsPageState extends State<_LeagueOwnerSettingsPage> {
         '${user.id}_${DateTime.now().millisecondsSinceEpoch}${path.extension(image.path)}';
     final filePath = '$folderName/$fileName';
     final bytes = await image.readAsBytes();
-    await requireAllowedImage(
-      bytes,
-      contentRef: 'image:$folderName',
-    );
+    await requireAllowedImage(bytes, contentRef: 'image:$folderName');
     await supabase.storage.from('Profile images').uploadBinary(filePath, bytes);
     return supabase.storage.from('Profile images').getPublicUrl(filePath);
   }
@@ -6259,6 +6253,8 @@ class _LeagueOwnerSettingsPageState extends State<_LeagueOwnerSettingsPage> {
         socialInstagram: _trimOrNull(_socialInstagramController.text),
         socialTiktok: _trimOrNull(_socialTiktokController.text),
         socialX: _trimOrNull(_socialXController.text),
+        playersPerSide: _playersPerSide,
+        defaultFormation: _formation,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -6301,6 +6297,19 @@ class _LeagueOwnerSettingsPageState extends State<_LeagueOwnerSettingsPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Text('League logo', style: textTheme.labelLarge),
+            const SizedBox(height: 8),
+            ImageUploadCard(
+              imageUrl: _logoUrl,
+              isUploading: _isUploadingLogo,
+              emptyLabel: 'Tap to upload league logo',
+              isCircular: true,
+              onTap: () => _pickForField(isLogo: true),
+              onClear: _logoUrl == null
+                  ? null
+                  : () => setState(() => _logoUrl = null),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'League name'),
@@ -6341,18 +6350,16 @@ class _LeagueOwnerSettingsPageState extends State<_LeagueOwnerSettingsPage> {
                 );
               },
             ),
-            const SizedBox(height: 16),
-            Text('League logo', style: textTheme.labelLarge),
-            const SizedBox(height: 8),
-            ImageUploadCard(
-              imageUrl: _logoUrl,
-              isUploading: _isUploadingLogo,
-              emptyLabel: 'Tap to upload league logo',
-              isCircular: true,
-              onTap: () => _pickForField(isLogo: true),
-              onClear: _logoUrl == null
-                  ? null
-                  : () => setState(() => _logoUrl = null),
+            const SizedBox(height: 24),
+            LeagueFormatFields(
+              playersPerSide: _playersPerSide,
+              formation: _formation,
+              onChanged: (side, formation) {
+                setState(() {
+                  _playersPerSide = side;
+                  _formation = formation;
+                });
+              },
             ),
             const SizedBox(height: 16),
             Text('Default match background', style: textTheme.labelLarge),

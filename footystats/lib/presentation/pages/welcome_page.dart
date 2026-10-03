@@ -9,7 +9,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/utils/guest_mode.dart';
 import 'home_page.dart';
 import 'login_page.dart';
-import 'onboarding_player_name_page.dart';
+import 'onboarding_account_type_page.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -108,6 +108,12 @@ class _WelcomePageState extends State<WelcomePage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final slide = _slides[_currentIndex];
+    // This page is a fixed light-green canvas (secondaryFixed + black heading)
+    // in both themes, so controls must use the matching *Fixed* tones. The
+    // theme-dependent secondaryContainer is near-identical to the canvas in
+    // light mode, which made the buttons illegible.
+    final accent = colorScheme.onSecondaryFixedVariant;
+    final onAccent = colorScheme.secondaryFixed;
 
     return Scaffold(
       backgroundColor: colorScheme.secondaryFixed,
@@ -164,7 +170,7 @@ class _WelcomePageState extends State<WelcomePage> {
                 _SlideIndicators(
                   count: _slides.length,
                   currentIndex: _currentIndex,
-                  activeColor: colorScheme.secondaryContainer,
+                  activeColor: accent,
                   inactiveColor: colorScheme.onSecondaryFixed
                       .withValues(alpha: 0.28),
                   onDotTap: _goToSlide,
@@ -200,13 +206,13 @@ class _WelcomePageState extends State<WelcomePage> {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const OnboardingPlayerNamePage(),
+                          builder: (_) => const OnboardingAccountTypePage(),
                         ),
                       );
                     },
                     style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.secondaryContainer,
-                      foregroundColor: colorScheme.onSecondaryContainer,
+                      backgroundColor: accent,
+                      foregroundColor: onAccent,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
@@ -225,14 +231,14 @@ class _WelcomePageState extends State<WelcomePage> {
                     },
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(
-                        color: colorScheme.secondaryContainer
-                            .withValues(alpha: 0.85),
+                        color: accent.withValues(alpha: 0.85),
+                        width: 1.5,
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
                       ),
-                      foregroundColor: colorScheme.secondaryContainer,
+                      foregroundColor: accent,
                     ),
                     child: const Text('I already have an account'),
                   ),
@@ -240,8 +246,7 @@ class _WelcomePageState extends State<WelcomePage> {
                   TextButton(
                     onPressed: _isGuestSigningIn ? null : _continueAsGuest,
                     style: TextButton.styleFrom(
-                      foregroundColor: colorScheme.secondaryContainer
-                          .withValues(alpha: 0.9),
+                      foregroundColor: accent.withValues(alpha: 0.9),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: _isGuestSigningIn
@@ -250,7 +255,7 @@ class _WelcomePageState extends State<WelcomePage> {
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: colorScheme.secondaryContainer,
+                              color: accent,
                             ),
                           )
                         : const Text(

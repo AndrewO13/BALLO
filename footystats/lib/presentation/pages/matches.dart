@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../../core/adaptive/adaptive.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_assets.dart';
@@ -18,6 +19,7 @@ import '../providers/matches_provider.dart';
 import '../providers/match_video_seen_provider.dart';
 import '../widgets/match_list_score_pill.dart';
 import '../widgets/match_live_status.dart';
+import '../widgets/matches_filter_chips.dart';
 import 'create_match_entry_page.dart';
 import 'fixture.dart';
 import 'league_detail_page.dart';
@@ -50,13 +52,32 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
   final Map<String, GlobalKey> _dateGroupKeys = <String, GlobalKey>{};
   int _lastHandledActivationNonce = -1;
   String? _lastHandledJumpDateKey;
+  bool _filtersVisible = true;
 
   @override
   void didUpdateWidget(covariant MatchesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.activationNonce != oldWidget.activationNonce) {
       _lastHandledActivationNonce = -1;
+      // Fresh visit to Matches: always reveal the gameweek + chips header,
+      // then hide/show again based on the user's next scroll direction.
+      if (!_filtersVisible) {
+        setState(() => _filtersVisible = true);
+      }
     }
+  }
+
+  bool _onUserScroll(UserScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    switch (notification.direction) {
+      case ScrollDirection.reverse:
+        if (_filtersVisible) setState(() => _filtersVisible = false);
+      case ScrollDirection.forward:
+        if (!_filtersVisible) setState(() => _filtersVisible = true);
+      case ScrollDirection.idle:
+        break;
+    }
+    return false;
   }
 
   @override
@@ -386,9 +407,6 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
     );
   }
 
-  /// Height of the sticky header: top padding + filter row + spacing + gameweek + bottom padding.
-  static const double _kStickyHeaderHeight = 164.0;
-
   @override
   Widget build(BuildContext context) {
     ref.listen<int>(
@@ -397,6 +415,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
       ),
       (previous, next) {
         if (previous == next) return;
+        if (!_filtersVisible) setState(() => _filtersVisible = true);
         animateScrollControllerToTop(_scrollController);
       },
     );
@@ -418,45 +437,51 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
         (!widget.useDateNavigation && selectedGw != null) ||
         selectedTeam != null;
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(matchesProvider);
-        await ref.read(matchesProvider.future);
-      },
-      child: CustomScrollView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          if (widget.header != null)
-            SliverToBoxAdapter(child: widget.header!),
-          SliverAppBar(
-            floating: true,
-            snap: true,
-            automaticallyImplyLeading: false,
-            toolbarHeight: _kStickyHeaderHeight,
-            expandedHeight: _kStickyHeaderHeight,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            surfaceTintColor: Colors.transparent,
-            flexibleSpace: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  _MatchesFilterRow(
-                    hideGameweekFilter: widget.useDateNavigation,
-                  ),
-                  const SizedBox(height: 12),
-                  if (widget.useDateNavigation)
-                    const _DateMatchesHeader()
-                  else
-                    const _GameweekHeader(),
-                ],
+    return Column(
+      children: [
+        ClipRect(
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            heightFactor: _filtersVisible ? 1 : 0,
+            child: Material(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _MatchesFilterRow(
+                      hideGameweekFilter: widget.useDateNavigation,
+                    ),
+                    const SizedBox(height: 12),
+                    if (widget.useDateNavigation)
+                      const _DateMatchesHeader()
+                    else
+                      const _GameweekHeader(),
+                  ],
+                ),
               ),
             ),
           ),
-          asyncMatches.when(
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(matchesProvider);
+              await ref.read(matchesProvider.future);
+            },
+            child: NotificationListener<UserScrollNotification>(
+              onNotification: _onUserScroll,
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  if (widget.header != null)
+                    SliverToBoxAdapter(child: widget.header!),
+                  asyncMatches.when(
             data: (_) {
               final List<({
                 String scrollKey,
@@ -620,9 +645,13 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                 ),
               ),
             ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -881,13 +910,7 @@ class _GameweekHeader extends ConsumerWidget {
   }
 }
 
-/// Truncates [text] to [maxLength] chars with ellipsis if longer.
-String _truncateFilterLabel(String text, [int maxLength = 16]) {
-  if (text.length <= maxLength) return text;
-  return '${text.substring(0, maxLength)}…';
-}
-
-/// Filter dropdowns for matches (league, season, gameweek, team).
+/// Filter chips for matches (league, season, gameweek, team).
 /// Options are based on user participation: leagues created or with user's team,
 /// seasons for those leagues, gameweeks for those seasons, teams created or member of.
 class _MatchesFilterRow extends ConsumerWidget {
@@ -906,174 +929,102 @@ class _MatchesFilterRow extends ConsumerWidget {
     final selectedGw = ref.watch(selectedGameweekProvider);
     final selectedTeam = ref.watch(selectedMatchesTeamProvider);
 
-    return SizedBox(
-      height: 64,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(width: 4),
-            // League filter
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(
-                width: 130,
-                child: leaguesAsync.when(
-                  data: (leagues) {
-                    final entries = [
-                      const DropdownMenuEntry(value: '', label: 'All leagues'),
-                      ...leagues.map(
-                        (l) => DropdownMenuEntry(
-                          value: l.id,
-                          label: _truncateFilterLabel(l.leagueName),
-                        ),
-                      ),
-                    ];
-                    return DropdownMenu<String>(
-                      initialSelection: selectedLeague ?? '',
-                      label: const Text('League'),
-                      dropdownMenuEntries: entries,
-                      onSelected: (s) {
-                        ref
-                            .read(selectedMatchesLeagueProvider.notifier)
-                            .set(s?.isEmpty == true ? null : s);
-                        ref
-                            .read(selectedMatchesSeasonProvider.notifier)
-                            .set(null);
-                        ref.read(selectedGameweekProvider.notifier).set(null);
-                        ref
-                            .read(selectedMatchesTeamProvider.notifier)
-                            .set(null);
-                      },
-                    );
-                  },
-                  loading: () => const DropdownMenu<String>(
-                    label: Text('League'),
-                    dropdownMenuEntries: [],
-                  ),
-                  error: (_, _) => const DropdownMenu<String>(
-                    label: Text('League'),
-                    dropdownMenuEntries: [],
-                  ),
-                ),
-              ),
+    final leagues = leaguesAsync.asData?.value ?? const [];
+    final seasons = seasonsAsync.asData?.value ?? const [];
+    final gameweeks = gameweeksAsync.asData?.value ?? const [];
+    final teams = teamsAsync.asData?.value ?? const [];
+
+    final selectedLeagueName = leagues
+        .where((l) => l.id == selectedLeague)
+        .map((l) => l.leagueName)
+        .firstOrNull;
+    final selectedSeasonName = seasons
+        .where((s) => s.id == selectedSeason)
+        .map((s) => s.seasonName)
+        .firstOrNull;
+    final selectedGwLabel = gameweeks
+        .where((g) => (g['id']?.toString() ?? '') == selectedGw)
+        .map((g) => 'GW ${g['week'] ?? '?'}')
+        .firstOrNull;
+    final selectedTeamName = teams
+        .where((t) => t.id == selectedTeam)
+        .map((t) => t.displayName)
+        .firstOrNull;
+
+    return MatchesFilterChipRow(
+      chips: [
+        MatchesFilterMenuChip(
+          categoryLabel: 'League',
+          selectedLabel: selectedLeagueName,
+          options: [
+            const MatchesFilterOption(value: '', label: 'All leagues'),
+            ...leagues.map(
+              (l) => MatchesFilterOption(value: l.id, label: l.leagueName),
             ),
-            // Season filter
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(
-                width: 130,
-                child: seasonsAsync.when(
-                  data: (seasons) {
-                    final entries = [
-                      const DropdownMenuEntry(value: '', label: 'All seasons'),
-                      ...seasons.map(
-                        (s) => DropdownMenuEntry(
-                          value: s.id,
-                          label: _truncateFilterLabel(s.seasonName),
-                        ),
-                      ),
-                    ];
-                    return DropdownMenu<String>(
-                      initialSelection: selectedSeason ?? '',
-                      label: const Text('Season'),
-                      dropdownMenuEntries: entries,
-                      onSelected: (v) {
-                        ref
-                            .read(selectedMatchesSeasonProvider.notifier)
-                            .set(v?.isEmpty == true ? null : v);
-                        ref.read(selectedGameweekProvider.notifier).set(null);
-                      },
-                    );
-                  },
-                  loading: () => const DropdownMenu<String>(
-                    label: Text('Season'),
-                    dropdownMenuEntries: [],
-                  ),
-                  error: (_, _) => const DropdownMenu<String>(
-                    label: Text('Season'),
-                    dropdownMenuEntries: [],
-                  ),
-                ),
-              ),
-            ),
-            // Gameweek filter
-            if (!hideGameweekFilter)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: SizedBox(
-                  width: 100,
-                  child: gameweeksAsync.when(
-                    data: (gameweeks) {
-                      final entries = [
-                        const DropdownMenuEntry(value: '', label: 'All GW'),
-                        ...gameweeks.map((g) {
-                          final id = g['id']?.toString() ?? '';
-                          final week = g['week']?.toString() ?? '?';
-                          return DropdownMenuEntry(value: id, label: 'GW $week');
-                        }),
-                      ];
-                      return DropdownMenu<String>(
-                        initialSelection: selectedGw ?? '',
-                        label: const Text('GW'),
-                        dropdownMenuEntries: entries,
-                        onSelected: (v) => ref
-                            .read(selectedGameweekProvider.notifier)
-                            .set(v?.isEmpty == true ? null : v),
-                      );
-                    },
-                    loading: () => const DropdownMenu<String>(
-                      label: Text('GW'),
-                      dropdownMenuEntries: [],
-                    ),
-                    error: (_, _) => const DropdownMenu<String>(
-                      label: Text('GW'),
-                      dropdownMenuEntries: [],
-                    ),
-                  ),
-                ),
-              ),
-            // Team filter
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(
-                width: 130,
-                child: teamsAsync.when(
-                  data: (teams) {
-                    final entries = [
-                      const DropdownMenuEntry(value: '', label: 'All teams'),
-                      ...teams.map(
-                        (t) => DropdownMenuEntry(
-                          value: t.id,
-                          label: _truncateFilterLabel(t.displayName),
-                        ),
-                      ),
-                    ];
-                    return DropdownMenu<String>(
-                      initialSelection: selectedTeam ?? '',
-                      label: const Text('Teams'),
-                      dropdownMenuEntries: entries,
-                      onSelected: (s) => ref
-                          .read(selectedMatchesTeamProvider.notifier)
-                          .set(s?.isEmpty == true ? null : s),
-                    );
-                  },
-                  loading: () => const DropdownMenu<String>(
-                    label: Text('Teams'),
-                    dropdownMenuEntries: [],
-                  ),
-                  error: (_, _) => const DropdownMenu<String>(
-                    label: Text('Teams'),
-                    dropdownMenuEntries: [],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
           ],
+          selectedValue: selectedLeague ?? '',
+          enabled: leaguesAsync.hasValue,
+          onSelected: (s) {
+            ref
+                .read(selectedMatchesLeagueProvider.notifier)
+                .set(s.isEmpty ? null : s);
+            ref.read(selectedMatchesSeasonProvider.notifier).set(null);
+            ref.read(selectedGameweekProvider.notifier).set(null);
+            ref.read(selectedMatchesTeamProvider.notifier).set(null);
+          },
         ),
-      ),
+        MatchesFilterMenuChip(
+          categoryLabel: 'Season',
+          selectedLabel: selectedSeasonName,
+          options: [
+            const MatchesFilterOption(value: '', label: 'All seasons'),
+            ...seasons.map(
+              (s) => MatchesFilterOption(value: s.id, label: s.seasonName),
+            ),
+          ],
+          selectedValue: selectedSeason ?? '',
+          enabled: seasonsAsync.hasValue,
+          onSelected: (v) {
+            ref
+                .read(selectedMatchesSeasonProvider.notifier)
+                .set(v.isEmpty ? null : v);
+            ref.read(selectedGameweekProvider.notifier).set(null);
+          },
+        ),
+        if (!hideGameweekFilter)
+          MatchesFilterMenuChip(
+            categoryLabel: 'GW',
+            selectedLabel: selectedGwLabel,
+            options: [
+              const MatchesFilterOption(value: '', label: 'All GW'),
+              ...gameweeks.map((g) {
+                final id = g['id']?.toString() ?? '';
+                final week = g['week']?.toString() ?? '?';
+                return MatchesFilterOption(value: id, label: 'GW $week');
+              }),
+            ],
+            selectedValue: selectedGw ?? '',
+            enabled: gameweeksAsync.hasValue,
+            onSelected: (v) => ref
+                .read(selectedGameweekProvider.notifier)
+                .set(v.isEmpty ? null : v),
+          ),
+        MatchesFilterMenuChip(
+          categoryLabel: 'Teams',
+          selectedLabel: selectedTeamName,
+          options: [
+            const MatchesFilterOption(value: '', label: 'All teams'),
+            ...teams.map(
+              (t) => MatchesFilterOption(value: t.id, label: t.displayName),
+            ),
+          ],
+          selectedValue: selectedTeam ?? '',
+          enabled: teamsAsync.hasValue,
+          onSelected: (s) => ref
+              .read(selectedMatchesTeamProvider.notifier)
+              .set(s.isEmpty ? null : s),
+        ),
+      ],
     );
   }
 }

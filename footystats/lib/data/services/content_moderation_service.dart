@@ -91,7 +91,7 @@ class ContentModerationService {
       {
         'kind': 'text',
         'text': text.trim(),
-        if (contentRef != null) 'contentRef': contentRef,
+        'contentRef': ?contentRef,
         'contentType': 'text',
       },
       softFailOnAuthError: softFailOnAuthError,
@@ -107,7 +107,7 @@ class ContentModerationService {
       {
         'kind': 'image',
         'imageBase64': base64Encode(bytes),
-        if (contentRef != null) 'contentRef': contentRef,
+        'contentRef': ?contentRef,
         'contentType': 'image',
       },
       softFailOnAuthError: softFailOnAuthError,
@@ -139,7 +139,7 @@ class ContentModerationService {
         'kind': 'video_frames',
         'framesBase64': frames.map(base64Encode).toList(),
         'sportsContext': true,
-        if (contentRef != null) 'contentRef': contentRef,
+        'contentRef': ?contentRef,
         'contentType': 'video',
       });
     } finally {

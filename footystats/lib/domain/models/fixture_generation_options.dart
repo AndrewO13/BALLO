@@ -68,7 +68,8 @@ class FixtureGenerationOptions {
   /// Default match status (usually 'upcoming').
   final String defaultStatus;
 
-  /// If true, allow regenerating over existing fixtures (with confirmation).
+  /// If true, replace existing fixtures (with confirmation). If false, append
+  /// new fixtures after any that already exist for the season.
   final bool allowRegeneration;
 
   /// If true, all matches in a gameweek use same kick-off; else distribute.

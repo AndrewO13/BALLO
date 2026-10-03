@@ -8,7 +8,9 @@ import '../widgets/onboarding_step_scaffold.dart';
 import 'username_page.dart';
 
 class OnboardingPlayerNamePage extends StatefulWidget {
-  const OnboardingPlayerNamePage({super.key});
+  const OnboardingPlayerNamePage({super.key, required this.draft});
+
+  final OnboardingDraft draft;
 
   @override
   State<OnboardingPlayerNamePage> createState() =>
@@ -17,12 +19,27 @@ class OnboardingPlayerNamePage extends StatefulWidget {
 
 class _OnboardingPlayerNamePageState extends State<OnboardingPlayerNamePage> {
   final _formKey = GlobalKey<FormState>();
-  final _playerNameController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _checking = false;
+
+  bool get _isStaff => widget.draft.isTechnicalStaff;
+
+  String get _title => _isStaff ? 'Your name' : 'Player name';
+
+  String get _subtitle => _isStaff
+      ? 'This is how players and clubs will see you on Ballo.'
+      : 'Give us the name you want on your Ballo card.';
+
+  String get _fieldLabel => _title;
+
+  String get _hint => _isStaff ? 'e.g. Alex Rivera' : 'e.g. Gareth Munroe';
+
+  String get _emptyError =>
+      _isStaff ? 'Enter your name' : 'Enter your player name';
 
   @override
   void dispose() {
-    _playerNameController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -30,7 +47,7 @@ class _OnboardingPlayerNamePageState extends State<OnboardingPlayerNamePage> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_checking) return;
 
-    final name = _playerNameController.text.trim();
+    final name = _nameController.text.trim();
     final local = UsernameRules.offensiveContentError(name);
     if (local != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(local)));
@@ -44,7 +61,7 @@ class _OnboardingPlayerNamePageState extends State<OnboardingPlayerNamePage> {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => UsernamePage(
-            draft: OnboardingDraft(playerName: name),
+            draft: widget.draft.copyWith(playerName: name),
           ),
         ),
       );
@@ -62,9 +79,9 @@ class _OnboardingPlayerNamePageState extends State<OnboardingPlayerNamePage> {
   Widget build(BuildContext context) {
     return OnboardingStepScaffold(
       step: OnboardingStep.playerName,
-      accountType: null,
-      title: 'Player name',
-      subtitle: 'Give us the name you want on your Ballo card.',
+      accountType: widget.draft.accountType,
+      title: _title,
+      subtitle: _subtitle,
       bottomBar: OnboardingContinueButton(
         label: _checking ? 'Checking…' : 'Continue',
         onPressed: _checking ? null : _onContinue,
@@ -72,16 +89,17 @@ class _OnboardingPlayerNamePageState extends State<OnboardingPlayerNamePage> {
       child: Form(
         key: _formKey,
         child: TextFormField(
-          controller: _playerNameController,
+          controller: _nameController,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
-            labelText: 'Player name',
-            hintText: 'e.g. Gareth Munroe',
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: _fieldLabel,
+            hintText: _hint,
           ),
           onFieldSubmitted: (_) => _onContinue(),
           validator: (v) {
             if (v == null || v.trim().isEmpty) {
-              return 'Enter your player name';
+              return _emptyError;
             }
             if (v.trim().length < 2) return 'At least 2 characters';
             return UsernameRules.offensiveContentError(v);

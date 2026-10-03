@@ -10,23 +10,21 @@ class HomePageShimmer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final matchCardHeight = MediaQuery.sizeOf(context).height / 4;
+    final matchCardHeight = AppResponsive.homeMatchCarouselHeight(context);
 
     return AppShimmer(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           AppResponsive.horizontalInset(context),
-          16 * AppResponsive.layoutScaleOf(context),
+          8 * AppResponsive.layoutScaleOf(context),
           AppResponsive.horizontalInset(context),
           26 * AppResponsive.layoutScaleOf(context),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ShimmerBox(width: 260, height: 32, borderRadius: 10),
-            const SizedBox(height: 8),
-            const ShimmerBox(width: 140, height: 20, borderRadius: 8),
-            const SizedBox(height: 16),
+            const ShimmerBox(width: 132, height: 28, borderRadius: 8),
+            SizedBox(height: 8 * AppResponsive.layoutScaleOf(context)),
             const _GameweekFiltersShimmer(),
             const SizedBox(height: 12),
             const _GameweekHeaderShimmer(),

@@ -35,6 +35,7 @@ import 'team_comparison_page.dart';
 import 'team_manage_applications_page.dart';
 import '../widgets/socials_section_card.dart';
 import '../widgets/match_date_picker_dialog.dart';
+import '../widgets/matches_filter_chips.dart';
 import '../widgets/match_list_score_pill.dart';
 import '../widgets/squad/team_player.dart';
 import '../widgets/image_upload_card.dart';
@@ -492,6 +493,55 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     if (currentUser == null) return;
 
     try {
+      final membersRes = await supabase
+          .from('player_team_memberships')
+          .select('player_id')
+          .eq('team_id', widget.teamId)
+          .isFilter('end_date', null);
+      final activeCount = (membersRes as List).length;
+
+      // Sole member: leaving deletes the team (nothing to transfer authority to).
+      if (activeCount < 2) {
+        if (!mounted) return;
+        final confirmedDelete = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Leave and delete team?'),
+            content: const Text(
+              'You are the only member of this team. Leaving will delete the team. This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Leave & delete'),
+              ),
+            ],
+          ),
+        );
+        if (confirmedDelete != true || !mounted) return;
+
+        setState(() => _isDeleting = true);
+        try {
+          await supabase.from('teams').delete().eq('id', widget.teamId);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Team deleted')),
+          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        } catch (error) {
+          if (!mounted) return;
+          setState(() => _isDeleting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting team: $error')),
+          );
+        }
+        return;
+      }
+
       final capRes = await supabase
           .from('teams')
           .select('captain_id')
@@ -3440,11 +3490,6 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
     return map;
   }
 
-  static String _truncate(String text, [int max = 16]) {
-    if (text.length <= max) return text;
-    return '${text.substring(0, max)}…';
-  }
-
   String _dateToKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -3546,8 +3591,8 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
                 floating: true,
                 snap: true,
                 automaticallyImplyLeading: false,
-                toolbarHeight: 164.0,
-                expandedHeight: 164.0,
+                toolbarHeight: 132.0,
+                expandedHeight: 132.0,
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                 surfaceTintColor: Colors.transparent,
                 flexibleSpace: Padding(
@@ -3556,107 +3601,88 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 8),
-                      // Filter row
-                      SizedBox(
-                        height: 64,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(Icons.calendar_month_outlined),
-                                tooltip: 'Go to date',
-                                onPressed: _pickDateToJump,
-                              ),
-                              // League filter
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedLeague ?? '',
-                                    label: const Text('League'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All leagues',
-                                      ),
-                                      ..._leagues.map(
-                                        (l) => DropdownMenuEntry(
-                                          value: l['id']?.toString() ?? '',
-                                          label: _truncate(
-                                            l['league_name']?.toString() ?? '',
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onLeagueChanged,
-                                  ),
-                                ),
-                              ),
-                              // Season filter
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedSeason ?? '',
-                                    label: const Text('Season'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All seasons',
-                                      ),
-                                      ..._seasons.map(
-                                        (s) => DropdownMenuEntry(
-                                          value: s.id,
-                                          label: _truncate(s.seasonName),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onSeasonChanged,
-                                  ),
-                                ),
-                              ),
-                              // Gameweek filter
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 100,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedGameweek ?? '',
-                                    label: const Text('GW'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All GW',
-                                      ),
-                                      ..._gameweeks.map((g) {
-                                        final id = g['id']?.toString() ?? '';
-                                        final week =
-                                            g['week']?.toString() ?? '?';
-                                        return DropdownMenuEntry(
-                                          value: id,
-                                          label: 'GW $week',
-                                        );
-                                      }),
-                                    ],
-                                    onSelected: _onGameweekChanged,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                          ),
+                      MatchesFilterChipRow(
+                        leading: IconButton(
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          tooltip: 'Go to date',
+                          onPressed: _pickDateToJump,
+                          visualDensity: VisualDensity.compact,
                         ),
+                        chips: [
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'League',
+                            selectedLabel: _leagues
+                                .where(
+                                  (l) =>
+                                      (l['id']?.toString() ?? '') ==
+                                      _selectedLeague,
+                                )
+                                .map((l) => l['league_name']?.toString() ?? '')
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All leagues',
+                              ),
+                              ..._leagues.map(
+                                (l) => MatchesFilterOption(
+                                  value: l['id']?.toString() ?? '',
+                                  label: l['league_name']?.toString() ?? '',
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedLeague ?? '',
+                            onSelected: _onLeagueChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'Season',
+                            selectedLabel: _seasons
+                                .where((s) => s.id == _selectedSeason)
+                                .map((s) => s.seasonName)
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All seasons',
+                              ),
+                              ..._seasons.map(
+                                (s) => MatchesFilterOption(
+                                  value: s.id,
+                                  label: s.seasonName,
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedSeason ?? '',
+                            onSelected: _onSeasonChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'GW',
+                            selectedLabel: _gameweeks
+                                .where(
+                                  (g) =>
+                                      (g['id']?.toString() ?? '') ==
+                                      _selectedGameweek,
+                                )
+                                .map((g) => 'GW ${g['week'] ?? '?'}')
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All GW',
+                              ),
+                              ..._gameweeks.map((g) {
+                                final id = g['id']?.toString() ?? '';
+                                final week = g['week']?.toString() ?? '?';
+                                return MatchesFilterOption(
+                                  value: id,
+                                  label: 'GW $week',
+                                );
+                              }),
+                            ],
+                            selectedValue: _selectedGameweek ?? '',
+                            onSelected: _onGameweekChanged,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       // Gameweek header
@@ -6218,6 +6244,20 @@ class _EditTeamPageState extends State<_EditTeamPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text('Team logo', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              ImageUploadCard(
+                imageUrl: _logoUrl,
+                isUploading: _isUploadingLogo,
+                emptyLabel: 'Tap to upload team logo',
+                isCircular: true,
+                onTap: () =>
+                    _pickAndUpload(isBanner: false, folderName: 'team logos'),
+                onClear: _logoUrl == null
+                    ? null
+                    : () => setState(() => _logoUrl = null),
+              ),
+              const SizedBox(height: 18),
               TextFormField(
                 controller: _teamNameController,
                 decoration: const InputDecoration(labelText: 'Team name'),
@@ -6241,20 +6281,6 @@ class _EditTeamPageState extends State<_EditTeamPage> {
                   }
                   return null;
                 },
-              ),
-              const SizedBox(height: 18),
-              Text('Team logo', style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 8),
-              ImageUploadCard(
-                imageUrl: _logoUrl,
-                isUploading: _isUploadingLogo,
-                emptyLabel: 'Tap to upload team logo',
-                isCircular: true,
-                onTap: () =>
-                    _pickAndUpload(isBanner: false, folderName: 'team logos'),
-                onClear: _logoUrl == null
-                    ? null
-                    : () => setState(() => _logoUrl = null),
               ),
               const SizedBox(height: 18),
               Text(

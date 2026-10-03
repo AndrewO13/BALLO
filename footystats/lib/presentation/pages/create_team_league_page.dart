@@ -9,7 +9,9 @@ import '../../core/utils/username_rules.dart';
 import '../../data/repositories/leagues_repository.dart';
 import '../../data/repositories/teams_repository.dart';
 import '../../data/repositories/user_profile_repository.dart';
+import '../../domain/models/league_format.dart';
 import '../widgets/country_picker_section.dart';
+import '../widgets/league_format_fields.dart';
 import '../widgets/media_access_sheet.dart';
 import 'create_match_entry_page.dart';
 import 'team_detail_page.dart';
@@ -910,13 +912,14 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
 
       final teamName = _teamNameController.text.trim();
       final shortForm = _shortFormController.text.trim();
-      final nameBlock = UsernameRules.offensiveContentError(teamName) ??
+      final nameBlock =
+          UsernameRules.offensiveContentError(teamName) ??
           UsernameRules.offensiveContentError(shortForm);
       if (nameBlock != null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nameBlock)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(nameBlock)));
         return;
       }
       await requireAllowedText(teamName, contentRef: 'team_name');
@@ -940,22 +943,16 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
       if (widget.onTeamCreated != null) {
         widget.onTeamCreated!(teamId);
         navigator.pop(teamId);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Team created')),
-        );
+        messenger.showSnackBar(const SnackBar(content: Text('Team created')));
         return;
       }
       // Replace create only — keep "Add to matches" (or prior route) underneath.
       // Do not pop() first; that + pushReplacement corrupts the stack and can
       // leave Add to matches stuck after a background reload.
       navigator.pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => TeamDetailPage(teamId: teamId),
-        ),
+        MaterialPageRoute<void>(builder: (_) => TeamDetailPage(teamId: teamId)),
       );
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Team created')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Team created')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1022,44 +1019,45 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
                     hintText: 'e.g. LCF',
                     helperText: 'Maximum 4 characters',
                   ),
-                  buildCounter: (
-                    context, {
-                    required currentLength,
-                    required isFocused,
-                    maxLength,
-                  }) {
-                    final limit = maxLength ?? _shortFormMaxLength;
-                    final remaining = limit - currentLength;
-                    final atLimit = currentLength >= limit;
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              currentLength == 0
-                                  ? 'Used on match cards and standings'
-                                  : atLimit
-                                  ? 'Maximum length reached'
-                                  : '$remaining character${remaining == 1 ? '' : 's'} left',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
+                  buildCounter:
+                      (
+                        context, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) {
+                        final limit = maxLength ?? _shortFormMaxLength;
+                        final remaining = limit - currentLength;
+                        final atLimit = currentLength >= limit;
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  currentLength == 0
+                                      ? 'Used on match cards and standings'
+                                      : atLimit
+                                      ? 'Maximum length reached'
+                                      : '$remaining character${remaining == 1 ? '' : 's'} left',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
                               ),
-                            ),
+                              Text(
+                                '$currentLength/$limit',
+                                style: textTheme.labelLarge?.copyWith(
+                                  color: atLimit
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            '$currentLength/$limit',
-                            style: textTheme.labelLarge?.copyWith(
-                              color: atLimit
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                        );
+                      },
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Enter a short form';
@@ -1128,6 +1126,8 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
   String? _logoUrl;
   String? _defaultVenueImageUrl;
   String? _countryCode;
+  int _playersPerSide = LeagueFormat.elevenASide.playersPerSide;
+  String _formation = LeagueFormat.elevenASide.formation;
 
   bool _isSubmitting = false;
 
@@ -1176,9 +1176,9 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
       final nameBlock = UsernameRules.offensiveContentError(leagueName);
       if (nameBlock != null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nameBlock)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(nameBlock)));
         return;
       }
       await requireAllowedText(leagueName, contentRef: 'league_name');
@@ -1189,6 +1189,8 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
         'default_venue_image_url': _defaultVenueImageUrl,
         'created_by': user.id,
         'country': _countryCode,
+        'players_per_side': _playersPerSide,
+        'default_formation': _formation,
       };
 
       final response = await supabase
@@ -1207,9 +1209,7 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
           builder: (_) => LeagueDetailPage(leagueId: leagueId),
         ),
       );
-      messenger.showSnackBar(
-        const SnackBar(content: Text('League created')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('League created')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1297,6 +1297,17 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
                         ],
                       ],
                     );
+                  },
+                ),
+                const SizedBox(height: 24),
+                LeagueFormatFields(
+                  playersPerSide: _playersPerSide,
+                  formation: _formation,
+                  onChanged: (side, formation) {
+                    setState(() {
+                      _playersPerSide = side;
+                      _formation = formation;
+                    });
                   },
                 ),
                 const SizedBox(height: 16),

@@ -73,11 +73,10 @@ class _ProgressRingState extends State<ProgressRing>
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    final bool isLight = colorScheme.brightness == Brightness.light;
-    final Color progressColor =
-        isLight ? colorScheme.primary : const Color(0xfff2fff1);
-    final Color trackColor =
-        isLight ? colorScheme.outlineVariant : const Color(0xff006a37);
+    // Completed portion uses primary; the remaining portion uses
+    // secondaryContainer, in both light and dark themes.
+    final Color progressColor = colorScheme.primary;
+    final Color trackColor = colorScheme.secondaryContainer;
     final double size = widget.size * AppResponsive.layoutScaleOf(context);
 
     // Separate positioning for large (163) and small (75) rings

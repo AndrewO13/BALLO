@@ -3,7 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/repositories/device_accounts_repository.dart';
 import '../../data/repositories/user_profile_repository.dart';
+import 'home_page.dart';
 import '../widgets/content_safety_sheets.dart';
 import 'account_email_page.dart';
 import 'change_password_page.dart';
@@ -32,9 +34,9 @@ class SettingsPage extends StatelessWidget {
   Future<void> _openExternalUrl(BuildContext context, Uri uri) async {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open $uri')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
     }
   }
 
@@ -49,9 +51,7 @@ class SettingsPage extends StatelessWidget {
       return;
     }
     await Navigator.of(pageContext).push(
-      MaterialPageRoute(
-        builder: (_) => EditProfilePage(profile: profile),
-      ),
+      MaterialPageRoute(builder: (_) => EditProfilePage(profile: profile)),
     );
   }
 
@@ -87,9 +87,7 @@ class SettingsPage extends StatelessWidget {
                 subtitle: email ?? 'Not set',
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AccountEmailPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const AccountEmailPage()),
                   );
                 },
               ),
@@ -139,19 +137,15 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 subtitle: AppConstants.privacyPolicyUri.toString(),
-                onTap: () => _openExternalUrl(
-                  context,
-                  AppConstants.privacyPolicyUri,
-                ),
+                onTap: () =>
+                    _openExternalUrl(context, AppConstants.privacyPolicyUri),
               ),
               _SettingsItem(
                 icon: Icons.description_outlined,
                 title: 'Terms of Service',
                 subtitle: AppConstants.termsOfServiceUri.toString(),
-                onTap: () => _openExternalUrl(
-                  context,
-                  AppConstants.termsOfServiceUri,
-                ),
+                onTap: () =>
+                    _openExternalUrl(context, AppConstants.termsOfServiceUri),
               ),
               _SettingsItem(
                 icon: Icons.gavel_outlined,
@@ -184,8 +178,21 @@ class SettingsPage extends StatelessWidget {
                           onPressed: () async {
                             Navigator.of(dialogContext).pop();
                             try {
-                              await Supabase.instance.client.auth.signOut();
+                              final next = await DeviceAccountsRepository()
+                                  .signOutCurrent();
                               if (!pageContext.mounted) return;
+                              if (next != null) {
+                                await DeviceAccountsRepository().switchTo(next);
+                                if (!pageContext.mounted) return;
+                                Navigator.of(pageContext).pushAndRemoveUntil(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        HomePage(key: ValueKey(next.userId)),
+                                  ),
+                                  (route) => false,
+                                );
+                                return;
+                              }
                               Navigator.of(pageContext).pushAndRemoveUntil(
                                 MaterialPageRoute(
                                   builder: (_) => const WelcomePage(),
@@ -285,18 +292,11 @@ class _SettingsItem extends StatelessWidget {
       borderRadius: BorderRadius.circular(28),
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
-        ),
-        leading: Icon(
-          icon,
-          color: titleColor ?? colorScheme.onSurface,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        leading: Icon(icon, color: titleColor ?? colorScheme.onSurface),
         title: Text(
           title,
-          style: TextStyle(
-            color: titleColor ?? colorScheme.onSurface,
-          ),
+          style: TextStyle(color: titleColor ?? colorScheme.onSurface),
         ),
         subtitle: subtitle != null
             ? Text(

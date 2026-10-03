@@ -476,18 +476,28 @@ class MatchesRepository {
         .eq('season_id', options.seasonId)
         .limit(1);
     final hasExisting = (existing as List).isNotEmpty;
-    if (hasExisting && !options.allowRegeneration) {
-      return FixtureGenerationResult.failure(
-        'Season already has fixtures. Enable "Allow regeneration" to replace.',
-      );
-    }
 
+    // Replace only when regeneration is allowed; otherwise append after existing.
+    var weekOffset = 0;
     if (options.allowRegeneration && hasExisting) {
       await _client.from('matches').delete().eq('season_id', options.seasonId);
       await _client
           .from('gameweeks')
           .delete()
           .eq('season_id', options.seasonId);
+    } else if (!options.allowRegeneration) {
+      final gwRes = await _client
+          .from('gameweeks')
+          .select('week')
+          .eq('season_id', options.seasonId)
+          .order('week', ascending: false)
+          .limit(1);
+      if ((gwRes as List).isNotEmpty) {
+        final maxWeek = (gwRes.first as Map)['week'];
+        weekOffset = maxWeek is int
+            ? maxWeek
+            : (int.tryParse(maxWeek?.toString() ?? '') ?? 0);
+      }
     }
 
     final gameweeks = FixtureGenerator.generate(
@@ -500,9 +510,10 @@ class MatchesRepository {
 
     final gameweekIds = <int, String>{};
     for (final gw in gameweeks) {
+      final week = gw.weekNumber + weekOffset;
       final res = await _client
           .from('gameweeks')
-          .insert({'season_id': options.seasonId, 'week': gw.weekNumber})
+          .insert({'season_id': options.seasonId, 'week': week})
           .select('id')
           .single();
       gameweekIds[gw.weekNumber] = res['id']?.toString() ?? '';

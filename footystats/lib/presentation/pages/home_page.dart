@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -12,6 +11,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/guest_mode.dart';
 import '../../core/utils/scroll_to_top.dart';
+import '../../core/widgets/media_placeholders.dart';
 import '../../core/widgets/progress_ring.dart';
 import '../../data/repositories/leagues_repository.dart';
 import '../../data/repositories/profile_scout_views_repository.dart';
@@ -46,6 +46,7 @@ import 'settings.dart';
 import 'staff_profile_page.dart';
 import 'scout_views_page.dart';
 import 'team_detail_page.dart';
+import 'league_detail_page.dart';
 import 'notifications_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -979,7 +980,9 @@ class _HomePageState extends ConsumerState<HomePage>
     ref.listen<int>(
       mainNavScrollToTopProvider.select((m) => m[MainNavTab.home] ?? 0),
       (previous, next) {
-        if (previous == next || _useFanShell || _selectedIndex != MainNavTab.home) {
+        if (previous == next ||
+            _useFanShell ||
+            _selectedIndex != MainNavTab.home) {
           return;
         }
         animateScrollControllerToTop(_playerHomeScrollController);
@@ -990,7 +993,8 @@ class _HomePageState extends ConsumerState<HomePage>
 
     return Scaffold(
       appBar: appBar,
-      floatingActionButton: ((_isStaff && _selectedIndex == 0) ||
+      floatingActionButton:
+          ((_isStaff && _selectedIndex == 0) ||
               (!_useFanShell && _selectedIndex == 1))
           ? FloatingActionButton(
               onPressed: _openCreateTeamOrLeague,
@@ -1038,11 +1042,16 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   void _openCreateTeamOrLeague() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const CreateTeamOrLeaguePage(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CreateTeamOrLeaguePage()));
+  }
+
+  void _openProfileBadges() {
+    if (_selectedIndex != MainNavTab.account) {
+      setState(() => _selectedIndex = MainNavTab.account);
+    }
+    ref.read(profileRevealBadgesProvider.notifier).request();
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
@@ -1093,9 +1102,7 @@ class _HomePageState extends ConsumerState<HomePage>
             tooltip: 'Search',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AppSearchPage(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const AppSearchPage()),
               );
             },
           ),
@@ -1125,8 +1132,22 @@ class _HomePageState extends ConsumerState<HomePage>
           children: [
             Row(
               children: [
-                ChallengeWidget(refreshTick: _badgeTrackerRefreshTick),
+                ChallengeWidget(
+                  refreshTick: _badgeTrackerRefreshTick,
+                  onPressed: _openProfileBadges,
+                ),
                 const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Search',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AppSearchPage(),
+                      ),
+                    );
+                  },
+                ),
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: _pendingInvitesStream(),
                   builder: (context, snapshot) {
@@ -1135,7 +1156,7 @@ class _HomePageState extends ConsumerState<HomePage>
                       icon: Badge(
                         isLabelVisible: count > 0,
                         label: Text(count > 99 ? '99+' : '$count'),
-                        child: const Icon(Icons.chat_bubble_outline),
+                        child: const Icon(Icons.notifications_outlined),
                       ),
                       onPressed: () {
                         Navigator.of(context).push(
@@ -1223,9 +1244,9 @@ class _HomePageState extends ConsumerState<HomePage>
                 matchDates: matchDates,
               );
               if (picked == null || !context.mounted) return;
-              ref.read(matchesJumpToDateProvider.notifier).set(
-                    DateTime(picked.year, picked.month, picked.day),
-                  );
+              ref
+                  .read(matchesJumpToDateProvider.notifier)
+                  .set(DateTime(picked.year, picked.month, picked.day));
             },
           ),
         ],
@@ -1285,7 +1306,8 @@ class _HomePageState extends ConsumerState<HomePage>
                 }
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => PlayerComparisonPage(basePlayerId: playerId),
+                    builder: (_) =>
+                        PlayerComparisonPage(basePlayerId: playerId),
                   ),
                 );
               },
@@ -1316,6 +1338,28 @@ class _HomePageState extends ConsumerState<HomePage>
     }
   }
 
+  void _showHomeStatsInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Your stats'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'The numbers on this page are your personal stats for the team '
+            'you select with the chips below. Switch chips to see another '
+            'squad.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHomeContent(BuildContext context) {
     if (_showHomeShimmer) {
       return RefreshIndicator(
@@ -1328,8 +1372,6 @@ class _HomePageState extends ConsumerState<HomePage>
       );
     }
 
-    final displayName =
-        _profile?.playerName ?? _profile?.username ?? 'Gareth';
     final allAttributes = _getAvailableMetrics(
       _playerPosition ?? _profile?.position,
     );
@@ -1345,25 +1387,42 @@ class _HomePageState extends ConsumerState<HomePage>
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             AppResponsive.horizontalInset(context),
-            16 * AppResponsive.layoutScaleOf(context),
+            8 * AppResponsive.layoutScaleOf(context),
             AppResponsive.horizontalInset(context),
             0,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "What's up $displayName!",
-                style: Theme.of(context).textTheme.displaySmall,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Your stats',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'About these stats',
+                    onPressed: () => _showHomeStatsInfo(context),
+                    icon: Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(28, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                "Let's hit the turf",
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 16),
+              SizedBox(height: 8 * AppResponsive.layoutScaleOf(context)),
               _buildGameweekFilters(context),
               const SizedBox(height: 12),
               GameweekHeader(
@@ -1519,10 +1578,10 @@ class _HomePageState extends ConsumerState<HomePage>
                               'No matches scheduled for your team this week.',
                         );
                       }
-                      return ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.of(context).size.height / 4,
-                        ),
+                      final carouselHeight =
+                          AppResponsive.homeMatchCarouselHeight(context);
+                      return SizedBox(
+                        height: carouselHeight,
                         child: CarouselView.weighted(
                           controller: _matchCarouselController,
                           itemSnapping: true,
@@ -1545,12 +1604,10 @@ class _HomePageState extends ConsumerState<HomePage>
                       );
                     },
                     loading: () => HomeMatchCarouselShimmer(
-                      height: MediaQuery.sizeOf(context).height / 4,
+                      height: AppResponsive.homeMatchCarouselHeight(context),
                     ),
-                    error: (err, _) => ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height / 4,
-                      ),
+                    error: (err, _) => SizedBox(
+                      height: AppResponsive.homeMatchCarouselHeight(context),
                       child: Center(
                         child: Text(
                           'Could not load matches',
@@ -1906,28 +1963,54 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => TeamDetailPage(teamId: team.id),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => TeamDetailPage(teamId: team.id),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
                         ),
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 8.0,
+                        minimumSize: const Size(99, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
                       ),
-                      minimumSize: const Size(99, 40),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
+                      child: const Text('View team'),
                     ),
-                    child: const Text('View team'),
-                  ),
+                    OutlinedButton(
+                      onPressed: leagueId == null
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      LeagueDetailPage(leagueId: leagueId),
+                                ),
+                              );
+                            },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        minimumSize: const Size(99, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                      ),
+                      child: const Text('View league stats'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1953,7 +2036,7 @@ class _HomePageState extends ConsumerState<HomePage>
     }
     if (p.startsWith('http://') || p.startsWith('https://')) {
       return Image(
-        image: CachedNetworkImageProvider(p),
+        image: appCachedImageProvider(p),
         fit: BoxFit.cover,
         width: double.infinity,
         height: 204,
@@ -2289,8 +2372,7 @@ class _HomePageState extends ConsumerState<HomePage>
       // Guest home and player Matches share the list; refresh at most every 2 min.
       final now = DateTime.now();
       final last = _lastHomeTabAutoRefreshAt;
-      if (last == null ||
-          now.difference(last) >= _homeTabRefreshThrottle) {
+      if (last == null || now.difference(last) >= _homeTabRefreshThrottle) {
         _lastHomeTabAutoRefreshAt = now;
         ref.invalidate(matchesProvider);
       }

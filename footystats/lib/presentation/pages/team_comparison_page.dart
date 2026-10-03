@@ -1262,8 +1262,7 @@ class _CompareRow {
     required this.left,
     required this.right,
     this.lowerIsBetter = false,
-    this.decimalPlaces = 0,
-  });
+  }) : decimalPlaces = 0;
 
   final String label;
   final double left;

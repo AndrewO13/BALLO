@@ -4,11 +4,13 @@ import '../../core/constants/onboarding_steps.dart';
 import '../../domain/models/account_type.dart';
 import '../../domain/models/onboarding_draft.dart';
 import '../widgets/onboarding_step_scaffold.dart';
-import 'onboarding_position_page.dart';
-import 'onboarding_staff_role_page.dart';
+import 'onboarding_player_name_page.dart';
 
 class OnboardingAccountTypePage extends StatefulWidget {
-  const OnboardingAccountTypePage({super.key, required this.draft});
+  const OnboardingAccountTypePage({
+    super.key,
+    this.draft = const OnboardingDraft(),
+  });
 
   final OnboardingDraft draft;
 
@@ -23,17 +25,9 @@ class _OnboardingAccountTypePageState extends State<OnboardingAccountTypePage> {
   void _onContinue() {
     if (_selected == null) return;
     final draft = widget.draft.copyWith(accountType: _selected);
-    if (_selected == AccountType.technicalStaff) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => OnboardingStaffRolePage(draft: draft),
-        ),
-      );
-      return;
-    }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => OnboardingPositionPage(draft: draft),
+        builder: (_) => OnboardingPlayerNamePage(draft: draft),
       ),
     );
   }

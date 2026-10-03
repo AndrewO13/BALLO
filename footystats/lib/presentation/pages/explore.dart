@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../core/adaptive/adaptive.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +15,7 @@ import '../../core/utils/connection_error.dart';
 import '../../core/utils/explore_video_controller.dart';
 import '../../core/utils/network_quality.dart';
 import '../../core/utils/scroll_to_top.dart';
+import '../../core/utils/storage_image_url.dart';
 import '../../core/utils/video_share.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/app_error_state.dart';
@@ -289,7 +289,7 @@ void _precacheThumbnails(BuildContext context, List<_ExploreVideoItem> items) {
     for (var i = 0; i < count; i++) {
       final url = items[i].thumbnailUrl;
       if (url == null || url.isEmpty) continue;
-      precacheImage(CachedNetworkImageProvider(url), context);
+      precacheImage(appCachedImageProvider(url), context);
     }
   }());
 }
@@ -709,8 +709,9 @@ class _VideoPlayerSection extends StatelessWidget {
       height: MediaQuery.of(context).size.height * 0.5,
       child: thumbnailUrl != null && thumbnailUrl!.isNotEmpty
           ? Image(
-              image: CachedNetworkImageProvider(thumbnailUrl!),
+              image: appCachedImageProvider(thumbnailUrl!),
               fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(color: Colors.black),
             )
           : Container(color: Colors.black),
     );
@@ -737,9 +738,16 @@ class _PosterAvatar extends StatelessWidget {
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       backgroundImage: hasImage
           ? (isNetwork
-                ? CachedNetworkImageProvider(path) as ImageProvider
-                : AssetImage(path))
+                ? appCachedImageProvider(
+                    path,
+                    width: storageImagePixelSize(40),
+                    height: storageImagePixelSize(40),
+                  )
+                : AssetImage(path) as ImageProvider)
           : null,
+      // Without this a failed download is reported as an unhandled
+      // FlutterError; the avatar simply keeps its background colour.
+      onBackgroundImageError: hasImage ? (_, _) {} : null,
       child: !hasImage
           ? Text(
               posterName.isNotEmpty ? posterName[0].toUpperCase() : '?',
@@ -1492,7 +1500,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
     if (widget.thumbnailUrl != null && widget.thumbnailUrl!.isNotEmpty) {
       return SizedBox.expand(
         child: Image(
-          image: CachedNetworkImageProvider(widget.thumbnailUrl!),
+          image: appCachedImageProvider(widget.thumbnailUrl!),
           fit: BoxFit.cover,
           gaplessPlayback: true,
           filterQuality: FilterQuality.low,

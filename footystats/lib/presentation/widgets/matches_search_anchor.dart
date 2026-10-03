@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/utils/storage_image_url.dart';
 import '../../core/widgets/media_placeholders.dart';
 import '../pages/league_detail_page.dart';
 import '../pages/team_detail_page.dart';
@@ -253,16 +254,22 @@ class _SearchLogo extends StatelessWidget {
     }
     final isNetwork =
         path.startsWith('http://') || path.startsWith('https://');
+    final fallback = Icon(
+      fallbackIcon,
+      size: 20,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final px = storageImagePixelSize(36);
     final image = isNetwork
-        ? Image.network(
-            path,
+        ? Image(
+            image: appCachedImageProvider(path, width: px, height: px),
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => fallback,
           )
         : Image.asset(
             path,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => fallback,
           );
     return CircleAvatar(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,

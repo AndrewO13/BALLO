@@ -9,7 +9,7 @@ import '../../data/repositories/onboarding_repository.dart';
 import '../../domain/models/onboarding_draft.dart';
 import '../widgets/onboarding_step_scaffold.dart';
 import '../widgets/content_safety_sheets.dart';
-import 'onboarding_player_name_page.dart';
+import 'onboarding_account_type_page.dart';
 import 'onboarding_profile_image_page.dart';
 
 class VerifyCodePage extends StatefulWidget {
@@ -75,7 +75,7 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const OnboardingPlayerNamePage()),
+        MaterialPageRoute(builder: (_) => const OnboardingAccountTypePage()),
         (route) => false,
       );
     } catch (error) {

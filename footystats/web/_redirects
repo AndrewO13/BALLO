@@ -5,6 +5,8 @@
 /terms/                  /terms.html                   200
 /community-guidelines    /community-guidelines.html    200
 /community-guidelines/   /community-guidelines.html    200
+/account-deletion        /account-deletion.html        200
+/account-deletion/       /account-deletion.html        200
 
 # Share deep links
 /v/*    /index.html   200

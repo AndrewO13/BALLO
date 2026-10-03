@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../domain/models/league_format.dart';
 import '../../domain/models/league_model.dart';
 
 class LeaguesRepository {
@@ -14,7 +15,8 @@ class LeaguesRepository {
         .from('leagues')
         .select(
           'id, league_name, logo_id, created_by, created_at, '
-          'default_venue, default_venue_image_url, country',
+          'default_venue, default_venue_image_url, country, '
+          'players_per_side, default_formation',
         )
         .eq('id', id)
         .maybeSingle();
@@ -105,7 +107,13 @@ class LeaguesRepository {
     String? logoId,
     required String createdBy,
     String? country,
+    int playersPerSide = 11,
+    String defaultFormation = '4-4-2',
   }) async {
+    final format = LeagueFormat.fromStored(
+      playersPerSide: playersPerSide,
+      formation: defaultFormation,
+    );
     final res = await _client
         .from('leagues')
         .insert({
@@ -113,6 +121,8 @@ class LeaguesRepository {
           'logo_id': logoId,
           'created_by': createdBy,
           'country': country,
+          'players_per_side': format.playersPerSide,
+          'default_formation': format.formation,
         })
         .select('id')
         .single();
@@ -129,6 +139,8 @@ class LeaguesRepository {
     String? socialTiktok,
     String? socialX,
     String? country,
+    int? playersPerSide,
+    String? defaultFormation,
   }) async {
     final data = <String, dynamic>{};
     if (leagueName != null) data['league_name'] = leagueName;
@@ -141,6 +153,18 @@ class LeaguesRepository {
     if (socialTiktok != null) data['social_tiktok'] = socialTiktok;
     if (socialX != null) data['social_x'] = socialX;
     if (country != null) data['country'] = country;
+    if (playersPerSide != null || defaultFormation != null) {
+      final format = LeagueFormat.fromStored(
+        playersPerSide: playersPerSide,
+        formation: defaultFormation,
+      );
+      if (playersPerSide != null) {
+        data['players_per_side'] = format.playersPerSide;
+      }
+      if (defaultFormation != null) {
+        data['default_formation'] = format.formation;
+      }
+    }
     if (data.isEmpty) return;
     await _client.from('leagues').update(data).eq('id', leagueId);
   }
@@ -266,16 +290,30 @@ class LeaguesRepository {
     return ended?['id']?.toString();
   }
 
-  /// Best XI for the **latest fully completed** gameweek in the league's
-  /// current/latest season. Ratings are **averages** of [rating] > 0 across
-  /// all matches that player played in that gameweek. GK×1, DEF×4, MID×4, ATT×2.
-  Future<Map<String, List<Map<String, dynamic>>>> getTeamOfTheWeek(
-    String leagueId,
-  ) async {
-    if (leagueId.isEmpty) return {};
+  Future<LeagueFormat> _leagueFormat(String leagueId) async {
+    if (leagueId.isEmpty) return LeagueFormat.elevenASide;
+    final row = await _client
+        .from('leagues')
+        .select('players_per_side, default_formation')
+        .eq('id', leagueId)
+        .maybeSingle();
+    return LeagueFormat.fromStored(
+      playersPerSide: row?['players_per_side'],
+      formation: row?['default_formation'],
+    );
+  }
+
+  /// Best lineup for the **latest fully completed** gameweek in the league's
+  /// current/latest season. Counts follow the league's players-a-side and
+  /// default formation (defenders→attackers, excluding GK).
+  Future<TeamOfTheWeekSelection> getTeamOfTheWeek(String leagueId) async {
+    final format = await _leagueFormat(leagueId);
+    if (leagueId.isEmpty) return TeamOfTheWeekSelection.empty(format);
 
     final seasonId = await _seasonIdForTeamOfTheWeek(leagueId);
-    if (seasonId == null || seasonId.isEmpty) return {};
+    if (seasonId == null || seasonId.isEmpty) {
+      return TeamOfTheWeekSelection.empty(format);
+    }
 
     final matchesRes = await _client
         .from('matches')
@@ -283,7 +321,7 @@ class LeaguesRepository {
         .eq('league_id', leagueId)
         .eq('season_id', seasonId);
     final allMatches = List<Map<String, dynamic>>.from(matchesRes as List);
-    if (allMatches.isEmpty) return {};
+    if (allMatches.isEmpty) return TeamOfTheWeekSelection.empty(format);
 
     final byGw = <String, List<Map<String, dynamic>>>{};
     for (final m in allMatches) {
@@ -291,7 +329,7 @@ class LeaguesRepository {
       if (gw == null || gw.isEmpty) continue;
       byGw.putIfAbsent(gw, () => []).add(m);
     }
-    if (byGw.isEmpty) return {};
+    if (byGw.isEmpty) return TeamOfTheWeekSelection.empty(format);
 
     final gwIds = byGw.keys.toList();
     final weekById = <String, int>{};
@@ -335,14 +373,16 @@ class LeaguesRepository {
         break;
       }
     }
-    if (completedLatestGwId == null) return {};
+    if (completedLatestGwId == null) {
+      return TeamOfTheWeekSelection.empty(format);
+    }
 
     final gwMatchIds = byGw[completedLatestGwId]!
         .map((e) => e['id']?.toString())
         .whereType<String>()
         .where((id) => id.isNotEmpty)
         .toList();
-    if (gwMatchIds.isEmpty) return {};
+    if (gwMatchIds.isEmpty) return TeamOfTheWeekSelection.empty(format);
 
     final statsRes = await _client
         .from('match_player_stats')
@@ -354,7 +394,7 @@ class LeaguesRepository {
         .inFilter('match_id', gwMatchIds);
 
     final stats = List<Map<String, dynamic>>.from(statsRes as List);
-    if (stats.isEmpty) return {};
+    if (stats.isEmpty) return TeamOfTheWeekSelection.empty(format);
 
     final byPlayer = <String, _TotwRatingAgg>{};
     for (final row in stats) {
@@ -437,21 +477,24 @@ class LeaguesRepository {
       final pos = entry['position'] as String;
       if (pos == 'Goalkeeper' && gk.isEmpty) {
         gk.add(entry);
-      } else if (pos == 'Defender' && def.length < 4) {
+      } else if (pos == 'Defender' && def.length < format.defenderCount) {
         def.add(entry);
-      } else if (pos == 'Midfielder' && mid.length < 4) {
+      } else if (pos == 'Midfielder' && mid.length < format.midfielderCount) {
         mid.add(entry);
-      } else if (pos == 'Attacker' && att.length < 2) {
+      } else if (pos == 'Attacker' && att.length < format.attackerCount) {
         att.add(entry);
       }
     }
 
-    return {
-      'Goalkeeper': gk,
-      'Defender': def,
-      'Midfielder': mid,
-      'Attacker': att,
-    };
+    return TeamOfTheWeekSelection(
+      format: format,
+      linesFromAttack: format.assignToPitch(
+        goalkeepers: gk,
+        defenders: def,
+        midfielders: mid,
+        attackers: att,
+      ),
+    );
   }
 
   /// Fetches league standings computed from finished matches via RPC.
@@ -759,7 +802,9 @@ class LeaguesRepository {
     return 0;
   }
 
-  Future<void> updateLeagueFavouritesOrder(List<String> leagueIdsInOrder) async {
+  Future<void> updateLeagueFavouritesOrder(
+    List<String> leagueIdsInOrder,
+  ) async {
     final uid = _client.auth.currentUser?.id;
     if (uid == null || leagueIdsInOrder.isEmpty) return;
     for (var i = 0; i < leagueIdsInOrder.length; i++) {

@@ -128,10 +128,54 @@ Iterable<String> _candidateFetchUrls(String url) sync* {
   if (url.contains(renderMarker)) {
     final objectUrl = url.replaceFirst(renderMarker, objectMarker).split('?').first;
     if (objectUrl != url) yield objectUrl;
-  } else if (url.contains(objectMarker)) {
+  } else if (kStorageImageTransformsEnabled && url.contains(objectMarker)) {
+    // Only worth trying when the Storage transform add-on is enabled;
+    // otherwise it is a guaranteed 403.
     final px = storageImagePixelSize(64);
     yield resizedStorageImageUrl(url, width: px, height: px);
   }
+}
+
+/// Fallback shader tones when a profile photo has not produced colors yet.
+({Color a, Color b, Color c}) profileHeaderFallbackTones(ColorScheme colorScheme) {
+  return (
+    a: Color.alphaBlend(
+      colorScheme.primary.withValues(alpha: 0.22),
+      colorScheme.surfaceContainerHigh,
+    ),
+    b: Color.alphaBlend(
+      colorScheme.secondary.withValues(alpha: 0.18),
+      colorScheme.surfaceContainer,
+    ),
+    c: Color.alphaBlend(
+      colorScheme.tertiary.withValues(alpha: 0.16),
+      colorScheme.surfaceContainerLow,
+    ),
+  );
+}
+
+({Color a, Color b, Color c}) resolveProfileHeaderTones({
+  required ColorScheme colorScheme,
+  Color? toneA,
+  Color? toneB,
+  Color? toneC,
+}) {
+  final fallback = profileHeaderFallbackTones(colorScheme);
+  return (
+    a: toneA ?? fallback.a,
+    b: toneB ?? fallback.b,
+    c: toneC ?? fallback.c,
+  );
+}
+
+/// Backdrop under the profile name (top-left of the header gradient).
+Color profileHeaderNameBackdrop(Color toneA, Color toneB) {
+  return Color.lerp(toneA, toneB, 0.28)!;
+}
+
+/// Backdrop under the unscrolled profile tab bar (bottom of the header gradient).
+Color profileHeaderTabBackdrop(Color toneB, Color toneC) {
+  return Color.lerp(toneB, toneC, 0.62)!;
 }
 
 /// Primary text/icon color that contrasts with a [background] fill.

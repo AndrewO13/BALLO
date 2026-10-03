@@ -12,6 +12,7 @@ class AppAssets {
   static const String cleanSheet = 'lib/assets/images/clean sheet.png';
   static const String leaderboardBg = 'lib/assets/images/leaderboard bg.png';
   static const String pitchBg = 'lib/assets/images/pitch bg.png';
+  static const String matchBg = 'lib/assets/images/match bg.jpeg';
 
   // Empty states & errors
   static const String emptyStatesPath = 'lib/assets/images/empty states/';

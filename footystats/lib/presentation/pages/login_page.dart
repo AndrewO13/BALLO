@@ -15,7 +15,7 @@ import '../../domain/models/onboarding_draft.dart';
 import '../widgets/auth_or_divider.dart';
 import '../widgets/social_sign_in_button.dart';
 import 'home_page.dart';
-import 'onboarding_player_name_page.dart';
+import 'onboarding_account_type_page.dart';
 import 'verify_code_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -433,7 +433,7 @@ class _LoginPageState extends State<LoginPage> {
                           : () {
                               Navigator.of(context).pushReplacement(
                                 MaterialPageRoute(
-                                  builder: (_) => const OnboardingPlayerNamePage(),
+                                  builder: (_) => const OnboardingAccountTypePage(),
                                 ),
                               );
                             },

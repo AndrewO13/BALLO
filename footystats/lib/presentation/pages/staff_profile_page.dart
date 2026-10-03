@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
+import '../../core/utils/dominant_image_color.dart';
 import '../../core/utils/scroll_to_top.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
@@ -18,15 +19,12 @@ import '../widgets/socials_section_card.dart';
 import 'edit_profile_page.dart';
 import 'league_detail_page.dart';
 import 'profile.dart';
+import '../widgets/profile_display_name.dart';
 import 'team_detail_page.dart';
 
 /// Simpler profile for coaches, scouts, agents and other technical staff.
 class StaffProfilePage extends ConsumerStatefulWidget {
-  const StaffProfilePage({
-    super.key,
-    this.viewedUserId,
-    this.refreshTick = 0,
-  });
+  const StaffProfilePage({super.key, this.viewedUserId, this.refreshTick = 0});
 
   /// Null means the signed-in user (Account tab).
   final String? viewedUserId;
@@ -92,7 +90,8 @@ class _StaffProfilePageState extends ConsumerState<StaffProfilePage>
   }
 
   void _handleOuterScroll() {
-    final collapsed = _outerScrollController.hasClients &&
+    final collapsed =
+        _outerScrollController.hasClients &&
         _outerScrollController.offset > 0.5;
     if (collapsed == _isHeaderCollapsed) return;
     setState(() => _isHeaderCollapsed = collapsed);
@@ -166,8 +165,8 @@ class _StaffProfilePageState extends ConsumerState<StaffProfilePage>
                 imagePath.startsWith('https://')))
         ? appCachedImageProvider(imagePath.trim())
         : (imagePath != null && imagePath.trim().isNotEmpty
-            ? AssetImage(imagePath.trim())
-            : AssetImage(AppAssets.pitchBg));
+              ? AssetImage(imagePath.trim())
+              : AssetImage(AppAssets.pitchBg));
     try {
       final scheme = await ColorScheme.fromImageProvider(
         provider: provider,
@@ -255,6 +254,15 @@ class _StaffProfilePageState extends ConsumerState<StaffProfilePage>
 
     final colorScheme = Theme.of(context).colorScheme;
     final userId = _userId ?? profile.id;
+    final headerTones = resolveProfileHeaderTones(
+      colorScheme: colorScheme,
+      toneA: _heroToneA,
+      toneB: _heroToneB,
+      toneC: _heroToneC,
+    );
+    final tabBackdrop = profileHeaderTabBackdrop(headerTones.b, headerTones.c);
+    final expandedTabColor = onDominantCardColor(tabBackdrop);
+    final expandedTabMuted = onDominantCardMutedColor(tabBackdrop);
 
     return NestedScrollView(
       controller: _outerScrollController,
@@ -285,8 +293,10 @@ class _StaffProfilePageState extends ConsumerState<StaffProfilePage>
                     1.0,
                     double.infinity,
                   );
-                  final t = ((currentExtent - minExtent) / collapseRange)
-                      .clamp(0.0, 1.0);
+                  final t = ((currentExtent - minExtent) / collapseRange).clamp(
+                    0.0,
+                    1.0,
+                  );
                   final fadeOpacity = (0.15 + (0.85 * t)).clamp(0.0, 1.0);
                   return Opacity(
                     opacity: fadeOpacity,
@@ -334,9 +344,15 @@ class _StaffProfilePageState extends ConsumerState<StaffProfilePage>
                   labelPadding: EdgeInsets.zero,
                   indicatorPadding: EdgeInsets.zero,
                   dividerHeight: 0,
-                  labelColor: colorScheme.onSurface,
-                  unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  indicatorColor: colorScheme.primary,
+                  labelColor: _isHeaderCollapsed
+                      ? colorScheme.onSurface
+                      : expandedTabColor,
+                  unselectedLabelColor: _isHeaderCollapsed
+                      ? colorScheme.onSurfaceVariant
+                      : expandedTabMuted,
+                  indicatorColor: _isHeaderCollapsed
+                      ? colorScheme.primary
+                      : expandedTabColor,
                   indicatorWeight: 3,
                   dividerColor: Colors.transparent,
                   tabs: const [
@@ -400,28 +416,27 @@ class _StaffProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final name = profile.playerName?.trim().isNotEmpty == true
         ? profile.playerName!.trim()
         : 'Staff';
     final username = profile.username?.trim().isNotEmpty == true
         ? '@${profile.username!.trim()}'
         : '@—';
-    final resolvedToneA = toneA ??
-        Color.alphaBlend(
-          colorScheme.primary.withValues(alpha: 0.22),
-          colorScheme.surfaceContainerHigh,
-        );
-    final resolvedToneB = toneB ??
-        Color.alphaBlend(
-          colorScheme.secondary.withValues(alpha: 0.18),
-          colorScheme.surfaceContainer,
-        );
-    final resolvedToneC = toneC ??
-        Color.alphaBlend(
-          colorScheme.tertiary.withValues(alpha: 0.16),
-          colorScheme.surfaceContainerLow,
-        );
+    final tones = resolveProfileHeaderTones(
+      colorScheme: colorScheme,
+      toneA: toneA,
+      toneB: toneB,
+      toneC: toneC,
+    );
+    final resolvedToneA = tones.a;
+    final resolvedToneB = tones.b;
+    final resolvedToneC = tones.c;
+    final nameBackdrop = profileHeaderNameBackdrop(
+      resolvedToneA,
+      resolvedToneB,
+    );
+    final nameOn = onDominantCardColor(nameBackdrop);
+    final nameMuted = onDominantCardMutedColor(nameBackdrop);
 
     return ClipRRect(
       borderRadius: const BorderRadius.only(
@@ -466,25 +481,13 @@ class _StaffProfileHeader extends StatelessWidget {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            name,
-                            style: textTheme.displayMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            username,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                      child: ProfileDisplayName(
+                        name: name,
+                        username: username,
+                        canSwitchAccount: showEditButton,
+                        nameColor: nameOn,
+                        usernameColor: nameMuted,
+                        iconColor: nameOn,
                       ),
                     ),
                     if (showEditButton) ...[
@@ -542,11 +545,7 @@ class _StaffProfileHeader extends StatelessWidget {
 }
 
 class _StaffHeroAvatar extends StatelessWidget {
-  const _StaffHeroAvatar({
-    this.imageUrl,
-    required this.heroTag,
-    this.onTap,
-  });
+  const _StaffHeroAvatar({this.imageUrl, required this.heroTag, this.onTap});
 
   final String? imageUrl;
   final Object heroTag;
@@ -564,10 +563,7 @@ class _StaffHeroAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: colorScheme.outlineVariant,
-          width: 1,
-        ),
+        border: Border.all(color: colorScheme.outlineVariant, width: 1),
       ),
       child: ClipOval(
         child: buildPlayerAvatar(
@@ -582,10 +578,7 @@ class _StaffHeroAvatar extends StatelessWidget {
     if (hasImage) {
       avatar = Hero(
         tag: heroTag,
-        child: Material(
-          color: Colors.transparent,
-          child: avatar,
-        ),
+        child: Material(color: Colors.transparent, child: avatar),
       );
       if (onTap != null) {
         avatar = GestureDetector(
@@ -601,10 +594,7 @@ class _StaffHeroAvatar extends StatelessWidget {
 }
 
 class _StaffActionChip extends StatelessWidget {
-  const _StaffActionChip({
-    required this.icon,
-    required this.label,
-  });
+  const _StaffActionChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -619,9 +609,7 @@ class _StaffActionChip extends StatelessWidget {
       onPressed: () {},
       backgroundColor: colorScheme.surfaceContainerHighest,
       side: BorderSide.none,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(999),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );
   }
@@ -713,9 +701,8 @@ class _StaffOverviewTab extends StatelessWidget {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => LeagueDetailPage(
-                                leagueId: leagues[i].id,
-                              ),
+                              builder: (_) =>
+                                  LeagueDetailPage(leagueId: leagues[i].id),
                             ),
                           );
                         },
@@ -798,10 +785,7 @@ class _StaffAboutSection extends StatelessWidget {
                 height: 1.45,
               ),
             )
-          : Text(
-              about,
-              style: textTheme.bodyMedium?.copyWith(height: 1.45),
-            ),
+          : Text(about, style: textTheme.bodyMedium?.copyWith(height: 1.45)),
     );
   }
 }
@@ -847,9 +831,9 @@ class _EditAboutDialogState extends State<_EditAboutDialog> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save about: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save about: $error')));
     }
   }
 
@@ -918,7 +902,7 @@ class _StaffOverviewSectionCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
-              if (trailing != null) trailing!,
+              ?trailing,
             ],
           ),
           const SizedBox(height: 12),
@@ -957,13 +941,8 @@ class _StaffEntityRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          Expanded(
-            child: Text(name, style: textTheme.bodySmall),
-          ),
-          Icon(
-            Icons.chevron_right,
-            color: colorScheme.onSurfaceVariant,
-          ),
+          Expanded(child: Text(name, style: textTheme.bodySmall)),
+          Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
         ],
       ),
     );

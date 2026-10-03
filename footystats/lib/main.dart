@@ -11,6 +11,7 @@ import 'core/config/env_config.dart';
 import 'core/onboarding/onboarding_completion.dart';
 import 'core/theme/theme.dart';
 import 'core/utils/pending_shared_video.dart';
+import 'data/repositories/device_accounts_repository.dart';
 import 'core/utils/referee_whistle_player.dart';
 import 'core/utils/video_share.dart';
 import 'core/utils/util.dart';
@@ -33,11 +34,8 @@ Future<void> main() async {
   );
   _listenForSharedVideoLinks();
 
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  unawaited(DeviceAccountsRepository().captureCurrent());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 void _listenForSharedVideoLinks() {
@@ -60,8 +58,6 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final brightness = View.of(context).platformDispatcher.platformBrightness;
-
     TextTheme textTheme = createTextTheme(context, "Roboto", "Roboto");
 
     MaterialTheme theme = MaterialTheme(textTheme);
@@ -69,15 +65,54 @@ class MyApp extends ConsumerWidget {
       navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Ballo',
-      theme: brightness == Brightness.light ? theme.light() : theme.dark(),
+      theme: theme.light(),
+      darkTheme: theme.dark(),
+      themeMode: ThemeMode.system,
       builder: (context, child) {
-        return MobileResponsiveScope(
-          child: child ?? const SizedBox.shrink(),
-        );
+        return MobileResponsiveScope(child: child ?? const SizedBox.shrink());
       },
-      home: const _LaunchShell(),
+      home: const _AuthSessionCapture(child: _LaunchShell()),
     );
   }
+}
+
+/// Keeps this device's signed-in accounts up to date as sessions refresh.
+class _AuthSessionCapture extends StatefulWidget {
+  const _AuthSessionCapture({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_AuthSessionCapture> createState() => _AuthSessionCaptureState();
+}
+
+class _AuthSessionCaptureState extends State<_AuthSessionCapture> {
+  StreamSubscription<AuthState>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      switch (state.event) {
+        case AuthChangeEvent.initialSession:
+        case AuthChangeEvent.signedIn:
+        case AuthChangeEvent.tokenRefreshed:
+        case AuthChangeEvent.userUpdated:
+          unawaited(DeviceAccountsRepository().captureCurrent());
+        default:
+          break;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Opens a shared `?v=` highlight on top of the normal auth flow.
@@ -138,11 +173,11 @@ class _AuthGate extends StatelessWidget {
         }
 
         if (session.user.isAnonymous) {
-          return const HomePage();
+          return HomePage(key: ValueKey('guest-${session.user.id}'));
         }
 
         if (OnboardingCompletion.isCompleteFromUser(session.user)) {
-          return const HomePage();
+          return HomePage(key: ValueKey(session.user.id));
         }
 
         return FutureBuilder<bool>(
@@ -155,12 +190,10 @@ class _AuthGate extends StatelessWidget {
             }
 
             if (snapshot.data == true) {
-              return const HomePage();
+              return HomePage(key: ValueKey(session.user.id));
             }
 
-            return const OnboardingJoinTeamPage(
-              draft: OnboardingDraft(),
-            );
+            return const OnboardingJoinTeamPage(draft: OnboardingDraft());
           },
         );
       },

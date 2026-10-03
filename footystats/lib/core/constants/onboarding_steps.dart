@@ -28,9 +28,9 @@ extension OnboardingStepProgress on OnboardingStep {
   int stepIndexFor(AccountType? accountType) {
     if (accountType == AccountType.technicalStaff) {
       return switch (this) {
-        OnboardingStep.playerName => 1,
-        OnboardingStep.username => 2,
-        OnboardingStep.accountType => 3,
+        OnboardingStep.accountType => 1,
+        OnboardingStep.playerName => 2,
+        OnboardingStep.username => 3,
         OnboardingStep.staffRole => 4,
         OnboardingStep.signUp => 5,
         OnboardingStep.verifyEmail => 6,
@@ -42,9 +42,9 @@ extension OnboardingStepProgress on OnboardingStep {
       };
     }
     return switch (this) {
-      OnboardingStep.playerName => 1,
-      OnboardingStep.username => 2,
-      OnboardingStep.accountType => 3,
+      OnboardingStep.accountType => 1,
+      OnboardingStep.playerName => 2,
+      OnboardingStep.username => 3,
       OnboardingStep.position => 4,
       OnboardingStep.country => 5,
       OnboardingStep.signUp => 6,

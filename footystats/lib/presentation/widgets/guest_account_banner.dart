@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pages/login_page.dart';
-import '../pages/onboarding_player_name_page.dart';
+import '../pages/onboarding_account_type_page.dart';
 
 /// Create-account banner shown on the guest profile tab.
 class GuestAccountBanner extends StatelessWidget {
@@ -10,7 +10,7 @@ class GuestAccountBanner extends StatelessWidget {
   void _openCreateAccount(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const OnboardingPlayerNamePage(),
+        builder: (_) => const OnboardingAccountTypePage(),
       ),
     );
   }

@@ -7,7 +7,8 @@ import '../../data/repositories/username_repository.dart';
 import '../../domain/models/onboarding_draft.dart';
 import '../widgets/onboarding_step_scaffold.dart';
 import '../widgets/username_availability_field.dart';
-import 'onboarding_account_type_page.dart';
+import 'onboarding_position_page.dart';
+import 'onboarding_staff_role_page.dart';
 
 class UsernamePage extends StatefulWidget {
   const UsernamePage({super.key, required this.draft});
@@ -53,11 +54,12 @@ class _UsernamePageState extends State<UsernamePage> {
     try {
       await requireAllowedText(username, contentRef: 'username:$username');
       if (!mounted) return;
+      final draft = widget.draft.copyWith(username: username);
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => OnboardingAccountTypePage(
-            draft: widget.draft.copyWith(username: username),
-          ),
+          builder: (_) => draft.isTechnicalStaff
+              ? OnboardingStaffRolePage(draft: draft)
+              : OnboardingPositionPage(draft: draft),
         ),
       );
     } catch (e) {
@@ -74,6 +76,7 @@ class _UsernamePageState extends State<UsernamePage> {
   Widget build(BuildContext context) {
     return OnboardingStepScaffold(
       step: OnboardingStep.username,
+      accountType: widget.draft.accountType,
       title: 'Choose your username',
       subtitle:
           'This is how others will find you on Ballo — on profiles, search and match reports.',

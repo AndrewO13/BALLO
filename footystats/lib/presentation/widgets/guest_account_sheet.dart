@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../pages/login_page.dart';
-import '../pages/onboarding_player_name_page.dart';
+import '../pages/onboarding_account_type_page.dart';
 
 /// Bottom sheet shown when a guest taps a player-only action
 /// (following, liking, creating teams, ...).
@@ -59,7 +59,7 @@ Future<void> showGuestAccountSheet(
                   Navigator.of(sheetContext).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const OnboardingPlayerNamePage(),
+                      builder: (_) => const OnboardingAccountTypePage(),
                     ),
                   );
                 },

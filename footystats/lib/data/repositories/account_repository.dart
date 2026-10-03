@@ -1,9 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'device_accounts_repository.dart';
+
 /// Auth account operations: email, password, and self-service deletion.
 class AccountRepository {
   AccountRepository({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -67,6 +69,6 @@ class AccountRepository {
 
     await _deleteAvatarUploads();
     await _client.rpc('delete_own_account');
-    await _client.auth.signOut();
+    await DeviceAccountsRepository(client: _client).signOutCurrent();
   }
 }

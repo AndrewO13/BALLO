@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
+import '../../core/utils/dominant_image_color.dart';
 import '../../core/utils/scroll_to_top.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
@@ -36,9 +37,11 @@ import '../widgets/video_upload_progress_overlay.dart';
 import '../widgets/socials_section_card.dart';
 import '../widgets/performance_radar_chart.dart';
 import '../widgets/profile/profile_page_shimmer.dart';
+import '../widgets/profile_display_name.dart';
 import '../widgets/app_search_page.dart';
 import '../widgets/home/home_section_empty_state.dart';
 import '../widgets/match_date_picker_dialog.dart';
+import '../widgets/matches_filter_chips.dart';
 import '../widgets/match_list_score_pill.dart';
 import 'create_match_entry_page.dart';
 import 'create_team_league_page.dart';
@@ -67,8 +70,10 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
   late final TabController _tabController;
   late final bool _showMatchesTab;
   bool _isHeaderCollapsed = false;
+  Color? _headerTabBackdrop;
   int _tabViewGeneration = 0;
   int _lastTabIndex = 0;
+  final GlobalKey _badgesSectionKey = GlobalKey();
 
   @override
   void initState() {
@@ -106,6 +111,13 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
     });
   }
 
+  void _onHeaderTabBackdrop(Color backdrop) {
+    if (_headerTabBackdrop == backdrop) return;
+    setState(() {
+      _headerTabBackdrop = backdrop;
+    });
+  }
+
   @override
   void dispose() {
     _outerScrollController.removeListener(_handleOuterScroll);
@@ -113,6 +125,47 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
     _tabController.removeListener(_handleTabIndexChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _revealBadges() {
+    final needsOverviewTab = _tabController.index != 0;
+    if (needsOverviewTab) {
+      _tabController.animateTo(0);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBadgesSection(attempt: 0, delayAfterTabChange: needsOverviewTab);
+    });
+  }
+
+  void _scrollToBadgesSection({
+    required int attempt,
+    required bool delayAfterTabChange,
+  }) {
+    if (!mounted) return;
+    if (delayAfterTabChange && attempt == 0) {
+      Future<void>.delayed(const Duration(milliseconds: 280), () {
+        _scrollToBadgesSection(attempt: 1, delayAfterTabChange: false);
+      });
+      return;
+    }
+    final targetContext = _badgesSectionKey.currentContext;
+    if (targetContext == null) {
+      if (attempt < 8) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBadgesSection(
+            attempt: attempt + 1,
+            delayAfterTabChange: false,
+          );
+        });
+      }
+      return;
+    }
+    Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+      alignment: 0.08,
+    );
   }
 
   @override
@@ -125,6 +178,10 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
           animateScrollControllerToTop(_outerScrollController);
         },
       );
+      ref.listen<int>(profileRevealBadgesProvider, (previous, next) {
+        if (previous == next) return;
+        _revealBadges();
+      });
     }
 
     final uid = Supabase.instance.client.auth.currentUser?.id;
@@ -144,6 +201,12 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
     final isOwnProfile =
         widget.viewedPlayerId == null || widget.viewedPlayerId == uid;
     final colorScheme = Theme.of(context).colorScheme;
+    final fallbackTones = profileHeaderFallbackTones(colorScheme);
+    final tabBackdrop =
+        _headerTabBackdrop ??
+        profileHeaderTabBackdrop(fallbackTones.b, fallbackTones.c);
+    final expandedTabColor = onDominantCardColor(tabBackdrop);
+    final expandedTabMuted = onDominantCardMutedColor(tabBackdrop);
 
     return DefaultTabController(
       length: _showMatchesTab ? 5 : 4,
@@ -188,6 +251,7 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                           playerId: effectiveId,
                           showEditButton: isOwnProfile,
                           refreshTick: widget.refreshTick,
+                          onTabBackdrop: _onHeaderTabBackdrop,
                         ),
                       ),
                     );
@@ -217,9 +281,15 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                     labelPadding: EdgeInsets.zero,
                     indicatorPadding: EdgeInsets.zero,
                     dividerHeight: 0,
-                    labelColor: colorScheme.onSurface,
-                    unselectedLabelColor: colorScheme.onSurfaceVariant,
-                    indicatorColor: colorScheme.primary,
+                    labelColor: _isHeaderCollapsed
+                        ? colorScheme.onSurface
+                        : expandedTabColor,
+                    unselectedLabelColor: _isHeaderCollapsed
+                        ? colorScheme.onSurfaceVariant
+                        : expandedTabMuted,
+                    indicatorColor: _isHeaderCollapsed
+                        ? colorScheme.primary
+                        : expandedTabColor,
                     indicatorWeight: 3,
                     dividerColor: Colors.transparent,
                     tabs: _showMatchesTab
@@ -253,6 +323,7 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                       profilePlayerId: effectiveId,
                       isOwnProfile: isOwnProfile,
                       onGoToMatchesTab: () => _tabController.animateTo(1),
+                      badgesSectionKey: _badgesSectionKey,
                     ),
                   ),
                   KeyedSubtree(
@@ -296,6 +367,7 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                       profilePlayerId: effectiveId,
                       isOwnProfile: isOwnProfile,
                       onGoToMatchesTab: () => _tabController.animateTo(1),
+                      badgesSectionKey: _badgesSectionKey,
                     ),
                   ),
                   KeyedSubtree(
@@ -341,12 +413,14 @@ class _ProfileTabContent extends StatelessWidget {
   final String profilePlayerId;
   final bool isOwnProfile;
   final VoidCallback? onGoToMatchesTab;
+  final Key? badgesSectionKey;
 
   const _ProfileTabContent({
     required this.title,
     required this.profilePlayerId,
     required this.isOwnProfile,
     this.onGoToMatchesTab,
+    this.badgesSectionKey,
   });
 
   @override
@@ -375,7 +449,10 @@ class _ProfileTabContent extends StatelessWidget {
             isOwnProfile: isOwnProfile,
           ),
           const SizedBox(height: 16),
-          _BadgesSection(profilePlayerId: profilePlayerId),
+          _BadgesSection(
+            key: badgesSectionKey,
+            profilePlayerId: profilePlayerId,
+          ),
           const SizedBox(height: 16),
           _ProfileSocialsSection(profilePlayerId: profilePlayerId),
         ],
@@ -759,11 +836,6 @@ class _ProfileMatchesTabState extends ConsumerState<_ProfileMatchesTab> {
     );
   }
 
-  static String _truncate(String text, [int max = 16]) {
-    if (text.length <= max) return text;
-    return '${text.substring(0, max)}...';
-  }
-
   String _dateToKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -847,8 +919,8 @@ class _ProfileMatchesTabState extends ConsumerState<_ProfileMatchesTab> {
                 floating: true,
                 snap: true,
                 automaticallyImplyLeading: false,
-                toolbarHeight: 164.0,
-                expandedHeight: 164.0,
+                toolbarHeight: 132.0,
+                expandedHeight: 132.0,
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                 surfaceTintColor: Colors.transparent,
                 flexibleSpace: Padding(
@@ -857,129 +929,113 @@ class _ProfileMatchesTabState extends ConsumerState<_ProfileMatchesTab> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 64,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(Icons.calendar_month_outlined),
-                                tooltip: 'Go to date',
-                                onPressed: _pickDateToJump,
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedLeague ?? '',
-                                    label: const Text('League'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All leagues',
-                                      ),
-                                      ..._leagues.map(
-                                        (league) => DropdownMenuEntry(
-                                          value: league['id']?.toString() ?? '',
-                                          label: _truncate(
-                                            league['league_name']?.toString() ??
-                                                '',
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onLeagueChanged,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedSeason ?? '',
-                                    label: const Text('Season'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All seasons',
-                                      ),
-                                      ..._seasons.map(
-                                        (season) => DropdownMenuEntry(
-                                          value: season.id,
-                                          label: _truncate(season.seasonName),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onSeasonChanged,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 100,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedGameweek ?? '',
-                                    label: const Text('GW'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All GW',
-                                      ),
-                                      ..._gameweeks.map((gw) {
-                                        final id = gw['id']?.toString() ?? '';
-                                        final week =
-                                            gw['week']?.toString() ?? '?';
-                                        return DropdownMenuEntry(
-                                          value: id,
-                                          label: 'GW $week',
-                                        );
-                                      }),
-                                    ],
-                                    onSelected: _onGameweekChanged,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: SizedBox(
-                                  width: 130,
-                                  child: DropdownMenu<String>(
-                                    initialSelection: _selectedTeam ?? '',
-                                    label: const Text('Teams'),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(
-                                        value: '',
-                                        label: 'All teams',
-                                      ),
-                                      ..._teams.map(
-                                        (team) => DropdownMenuEntry(
-                                          value: team.id,
-                                          label: _truncate(team.displayName),
-                                        ),
-                                      ),
-                                    ],
-                                    onSelected: _onTeamChanged,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                          ),
+                      MatchesFilterChipRow(
+                        leading: IconButton(
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          tooltip: 'Go to date',
+                          onPressed: _pickDateToJump,
+                          visualDensity: VisualDensity.compact,
                         ),
+                        chips: [
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'League',
+                            selectedLabel: _leagues
+                                .where(
+                                  (league) =>
+                                      (league['id']?.toString() ?? '') ==
+                                      _selectedLeague,
+                                )
+                                .map(
+                                  (league) =>
+                                      league['league_name']?.toString() ?? '',
+                                )
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All leagues',
+                              ),
+                              ..._leagues.map(
+                                (league) => MatchesFilterOption(
+                                  value: league['id']?.toString() ?? '',
+                                  label:
+                                      league['league_name']?.toString() ?? '',
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedLeague ?? '',
+                            onSelected: _onLeagueChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'Season',
+                            selectedLabel: _seasons
+                                .where((season) => season.id == _selectedSeason)
+                                .map((season) => season.seasonName)
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All seasons',
+                              ),
+                              ..._seasons.map(
+                                (season) => MatchesFilterOption(
+                                  value: season.id,
+                                  label: season.seasonName,
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedSeason ?? '',
+                            onSelected: _onSeasonChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'GW',
+                            selectedLabel: _gameweeks
+                                .where(
+                                  (gw) =>
+                                      (gw['id']?.toString() ?? '') ==
+                                      _selectedGameweek,
+                                )
+                                .map((gw) => 'GW ${gw['week'] ?? '?'}')
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All GW',
+                              ),
+                              ..._gameweeks.map((gw) {
+                                final id = gw['id']?.toString() ?? '';
+                                final week = gw['week']?.toString() ?? '?';
+                                return MatchesFilterOption(
+                                  value: id,
+                                  label: 'GW $week',
+                                );
+                              }),
+                            ],
+                            selectedValue: _selectedGameweek ?? '',
+                            onSelected: _onGameweekChanged,
+                          ),
+                          MatchesFilterMenuChip(
+                            categoryLabel: 'Teams',
+                            selectedLabel: _teams
+                                .where((team) => team.id == _selectedTeam)
+                                .map((team) => team.displayName)
+                                .firstOrNull,
+                            options: [
+                              const MatchesFilterOption(
+                                value: '',
+                                label: 'All teams',
+                              ),
+                              ..._teams.map(
+                                (team) => MatchesFilterOption(
+                                  value: team.id,
+                                  label: team.displayName,
+                                ),
+                              ),
+                            ],
+                            selectedValue: _selectedTeam ?? '',
+                            onSelected: _onTeamChanged,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
@@ -1102,9 +1158,7 @@ class _ProfileMatchesTabState extends ConsumerState<_ProfileMatchesTab> {
 
   void _openCreateMatch() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const CreateMatchEntryPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const CreateMatchEntryPage()),
     );
   }
 
@@ -1687,11 +1741,7 @@ class _PlayerYearTeamStatsSectionState
       const SizedBox(height: 12),
       _buildStatRow(context, 'Shots', _formatInt(team.shots)),
       const SizedBox(height: 12),
-      _buildStatRow(
-        context,
-        'Shots on target',
-        _formatInt(team.shotsOnTarget),
-      ),
+      _buildStatRow(context, 'Shots on target', _formatInt(team.shotsOnTarget)),
       const SizedBox(height: 12),
       _buildStatRow(
         context,
@@ -1711,11 +1761,7 @@ class _PlayerYearTeamStatsSectionState
       const SizedBox(height: 12),
       _buildStatRow(context, 'Matches', _formatInt(team.matches)),
       const SizedBox(height: 12),
-      _buildStatRow(
-        context,
-        'Minutes played',
-        _formatInt(team.minutesPlayed),
-      ),
+      _buildStatRow(context, 'Minutes played', _formatInt(team.minutesPlayed)),
       const SizedBox(height: 12),
       _buildStatRow(context, 'Rating', ratingText, highlight: true),
     ];
@@ -1851,7 +1897,12 @@ class _PlayerYearTeamStatsSectionState
                           color: colorScheme.outlineVariant,
                         ),
                         Padding(
-                          padding: EdgeInsets.fromLTRB(16, 16, 16, isLast ? 16 : 0),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            isLast ? 16 : 0,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -2054,7 +2105,8 @@ class _CareerTeamStatsSection extends StatefulWidget {
   final String profilePlayerId;
 
   @override
-  State<_CareerTeamStatsSection> createState() => _CareerTeamStatsSectionState();
+  State<_CareerTeamStatsSection> createState() =>
+      _CareerTeamStatsSectionState();
 }
 
 class _CareerTeamStatsSectionState extends State<_CareerTeamStatsSection> {
@@ -2149,11 +2201,7 @@ class _CareerTeamStatsSectionState extends State<_CareerTeamStatsSection> {
       const SizedBox(height: 12),
       _buildStatRow(context, 'Saves', _formatInt(team.saves)),
       const SizedBox(height: 12),
-      _buildStatRow(
-        context,
-        'Minutes played',
-        _formatInt(team.minutesPlayed),
-      ),
+      _buildStatRow(context, 'Minutes played', _formatInt(team.minutesPlayed)),
       const SizedBox(height: 12),
       _buildStatRow(context, 'Rating', ratingText, highlight: true),
     ];
@@ -2289,7 +2337,12 @@ class _CareerTeamStatsSectionState extends State<_CareerTeamStatsSection> {
                           color: colorScheme.outlineVariant,
                         ),
                         Padding(
-                          padding: EdgeInsets.fromLTRB(16, 16, 16, isLast ? 16 : 0),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            isLast ? 16 : 0,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -2399,7 +2452,10 @@ class _AttributesSectionState extends State<_AttributesSection> {
     final imageUrl = selected?['image_url']?.toString() ?? '';
     if (imageUrl.isNotEmpty &&
         (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
-      return CircleAvatar(radius: 20, backgroundImage: appCachedImageProvider(imageUrl));
+      return CircleAvatar(
+        radius: 20,
+        backgroundImage: appCachedImageProvider(imageUrl),
+      );
     }
     if (imageUrl.isNotEmpty) {
       return CircleAvatar(
@@ -2546,7 +2602,9 @@ class _AttributesSectionState extends State<_AttributesSection> {
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
               child: ListView.separated(
@@ -2613,10 +2671,7 @@ class _AttributesSectionState extends State<_AttributesSection> {
 
 /// Overview tab section shell (title + body) matching home section cards.
 class _ProfileOverviewSectionCard extends StatelessWidget {
-  const _ProfileOverviewSectionCard({
-    required this.title,
-    required this.child,
-  });
+  const _ProfileOverviewSectionCard({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -2642,9 +2697,9 @@ class _ProfileOverviewSectionCard extends StatelessWidget {
 }
 
 Future<void> _profileOpenFindTeam(BuildContext context) async {
-  await Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (_) => const AppSearchPage()),
-  );
+  await Navigator.of(
+    context,
+  ).push<void>(MaterialPageRoute<void>(builder: (_) => const AppSearchPage()));
 }
 
 Future<void> _profileOpenCreateTeam(BuildContext context) async {
@@ -2719,10 +2774,7 @@ class _NextMatchSection extends StatelessWidget {
         final next = await matchRepo.getNextUpcomingMatch(
           teamIds: teamIds.toList(),
         );
-        return {
-          'match': next,
-          'hasTeams': true,
-        };
+        return {'match': next, 'hasTeams': true};
       }(),
       builder: (context, snapshot) {
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
@@ -2748,11 +2800,11 @@ class _NextMatchSection extends StatelessWidget {
         if (match == null) {
           final message = !hasTeams
               ? (isOwnProfile
-                  ? 'Join a team to see your next scheduled fixture here.'
-                  : 'This player is not on a team, so there is no upcoming fixture to show.')
+                    ? 'Join a team to see your next scheduled fixture here.'
+                    : 'This player is not on a team, so there is no upcoming fixture to show.')
               : (isOwnProfile
-                  ? 'Nothing is on the calendar yet. Your next league fixture will show up here once it is scheduled.'
-                  : 'This player has no upcoming matches scheduled right now.');
+                    ? 'Nothing is on the calendar yet. Your next league fixture will show up here once it is scheduled.'
+                    : 'This player has no upcoming matches scheduled right now.');
           return _ProfileOverviewSectionCard(
             title: 'Next match',
             child: HomeSectionEmptyState(
@@ -2767,10 +2819,11 @@ class _NextMatchSection extends StatelessWidget {
               onAction: isOwnProfile && hasTeams
                   ? onGoToMatchesTab
                   : (isOwnProfile && !hasTeams
-                      ? () => _profileOpenFindTeam(context)
-                      : null),
-              secondaryActionLabel:
-                  isOwnProfile && !hasTeams ? 'Create team' : null,
+                        ? () => _profileOpenFindTeam(context)
+                        : null),
+              secondaryActionLabel: isOwnProfile && !hasTeams
+                  ? 'Create team'
+                  : null,
               onSecondaryAction: isOwnProfile && !hasTeams
                   ? () => _profileOpenCreateTeam(context)
                   : null,
@@ -3045,91 +3098,93 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: _recentMatches.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final match = entry.value;
+                    final index = entry.key;
+                    final match = entry.value;
 
-                  final isTeamA = match.teamA.id == _selectedTeamId;
-                  final myScore = isTeamA ? match.teamAScore : match.teamBScore;
-                  final oppScore = isTeamA
-                      ? match.teamBScore
-                      : match.teamAScore;
-                  final opponent = isTeamA ? match.teamB : match.teamA;
+                    final isTeamA = match.teamA.id == _selectedTeamId;
+                    final myScore = isTeamA
+                        ? match.teamAScore
+                        : match.teamBScore;
+                    final oppScore = isTeamA
+                        ? match.teamBScore
+                        : match.teamAScore;
+                    final opponent = isTeamA ? match.teamB : match.teamA;
 
-                  Color scoreColor;
-                  if (myScore != null && oppScore != null) {
-                    if (myScore > oppScore) {
-                      scoreColor = Colors.green;
-                    } else if (myScore < oppScore) {
-                      scoreColor = Colors.red;
+                    Color scoreColor;
+                    if (myScore != null && oppScore != null) {
+                      if (myScore > oppScore) {
+                        scoreColor = Colors.green;
+                      } else if (myScore < oppScore) {
+                        scoreColor = Colors.red;
+                      } else {
+                        scoreColor = colorScheme.surfaceContainerHighest;
+                      }
                     } else {
                       scoreColor = colorScheme.surfaceContainerHighest;
                     }
-                  } else {
-                    scoreColor = colorScheme.surfaceContainerHighest;
-                  }
 
-                  final isDraw =
-                      myScore != null &&
-                      oppScore != null &&
-                      myScore == oppScore;
-                  final scoreText = (myScore != null && oppScore != null)
-                      ? '$myScore - $oppScore'
-                      : '—';
+                    final isDraw =
+                        myScore != null &&
+                        oppScore != null &&
+                        myScore == oppScore;
+                    final scoreText = (myScore != null && oppScore != null)
+                        ? '$myScore - $oppScore'
+                        : '—';
 
-                  final gwLabel = match.gameweekNumber != null
-                      ? 'GW${match.gameweekNumber}'
-                      : (match.gameweek ?? '');
+                    final gwLabel = match.gameweekNumber != null
+                        ? 'GW${match.gameweekNumber}'
+                        : (match.gameweek ?? '');
 
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Column(
-                        children: [
-                          // Game week
-                          Text(
-                            gwLabel.isNotEmpty ? gwLabel : '—',
-                            style: textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          // Opponent logo
-                          CircleAvatar(
-                            backgroundColor: Colors.transparent,
-                            backgroundImage: _logoProvider(opponent.logoPath),
-                          ),
-                          const SizedBox(height: 8),
-                          // Opponent short form
-                          Text(
-                            opponent.shortForm,
-                            style: textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.bold,
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Column(
+                          children: [
+                            // Game week
+                            Text(
+                              gwLabel.isNotEmpty ? gwLabel : '—',
+                              style: textTheme.bodySmall,
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Score pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 1,
+                            const SizedBox(height: 8),
+                            // Opponent logo
+                            CircleAvatar(
+                              backgroundColor: Colors.transparent,
+                              backgroundImage: _logoProvider(opponent.logoPath),
                             ),
-                            decoration: BoxDecoration(
-                              color: scoreColor,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              scoreText,
-                              style: textTheme.labelSmall?.copyWith(
-                                color: isDraw
-                                    ? colorScheme.onSurface
-                                    : Colors.white,
+                            const SizedBox(height: 8),
+                            // Opponent short form
+                            Text(
+                              opponent.shortForm,
+                              style: textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      if (index < _recentMatches.length - 1)
-                        const SizedBox(width: 24),
-                    ],
-                  );
+                            const SizedBox(height: 4),
+                            // Score pill
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scoreColor,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                scoreText,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: isDraw
+                                      ? colorScheme.onSurface
+                                      : Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (index < _recentMatches.length - 1)
+                          const SizedBox(width: 24),
+                      ],
+                    );
                   }).toList(),
                 ),
               ),
@@ -3631,8 +3686,7 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
         title: 'Trophies',
         child: const HomeSectionEmptyState(
           embedded: true,
-          message:
-              'We could not load trophies. Pull to refresh and try again.',
+          message: 'We could not load trophies. Pull to refresh and try again.',
         ),
       );
     }
@@ -3826,7 +3880,7 @@ class _ProfileTrophyLeagueThumb extends StatelessWidget {
 }
 
 class _BadgesSection extends StatefulWidget {
-  const _BadgesSection({required this.profilePlayerId});
+  const _BadgesSection({super.key, required this.profilePlayerId});
 
   final String profilePlayerId;
 
@@ -3956,9 +4010,7 @@ class _BadgesSectionState extends State<_BadgesSection> {
                               const SizedBox(height: 4),
                               Text(
                                 badge.objective,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
+                                style: Theme.of(context).textTheme.labelSmall
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
@@ -4056,11 +4108,13 @@ class _ProfileCard extends StatefulWidget {
     required this.playerId,
     required this.showEditButton,
     this.refreshTick = 0,
+    this.onTabBackdrop,
   });
 
   final String playerId;
   final bool showEditButton;
   final int refreshTick;
+  final ValueChanged<Color>? onTabBackdrop;
 
   @override
   State<_ProfileCard> createState() => _ProfileCardState();
@@ -4170,7 +4224,6 @@ class _ProfileCardState extends State<_ProfileCard> {
             ? '@${profile.username}'
             : '@—';
         final colorScheme = Theme.of(context).colorScheme;
-        final textTheme = Theme.of(context).textTheme;
         final imagePath = profile?.imageUrl;
         final imageKey = imagePath?.trim().isNotEmpty == true
             ? imagePath!.trim()
@@ -4181,24 +4234,23 @@ class _ProfileCardState extends State<_ProfileCard> {
             _deriveHeroColorsFromImage(imagePath);
           });
         }
-        final toneA =
-            _heroToneA ??
-            Color.alphaBlend(
-              colorScheme.primary.withValues(alpha: 0.22),
-              colorScheme.surfaceContainerHigh,
-            );
-        final toneB =
-            _heroToneB ??
-            Color.alphaBlend(
-              colorScheme.secondary.withValues(alpha: 0.18),
-              colorScheme.surfaceContainer,
-            );
-        final toneC =
-            _heroToneC ??
-            Color.alphaBlend(
-              colorScheme.tertiary.withValues(alpha: 0.16),
-              colorScheme.surfaceContainerLow,
-            );
+        final tones = resolveProfileHeaderTones(
+          colorScheme: colorScheme,
+          toneA: _heroToneA,
+          toneB: _heroToneB,
+          toneC: _heroToneC,
+        );
+        final toneA = tones.a;
+        final toneB = tones.b;
+        final toneC = tones.c;
+        final nameBackdrop = profileHeaderNameBackdrop(toneA, toneB);
+        final nameOn = onDominantCardColor(nameBackdrop);
+        final nameMuted = onDominantCardMutedColor(nameBackdrop);
+        final tabBackdrop = profileHeaderTabBackdrop(toneB, toneC);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          widget.onTabBackdrop?.call(tabBackdrop);
+        });
 
         return ClipRRect(
           borderRadius: const BorderRadius.only(
@@ -4248,25 +4300,13 @@ class _ProfileCardState extends State<_ProfileCard> {
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                playerName,
-                                style: textTheme.displayMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                username,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                          child: ProfileDisplayName(
+                            name: playerName,
+                            username: username,
+                            canSwitchAccount: widget.showEditButton,
+                            nameColor: nameOn,
+                            usernameColor: nameMuted,
+                            iconColor: nameOn,
                           ),
                         ),
                         if (widget.showEditButton) ...[
@@ -4314,58 +4354,58 @@ class _ProfileCardState extends State<_ProfileCard> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ActionChip(
-                            svgPath: AppAssets.positionIcon,
-                            label: profile?.position?.isNotEmpty == true
-                                ? profile!.position!
-                                : '—',
-                            context: context,
-                          ),
-                          const SizedBox(width: 8),
-                          FutureBuilder<int>(
-                            future: _followersFuture,
-                            builder: (context, followersSnapshot) {
-                              return _ActionChip(
-                                icon: Icons.groups_outlined,
-                                label: followersSnapshot.hasData
-                                    ? _formatCount(followersSnapshot.data!)
-                                    : '—',
-                                context: context,
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          FutureBuilder<int?>(
-                            future: _overallRankFuture,
-                            builder: (context, rankSnapshot) {
-                              return _ActionChip(
-                                icon: Icons.bar_chart_outlined,
-                                label:
-                                    rankSnapshot.hasData &&
-                                        rankSnapshot.data != null
-                                    ? '${rankSnapshot.data}'
-                                    : '—',
-                                context: context,
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          _ActionChip(
-                            icon: Icons.public_outlined,
-                            label:
-                                profile?.country != null &&
-                                    profile!.country!.isNotEmpty
-                                ? countryCodeToName(profile.country!)
-                                : '—',
-                            context: context,
-                          ),
-                        ],
-                      ),
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _ActionChip(
+                              svgPath: AppAssets.positionIcon,
+                              label: profile?.position?.isNotEmpty == true
+                                  ? profile!.position!
+                                  : '—',
+                              context: context,
+                            ),
+                            const SizedBox(width: 8),
+                            FutureBuilder<int>(
+                              future: _followersFuture,
+                              builder: (context, followersSnapshot) {
+                                return _ActionChip(
+                                  icon: Icons.groups_outlined,
+                                  label: followersSnapshot.hasData
+                                      ? _formatCount(followersSnapshot.data!)
+                                      : '—',
+                                  context: context,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            FutureBuilder<int?>(
+                              future: _overallRankFuture,
+                              builder: (context, rankSnapshot) {
+                                return _ActionChip(
+                                  icon: Icons.bar_chart_outlined,
+                                  label:
+                                      rankSnapshot.hasData &&
+                                          rankSnapshot.data != null
+                                      ? '${rankSnapshot.data}'
+                                      : '—',
+                                  context: context,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _ActionChip(
+                              icon: Icons.public_outlined,
+                              label:
+                                  profile?.country != null &&
+                                      profile!.country!.isNotEmpty
+                                  ? countryCodeToName(profile.country!)
+                                  : '—',
+                              context: context,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -4467,18 +4507,20 @@ class _ProfilePhotoViewerPage extends StatelessWidget {
         child: Center(
           child: Hero(
             tag: heroTag,
-            flightShuttleBuilder: (
-              flightContext,
-              animation,
-              flightDirection,
-              fromHeroContext,
-              toHeroContext,
-            ) {
-              final shuttleHero = flightDirection == HeroFlightDirection.push
-                  ? toHeroContext.widget as Hero
-                  : fromHeroContext.widget as Hero;
-              return shuttleHero.child;
-            },
+            flightShuttleBuilder:
+                (
+                  flightContext,
+                  animation,
+                  flightDirection,
+                  fromHeroContext,
+                  toHeroContext,
+                ) {
+                  final shuttleHero =
+                      flightDirection == HeroFlightDirection.push
+                      ? toHeroContext.widget as Hero
+                      : fromHeroContext.widget as Hero;
+                  return shuttleHero.child;
+                },
             child: Material(
               color: Colors.transparent,
               child: ConstrainedBox(
@@ -4497,11 +4539,7 @@ class _ProfilePhotoViewerPage extends StatelessWidget {
 }
 
 class _ProfileHeroAvatar extends StatelessWidget {
-  const _ProfileHeroAvatar({
-    this.imageUrl,
-    required this.heroTag,
-    this.onTap,
-  });
+  const _ProfileHeroAvatar({this.imageUrl, required this.heroTag, this.onTap});
 
   final String? imageUrl;
   final Object heroTag;
@@ -4519,10 +4557,7 @@ class _ProfileHeroAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: colorScheme.outlineVariant,
-          width: 1,
-        ),
+        border: Border.all(color: colorScheme.outlineVariant, width: 1),
       ),
       child: ClipOval(
         child: buildPlayerAvatar(
@@ -4537,22 +4572,20 @@ class _ProfileHeroAvatar extends StatelessWidget {
     if (hasImage) {
       avatar = Hero(
         tag: heroTag,
-        flightShuttleBuilder: (
-          flightContext,
-          animation,
-          flightDirection,
-          fromHeroContext,
-          toHeroContext,
-        ) {
-          final shuttleHero = flightDirection == HeroFlightDirection.push
-              ? toHeroContext.widget as Hero
-              : fromHeroContext.widget as Hero;
-          return shuttleHero.child;
-        },
-        child: Material(
-          color: Colors.transparent,
-          child: avatar,
-        ),
+        flightShuttleBuilder:
+            (
+              flightContext,
+              animation,
+              flightDirection,
+              fromHeroContext,
+              toHeroContext,
+            ) {
+              final shuttleHero = flightDirection == HeroFlightDirection.push
+                  ? toHeroContext.widget as Hero
+                  : fromHeroContext.widget as Hero;
+              return shuttleHero.child;
+            },
+        child: Material(color: Colors.transparent, child: avatar),
       );
       if (onTap != null) {
         avatar = GestureDetector(
@@ -4660,7 +4693,9 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
       final enriched = await _enrichVideos(list);
       if (!mounted) return;
       setState(() {
-        final existing = {for (final v in _videos ?? <LeagueVideoItem>[]) v.videoId};
+        final existing = {
+          for (final v in _videos ?? <LeagueVideoItem>[]) v.videoId,
+        };
         _videos = [
           ...?_videos,
           ...enriched.where((v) => !existing.contains(v.videoId)),
@@ -4886,7 +4921,10 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
         .where((job) => job.uploaderUserId == widget.profilePlayerId)
         .toList();
 
-    ref.listen<List<VideoUploadJob>>(videoUploadQueueProvider, (previous, next) {
+    ref.listen<List<VideoUploadJob>>(videoUploadQueueProvider, (
+      previous,
+      next,
+    ) {
       final prevIds = {
         for (final job in previous ?? const <VideoUploadJob>[])
           if (job.uploaderUserId == widget.profilePlayerId) job.id,
@@ -5323,9 +5361,7 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
   Widget _buildJobThumbnail(VideoUploadJob job) {
     final bytes = job.thumbnailBytes;
     if (bytes != null && bytes.isNotEmpty) {
-      return Positioned.fill(
-        child: Image.memory(bytes, fit: BoxFit.cover),
-      );
+      return Positioned.fill(child: Image.memory(bytes, fit: BoxFit.cover));
     }
     return Positioned.fill(child: videoThumbnailPlaceholder(context));
   }
@@ -5348,10 +5384,7 @@ class _ProfileFeedLogo extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: buildTeamLogo(
-          logoPath.isEmpty ? null : logoPath,
-          size: size,
-        ),
+        child: buildTeamLogo(logoPath.isEmpty ? null : logoPath, size: size),
       ),
     );
   }

@@ -37,6 +37,7 @@ RewriteRule ^privacy/?$ privacy.html [L]
 RewriteRule ^terms/?$ terms.html [L]
 
 RewriteRule ^community-guidelines/?$ community-guidelines.html [L]
+RewriteRule ^account-deletion/?$ account-deletion.html [L]
 
 
 

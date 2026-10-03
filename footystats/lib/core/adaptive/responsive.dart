@@ -71,6 +71,20 @@ class AppResponsive {
       design: design,
     );
   }
+
+  /// Height of the home "This week" match carousel.
+  ///
+  /// Tracks viewport height so Safari / desktop resizes stay in proportion,
+  /// but stays inside a readable band so cards are never crushed or oversized.
+  static double homeMatchCarouselHeight(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final viewHeight =
+        size.height - MediaQuery.paddingOf(context).vertical;
+    final fromViewport = viewHeight * 0.25;
+    final widthCap = size.width * 0.62;
+    final maxHeight = widthCap.clamp(200.0, 280.0);
+    return fromViewport.clamp(176.0, maxHeight);
+  }
 }
 
 extension AppResponsiveContext on BuildContext {

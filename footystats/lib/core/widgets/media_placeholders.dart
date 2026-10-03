@@ -1,22 +1,65 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_assets.dart';
 import '../utils/storage_image_url.dart';
 
+/// Dedicated disk cache for images.
+///
+/// Videos use [DefaultCacheManager] (200-object cap). Keeping images in their
+/// own cache means a session of scrolling the explore feed can no longer evict
+/// every logo and avatar, which would force them to re-download.
+BaseCacheManager get _appImageCacheManager =>
+    debugAppImageCacheManagerOverride ?? _defaultAppImageCacheManager;
+
+final BaseCacheManager _defaultAppImageCacheManager = CacheManager(
+  Config(
+    'balloImageCache',
+    stalePeriod: const Duration(days: 30),
+    maxNrOfCacheObjects: 1000,
+  ),
+);
+
+/// Lets widget tests substitute the disk cache (which needs native plugins).
+@visibleForTesting
+BaseCacheManager? debugAppImageCacheManagerOverride;
+
 /// Disk-cached provider for any network image (logos, avatars, banners,
 /// thumbnails). Use this instead of [NetworkImage] so images are downloaded
 /// once and reused across rebuilds, navigation and app restarts.
+///
+/// When [width] is given the image is downsampled on the client to roughly
+/// [width]x[height] (aspect ratio preserved) so list avatars/logos do not keep
+/// the full-resolution upload decoded in memory. The original file is still
+/// what gets downloaded and cached, so one download serves every size.
 ImageProvider<Object> appCachedImageProvider(
   String url, {
   int? width,
   int? height,
 }) {
-  final resolved = (width != null)
-      ? resizedStorageImageUrl(url, width: width, height: height)
-      : url;
-  return CachedNetworkImageProvider(resolved);
+  final trimmed = url.trim();
+  final resolved = (kStorageImageTransformsEnabled && width != null)
+      ? resizedStorageImageUrl(trimmed, width: width, height: height)
+      : trimmed;
+
+  final ImageProvider<Object> provider = CachedNetworkImageProvider(
+    resolved,
+    cacheManager: _appImageCacheManager,
+    errorListener: kDebugMode
+        ? (error) => debugPrint('[appCachedImageProvider] $resolved -> $error')
+        : null,
+  );
+
+  if (width == null) return provider;
+  return ResizeImage(
+    provider,
+    width: width,
+    height: height ?? width,
+    policy: ResizeImagePolicy.fit,
+  );
 }
 
 /// True only for bundled asset paths declared in [pubspec.yaml].
