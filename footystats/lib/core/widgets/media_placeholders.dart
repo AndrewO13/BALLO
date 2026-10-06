@@ -45,15 +45,21 @@ ImageProvider<Object> appCachedImageProvider(
       ? resizedStorageImageUrl(trimmed, width: width, height: height)
       : trimmed;
 
-  final ImageProvider<Object> provider = CachedNetworkImageProvider(
-    resolved,
-    cacheManager: _appImageCacheManager,
-    errorListener: kDebugMode
-        ? (error) => debugPrint('[appCachedImageProvider] $resolved -> $error')
-        : null,
-  );
+  // On web, CachedNetworkImage's default HtmlImage codec is uploaded to
+  // WebGL and fails with a cross-origin texImage2D error. NetworkImage
+  // fetches bytes with CORS (Storage already sends Access-Control-Allow-Origin: *).
+  final ImageProvider<Object> provider = kIsWeb
+      ? NetworkImage(resolved)
+      : CachedNetworkImageProvider(
+          resolved,
+          cacheManager: _appImageCacheManager,
+          errorListener: kDebugMode
+              ? (error) =>
+                    debugPrint('[appCachedImageProvider] $resolved -> $error')
+              : null,
+        );
 
-  if (width == null) return provider;
+  if (width == null || kIsWeb) return provider;
   return ResizeImage(
     provider,
     width: width,

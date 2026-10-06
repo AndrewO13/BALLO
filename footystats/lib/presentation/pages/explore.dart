@@ -12,7 +12,9 @@ import 'package:visibility_detector/visibility_detector.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/utils/app_video_cache.dart';
 import '../../core/utils/connection_error.dart';
+import '../../core/utils/dismiss_keyboard.dart';
 import '../../core/utils/explore_video_controller.dart';
+import '../../core/utils/guest_mode.dart';
 import '../../core/utils/network_quality.dart';
 import '../../core/utils/scroll_to_top.dart';
 import '../../core/utils/storage_image_url.dart';
@@ -24,7 +26,9 @@ import 'fixture.dart';
 import 'league_video_player_page.dart';
 import 'player_profile_page.dart';
 import '../providers/main_nav_scroll_provider.dart';
+import '../providers/favourited_players_provider.dart';
 import '../widgets/app_search_page.dart';
+import '../widgets/page_content_shimmers.dart';
 import '../widgets/content_safety_sheets.dart';
 import '../widgets/guest_account_sheet.dart';
 
@@ -187,7 +191,7 @@ class _ExploreTabContentState extends ConsumerState<_ExploreTabContent> {
     );
 
     if (!_hasLoadedOnce || (_isInitialLoading && _items.isEmpty)) {
-      return const Center(child: CircularProgressIndicator());
+      return const ExploreFeedShimmer();
     }
     if (_error != null && _items.isEmpty) {
       return RefreshIndicator(
@@ -255,10 +259,7 @@ class _ExploreTabContentState extends ConsumerState<_ExploreTabContent> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) _loadMore();
             });
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            );
+            return const ExploreFeedCardShimmer();
           }
           // Fetch the next page slightly before the user reaches the end.
           if (_hasMore && index >= items.length - 3) {
@@ -852,7 +853,7 @@ class _AnimatedLikeButtonState extends State<_AnimatedLikeButton>
 }
 
 /// Poster info section with profile, follow button, like and share buttons
-class _PosterInfoSection extends StatefulWidget {
+class _PosterInfoSection extends ConsumerStatefulWidget {
   const _PosterInfoSection({
     required this.videoId,
     required this.posterName,
@@ -888,10 +889,10 @@ class _PosterInfoSection extends StatefulWidget {
   final VoidCallback? onPosterTap;
 
   @override
-  State<_PosterInfoSection> createState() => _PosterInfoSectionState();
+  ConsumerState<_PosterInfoSection> createState() => _PosterInfoSectionState();
 }
 
-class _PosterInfoSectionState extends State<_PosterInfoSection> {
+class _PosterInfoSectionState extends ConsumerState<_PosterInfoSection> {
   late bool _isLiked;
   late int _likeCount;
 
@@ -928,14 +929,7 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
     final client = Supabase.instance.client;
     final currentUser = client.auth.currentUser;
     if (currentUser == null || widget.posterUserId == null) return;
-    if (currentUser.isAnonymous) {
-      await showGuestAccountSheet(
-        context,
-        message: 'Create a free Ballo account to follow players and '
-            'keep up with their highlights.',
-      );
-      return;
-    }
+    if (GuestMode.isGuest) return;
     final currentUserId = currentUser.id;
 
     final newFollowing = !widget.isFollowing;
@@ -1012,6 +1006,13 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isPosterFavourited = GuestMode.isGuest &&
+        widget.posterUserId != null &&
+        ref.watch(favouritedPlayersProvider).any(
+          (player) => player.id == widget.posterUserId,
+        );
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: EdgeInsets.symmetric(
@@ -1049,7 +1050,39 @@ class _PosterInfoSectionState extends State<_PosterInfoSection> {
               ),
             ),
           ),
-          if (_showFollowButton) ...[
+          if (GuestMode.isGuest && _showFollowButton) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              style: IconButton.styleFrom(
+                fixedSize: const Size(48, 48),
+                padding: EdgeInsets.zero,
+              ),
+              icon: Icon(
+                isPosterFavourited
+                    ? Icons.star_rounded
+                    : Icons.star_outline_rounded,
+                color: isPosterFavourited
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+                size: 26,
+              ),
+              onPressed: () {
+                final posterId = widget.posterUserId;
+                if (posterId == null || posterId.isEmpty) return;
+                final name = widget.posterName.trim();
+                ref.read(favouritedPlayersProvider.notifier).toggle(
+                  FavouritedPlayer(
+                    id: posterId,
+                    name: name.isNotEmpty ? name : 'Player',
+                    imageUrl: widget.posterAvatar,
+                  ),
+                );
+              },
+              tooltip: isPosterFavourited
+                  ? 'Remove from favourites'
+                  : 'Add to favourites',
+            ),
+          ] else if (_showFollowButton) ...[
             const SizedBox(width: 16),
             OutlinedButton(
               onPressed: Supabase.instance.client.auth.currentUser != null
@@ -1172,8 +1205,11 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
   double _watchSeconds = 0;
   Timer? _watchTimer;
   Timer? _disposeTimer;
+  Timer? _hideControlsTimer;
   double _visibleFraction = 0.0;
   int _visibilityEventId = 0;
+  bool _controlsVisible = true;
+  bool _handoffInProgress = false;
 
   final String _videoKey = 'video_${UniqueKey()}';
 
@@ -1188,6 +1224,12 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
       _controller = seeded;
       _isInitialized = true;
       _isPlaying = seeded.value.isPlaying;
+      _controlsVisible = !_isPlaying;
+      if (_isPlaying) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isPlaying) _scheduleHideControls();
+        });
+      }
     }
     // No eager initialization here: the controller is created lazily by the
     // VisibilityDetector callback once the card actually scrolls into view,
@@ -1205,8 +1247,13 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
       _controller = seeded;
       _isInitialized = true;
       _isPlaying = seeded.value.isPlaying;
+      _controlsVisible = !_isPlaying;
       if (_visibleFraction > 0.65) {
         _playVideo();
+      } else if (_isPlaying) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isPlaying) _scheduleHideControls();
+        });
       }
       if (mounted) setState(() {});
     }
@@ -1229,10 +1276,11 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
   }
 
   Future<void> _initializeVideo() async {
-    if (_isInitializing || _controller != null) return;
+    if (_isInitializing || _controller != null || _handoffInProgress) return;
 
     _isInitializing = true;
     _cancelScheduledDispose();
+    if (mounted) setState(() {});
 
     try {
       final controller = await createExploreVideoController(
@@ -1244,7 +1292,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
       await controller.initialize();
       await controller.setLooping(true);
 
-      if (!mounted || _visibleFraction <= 0.01) {
+      if (!mounted || _handoffInProgress || _visibleFraction <= 0.01) {
         await controller.dispose();
         return;
       }
@@ -1261,6 +1309,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
       });
     } finally {
       _isInitializing = false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -1274,26 +1323,57 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
   }
 
   void _playVideo() {
+    if (_handoffInProgress) return;
     final controller = _controller;
     if (!_controllerUsable(controller)) return;
 
     try {
+      final wasPlaying = _isPlaying;
       controller!.play();
-      if (mounted) setState(() => _isPlaying = true);
+      if (mounted) {
+        setState(() {
+          _isPlaying = true;
+          if (!wasPlaying) _controlsVisible = true;
+        });
+      }
+      if (!wasPlaying) _scheduleHideControls();
     } catch (_) {
       _detachController(disposeNow: true);
     }
   }
 
   void _pauseVideo() {
+    if (_handoffInProgress) return;
     final controller = _controller;
     if (!_controllerUsable(controller)) return;
 
     try {
       controller!.pause();
-      if (mounted) setState(() => _isPlaying = false);
+      _hideControlsTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _controlsVisible = true;
+        });
+      }
     } catch (_) {
       _detachController(disposeNow: true);
+    }
+  }
+
+  void _scheduleHideControls() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (!mounted || !_isPlaying) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _toggleCenterPlayback() {
+    if (_isPlaying) {
+      _pauseVideo();
+    } else {
+      _playVideo();
     }
   }
 
@@ -1307,6 +1387,8 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
     _controller = null;
     _isInitialized = false;
     _isPlaying = false;
+    _controlsVisible = true;
+    _hideControlsTimer?.cancel();
     if (mounted) setState(() {});
     if (controller == null || handoff) return;
 
@@ -1339,15 +1421,27 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
 
   void _handleSurfaceTap() {
     final callback = widget.onSurfaceTap;
-    if (callback == null) return;
+    if (callback == null || _handoffInProgress) return;
 
     final controller = _controller;
     if (_controllerUsable(controller)) {
+      _handoffInProgress = true;
       _cancelScheduledDispose();
+      _hideControlsTimer?.cancel();
       _watchTimer?.cancel();
       _watchTimer = null;
-      _detachController(handoff: true);
-      callback(controller);
+      setState(() {
+        _controller = null;
+        _isInitialized = false;
+        _isPlaying = false;
+        _controlsVisible = true;
+      });
+      // Unmount this VideoPlayer before the full-screen page mounts the same
+      // controller, or Flutter asserts `_elements.contains(element)`.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        callback(controller);
+        if (mounted) _handoffInProgress = false;
+      });
       return;
     }
 
@@ -1358,6 +1452,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
   void dispose() {
     _watchTimer?.cancel();
     _disposeTimer?.cancel();
+    _hideControlsTimer?.cancel();
     final controller = _controller;
     _controller = null;
     try {
@@ -1375,6 +1470,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
     return VisibilityDetector(
       key: Key(_videoKey),
       onVisibilityChanged: (info) async {
+        if (!mounted || _handoffInProgress) return;
         final visible = info.visibleFraction;
         _visibleFraction = visible;
         final eventId = ++_visibilityEventId;
@@ -1383,7 +1479,9 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
         // we keep the thumbnail and wait for an explicit tap (Wi-Fi-only autoplay).
         if (visible > 0.65 && _controller == null) {
           final allowAutoplay = await NetworkQuality.allowsVideoAutoplay;
-          if (!mounted || eventId != _visibilityEventId) return;
+          if (!mounted || _handoffInProgress || eventId != _visibilityEventId) {
+            return;
+          }
           if (_visibleFraction <= 0.65) {
             _pauseVideo();
             _scheduleDispose();
@@ -1392,7 +1490,11 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
           if (allowAutoplay) {
             _cancelScheduledDispose();
             await _initializeVideo();
-            if (!mounted || eventId != _visibilityEventId) return;
+            if (!mounted ||
+                _handoffInProgress ||
+                eventId != _visibilityEventId) {
+              return;
+            }
             if (_visibleFraction <= 0.65) {
               _pauseVideo();
               _scheduleDispose();
@@ -1408,7 +1510,9 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
           }
           _startWatchTimer();
 
-          if (!mounted || eventId != _visibilityEventId) return;
+          if (!mounted || _handoffInProgress || eventId != _visibilityEventId) {
+            return;
+          }
           if (_visibleFraction <= 0.65) {
             _pauseVideo();
             _scheduleDispose();
@@ -1416,7 +1520,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
           }
 
           _playVideo();
-        } else {
+        } else if (!_handoffInProgress) {
           _pauseVideo();
           _scheduleDispose();
         }
@@ -1445,46 +1549,43 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
             if (!showPlayer)
               Center(
                 child: GestureDetector(
-                  onTap: () async {
-                    await _initializeVideo();
-                    if (mounted && _visibleFraction > 0.01) _playVideo();
-                  },
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
+                  onTap: _isInitializing
+                      ? null
+                      : () async {
+                          await _initializeVideo();
+                          if (mounted && _visibleFraction > 0.01) {
+                            _playVideo();
+                          }
+                        },
+                  child: _PulsingPlayButton(pulsing: _isInitializing),
                 ),
               ),
             if (showPlayer)
               Center(
                 child: GestureDetector(
-                  onTap: () {
-                    if (_isPlaying) {
-                      _pauseVideo();
-                    } else {
-                      _playVideo();
-                    }
-                  },
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 32,
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggleCenterPlayback,
+                  child: SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: Center(
+                      child: AnimatedOpacity(
+                        opacity: _controlsVisible ? 1 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1512,6 +1613,76 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
     }
 
     return Container(color: Colors.black);
+  }
+}
+
+class _PulsingPlayButton extends StatefulWidget {
+  const _PulsingPlayButton({required this.pulsing});
+
+  final bool pulsing;
+
+  @override
+  State<_PulsingPlayButton> createState() => _PulsingPlayButtonState();
+}
+
+class _PulsingPlayButtonState extends State<_PulsingPlayButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+      lowerBound: 0.28,
+      upperBound: 1,
+    );
+    if (widget.pulsing) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulsingPlayButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pulsing == oldWidget.pulsing) return;
+    if (widget.pulsing) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse
+        ..stop()
+        ..value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _pulse,
+      child: Container(
+        width: 60,
+        height: 60,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.play_arrow,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+    );
   }
 }
 
@@ -1798,8 +1969,24 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(
   }).toList();
 }
 
-class ExploreSearchBar extends StatelessWidget {
+class ExploreSearchBar extends StatefulWidget {
   const ExploreSearchBar({super.key});
+
+  @override
+  State<ExploreSearchBar> createState() => _ExploreSearchBarState();
+}
+
+class _ExploreSearchBarState extends State<ExploreSearchBar> {
+  late final FocusNode _focusNode = FocusNode(
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1808,11 +1995,13 @@ class ExploreSearchBar extends StatelessWidget {
         horizontal: AppResponsive.horizontalInset(context),
       ),
       child: SearchBar(
+        focusNode: _focusNode,
         readOnly: true,
         padding: const WidgetStatePropertyAll<EdgeInsets>(
           EdgeInsets.symmetric(horizontal: 16.0),
         ),
         onTap: () {
+          dismissKeyboard();
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const AppSearchPage()),
           );

@@ -14,6 +14,8 @@ class UserProfile {
   final String? staffRole;
   final String? staffRoleOther;
   final String? about;
+  final String? createdBy;
+  final DateTime? loginEnabledAt;
 
   const UserProfile({
     required this.id,
@@ -31,9 +33,19 @@ class UserProfile {
     this.staffRole,
     this.staffRoleOther,
     this.about,
+    this.createdBy,
+    this.loginEnabledAt,
   });
 
   bool get isDeleted => deletedAt != null;
+
+  bool canBeEditedBy(String? userId) {
+    return userId != null &&
+        userId.isNotEmpty &&
+        createdBy == userId &&
+        loginEnabledAt == null &&
+        deletedAt == null;
+  }
 
   bool get isTechnicalStaff => accountType == 'technical_staff';
 
@@ -73,6 +85,10 @@ class UserProfile {
       staffRole: json['staff_role'] as String?,
       staffRoleOther: json['staff_role_other'] as String?,
       about: json['about'] as String?,
+      createdBy: json['created_by']?.toString(),
+      loginEnabledAt: json['login_enabled_at'] != null
+          ? DateTime.tryParse(json['login_enabled_at'].toString())
+          : null,
     );
   }
 
@@ -93,6 +109,8 @@ class UserProfile {
       'staff_role': staffRole,
       'staff_role_other': staffRoleOther,
       'about': about,
+      'created_by': createdBy,
+      'login_enabled_at': loginEnabledAt?.toIso8601String(),
     };
   }
 }

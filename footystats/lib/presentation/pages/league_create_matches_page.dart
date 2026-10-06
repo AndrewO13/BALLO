@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
 import '../../core/widgets/app_empty_state.dart';
@@ -77,7 +78,16 @@ class _LeagueCreateMatchesPageState
     if (time != null) setState(() => _matchTime = time);
   }
 
+  bool _isLeagueCreator(LeagueModel? league) {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    return league != null &&
+        userId != null &&
+        league.createdBy == userId;
+  }
+
   Future<void> _showCreateSeasonDialog() async {
+    final league = ref.read(leagueByIdProvider(widget.leagueId)).value;
+    if (!_isLeagueCreator(league)) return;
     final result = await showCreateSeasonBottomSheet(context);
 
     if (result == null || !mounted) return;
@@ -293,6 +303,8 @@ class _LeagueCreateMatchesPageState
         });
       },
     );
+    final leagueAsync = ref.watch(leagueByIdProvider(widget.leagueId));
+    final canCreateSeason = _isLeagueCreator(leagueAsync.value);
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -330,10 +342,11 @@ class _LeagueCreateMatchesPageState
                   child: AppEmptyState(
                     imageAsset: AppAssets.seasonEmpty,
                     title: 'Create a season first',
-                    subtitle:
-                        'You need a season in this league before you can schedule matches. Create one to get started.',
-                    actionLabel: 'Create season',
-                    onAction: _showCreateSeasonDialog,
+                    subtitle: canCreateSeason
+                        ? 'You need a season in this league before you can schedule matches. Create one to get started.'
+                        : 'Ask the league creator to add a season before matches can be scheduled.',
+                    actionLabel: canCreateSeason ? 'Create season' : null,
+                    onAction: canCreateSeason ? _showCreateSeasonDialog : null,
                   ),
                 );
               }

@@ -5,7 +5,8 @@ import '../../domain/models/user_profile.dart';
 const _playerProfileColumns =
     'id, username, player_name, position, image_url, country, '
     'social_instagram, social_tiktok, social_x, deleted_at, '
-    'account_type, staff_role, staff_role_other, about';
+    'account_type, staff_role, staff_role_other, about, '
+    'created_by, login_enabled_at';
 
 /// Simple repository for reading and writing the current user's profile.
 ///
@@ -43,6 +44,10 @@ class UserProfileRepository {
       staffRole: map['staff_role'] as String?,
       staffRoleOther: map['staff_role_other'] as String?,
       about: map['about'] as String?,
+      createdBy: map['created_by']?.toString(),
+      loginEnabledAt: map['login_enabled_at'] != null
+          ? DateTime.tryParse(map['login_enabled_at'].toString())
+          : null,
     );
   }
 

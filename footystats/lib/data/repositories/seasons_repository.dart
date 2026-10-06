@@ -64,6 +64,16 @@ class SeasonsRepository {
     return list.map(SeasonModel.fromJson).toList();
   }
 
+  /// Every season on the app, for guest/staff match filters.
+  Future<List<SeasonModel>> getAllSeasons() async {
+    final res = await _client
+        .from('seasons')
+        .select('id, league_id, season_name, start_date, end_date, status')
+        .order('start_date', ascending: false);
+    final list = List<Map<String, dynamic>>.from(res as List);
+    return list.map(SeasonModel.fromJson).toList();
+  }
+
   /// Returns seasons for the given league IDs (for matches filter).
   Future<List<SeasonModel>> getSeasonsForLeagues(
     List<String> leagueIds,

@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/theme/theme.dart';
 import '../../core/utils/guest_mode.dart';
 import 'home_page.dart';
 import 'login_page.dart';
@@ -19,7 +22,7 @@ class WelcomePage extends StatefulWidget {
 }
 
 class _WelcomePageState extends State<WelcomePage> {
-  static const _logo = 'lib/assets/icons/ballo logo2.svg';
+  static const _background = 'lib/assets/images/onboarding bg2.jpeg';
 
   static const _slides = <_OnboardingSlide>[
     _OnboardingSlide(
@@ -39,7 +42,7 @@ class _WelcomePageState extends State<WelcomePage> {
     ),
     _OnboardingSlide(
       heading: "See who's\ncarrying the team",
-      imageAsset: 'lib/assets/images/slide 1.png',
+      imageAsset: 'lib/assets/images/slide 4.png',
       readDuration: Duration(milliseconds: 4200),
     ),
   ];
@@ -106,24 +109,32 @@ class _WelcomePageState extends State<WelcomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final slide = _slides[_currentIndex];
-    // This page is a fixed light-green canvas (secondaryFixed + black heading)
-    // in both themes, so controls must use the matching *Fixed* tones. The
-    // theme-dependent secondaryContainer is near-identical to the canvas in
-    // light mode, which made the buttons illegible.
-    final accent = colorScheme.onSecondaryFixedVariant;
-    final onAccent = colorScheme.secondaryFixed;
+    final dark = MaterialTheme.darkScheme();
+    final primary = dark.primary;
+    final onPrimary = dark.onPrimary;
+    final secondary = dark.secondary;
+    const onImage = Colors.white;
 
     return Scaffold(
-      backgroundColor: colorScheme.secondaryFixed,
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            _background,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+          ),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
             final metrics = _WelcomeLayoutMetrics.of(constraints);
             final buttonInset =
                 AppConstants.onboardingEdgeInset(constraints.maxWidth);
@@ -137,8 +148,9 @@ class _WelcomePageState extends State<WelcomePage> {
               children: [
                 Center(
                   child: SvgPicture.asset(
-                    _logo,
+                    AppAssets.balloLogo,
                     height: metrics.logoHeight,
+                    fit: BoxFit.contain,
                   ),
                 ),
                 SizedBox(height: metrics.gapAfterLogo),
@@ -153,7 +165,7 @@ class _WelcomePageState extends State<WelcomePage> {
                           style: GoogleFonts.anton(
                             fontSize: 32,
                         height: 1.1,
-                        color: Colors.black,
+                            color: onImage,
                       ),
                     ),
                   ),
@@ -170,9 +182,8 @@ class _WelcomePageState extends State<WelcomePage> {
                 _SlideIndicators(
                   count: _slides.length,
                   currentIndex: _currentIndex,
-                  activeColor: accent,
-                  inactiveColor: colorScheme.onSecondaryFixed
-                      .withValues(alpha: 0.28),
+                  activeColor: primary,
+                  inactiveColor: onImage.withValues(alpha: 0.28),
                   onDotTap: _goToSlide,
                 ),
                 SizedBox(height: metrics.gapAfterIndicators),
@@ -211,8 +222,8 @@ class _WelcomePageState extends State<WelcomePage> {
                       );
                     },
                     style: FilledButton.styleFrom(
-                      backgroundColor: accent,
-                      foregroundColor: onAccent,
+                      backgroundColor: primary,
+                      foregroundColor: onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
@@ -230,15 +241,12 @@ class _WelcomePageState extends State<WelcomePage> {
                       );
                     },
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(
-                        color: accent.withValues(alpha: 0.85),
-                        width: 1.5,
-                      ),
+                      side: BorderSide(color: secondary, width: 1.5),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
                       ),
-                      foregroundColor: accent,
+                      foregroundColor: secondary,
                     ),
                     child: const Text('I already have an account'),
                   ),
@@ -246,7 +254,7 @@ class _WelcomePageState extends State<WelcomePage> {
                   TextButton(
                     onPressed: _isGuestSigningIn ? null : _continueAsGuest,
                     style: TextButton.styleFrom(
-                      foregroundColor: accent.withValues(alpha: 0.9),
+                      foregroundColor: secondary,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: _isGuestSigningIn
@@ -255,7 +263,7 @@ class _WelcomePageState extends State<WelcomePage> {
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: accent,
+                              color: secondary,
                             ),
                           )
                         : const Text(
@@ -284,8 +292,10 @@ class _WelcomePageState extends State<WelcomePage> {
                 ],
               ),
             );
-          },
-        ),
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

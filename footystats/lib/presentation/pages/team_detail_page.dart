@@ -9,13 +9,17 @@ import '../../core/constants/app_assets.dart';
 import '../../core/utils/content_moderation_guards.dart';
 import '../../core/utils/guest_mode.dart';
 import '../../core/utils/connection_error.dart';
+import '../../core/utils/dismiss_keyboard.dart';
 import '../../core/utils/username_rules.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/app_error_state.dart';
+import '../../core/widgets/app_shimmer.dart';
 import '../../core/widgets/media_placeholders.dart';
 import 'create_match_entry_page.dart';
+import '../widgets/home/home_page_shimmer.dart';
 import '../widgets/home/home_section_empty_state.dart';
 import '../widgets/media_access_sheet.dart';
+import '../widgets/page_content_shimmers.dart';
 import '../../data/repositories/leagues_repository.dart';
 import '../../data/repositories/teams_repository.dart';
 import '../../data/repositories/matches_repository.dart';
@@ -206,6 +210,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     _tabController = TabController(length: 7, vsync: this)
       ..addListener(_handleTabIndexChanged);
     _loadTeam();
+    dismissKeyboard();
   }
 
   void _handleTabIndexChanged() {
@@ -243,6 +248,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     _outerScrollController.dispose();
     _tabController.removeListener(_handleTabIndexChanged);
     _tabController.dispose();
+    dismissKeyboardAfterFrame();
     super.dispose();
   }
 
@@ -674,7 +680,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const SizedBox.shrink(), centerTitle: false),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const EntityDetailPageShimmer(circularLogo: true),
       );
     }
 
@@ -1438,18 +1444,9 @@ class _TeamOverviewTab extends StatelessWidget {
             future: _fetchNextUpcomingMatchCard(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return _TeamOverviewSectionCard(
+                return const _TeamOverviewSectionCard(
                   title: 'Next match',
-                  child: const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  ),
+                  child: DetailInlineShimmer(),
                 );
               }
 
@@ -1732,7 +1729,7 @@ class _TeamTrophiesSectionState extends State<_TeamTrophiesSection> {
               }
               return y != null ? 'Season ($y)' : 'Season';
             })
-            .join(' Â· ');
+            .join(' · ');
         final logoId = list.first['logo_id']?.toString();
         rows.add(
           _TeamTrophyRow(
@@ -1764,18 +1761,9 @@ class _TeamTrophiesSectionState extends State<_TeamTrophiesSection> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return _TeamOverviewSectionCard(
+      return const _TeamOverviewSectionCard(
         title: 'Trophies',
-        child: const Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
+        child: DetailInlineShimmer(),
       );
     }
 
@@ -1991,18 +1979,9 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return _TeamOverviewSectionCard(
+      return const _TeamOverviewSectionCard(
         title: 'Team form',
-        child: const Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
+        child: DetailInlineShimmer(),
       );
     }
 
@@ -2081,44 +2060,64 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Column(
-                        children: [
-                          Text(
-                            gwLabel.isNotEmpty ? gwLabel : '—',
-                            style: textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          CircleAvatar(
-                            backgroundColor: Colors.transparent,
-                            backgroundImage: _logoProvider(opponent.logoPath),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            opponent.shortForm,
-                            style: textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: resultColor,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              scoreText,
-                              style: textTheme.labelSmall?.copyWith(
-                                color: isDraw
-                                    ? colorScheme.onSurface
-                                    : Colors.white,
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: opponent.id.isEmpty ||
+                                  opponent.id == widget.teamId
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => TeamDetailPage(
+                                        teamId: opponent.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                          child: Column(
+                            children: [
+                              Text(
+                                gwLabel.isNotEmpty ? gwLabel : '—',
+                                style: textTheme.bodySmall,
                               ),
-                            ),
+                              const SizedBox(height: 8),
+                              CircleAvatar(
+                                backgroundColor: Colors.transparent,
+                                backgroundImage: _logoProvider(
+                                  opponent.logoPath,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                opponent.shortForm,
+                                style: textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: resultColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  scoreText,
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: isDraw
+                                        ? colorScheme.onSurface
+                                        : Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                       if (index < _recentMatches.length - 1)
                         const SizedBox(width: 24),
@@ -2327,7 +2326,10 @@ class _TeamSummaryStatsTabState extends State<_TeamSummaryStatsTab> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: DetailTableShimmer(),
+      );
     }
 
     if (_error != null) {
@@ -2488,6 +2490,24 @@ class _SquadTabState extends State<_SquadTab> {
   final Set<String> _isDragging = {};
   Size? _lastPitchSize;
   List<Map<String, dynamic>> _members = [];
+  bool _isLoadingSquad = true;
+
+  static const _squadShimmerOffsets = <Offset>[
+    Offset(160, 308),
+    Offset(28, 250),
+    Offset(116, 258),
+    Offset(204, 258),
+    Offset(292, 250),
+    Offset(70, 188),
+    Offset(160, 180),
+    Offset(250, 188),
+    Offset(70, 122),
+    Offset(160, 112),
+    Offset(250, 122),
+    Offset(36, 402),
+    Offset(124, 402),
+    Offset(212, 402),
+  ];
 
   @override
   void initState() {
@@ -2532,8 +2552,12 @@ class _SquadTabState extends State<_SquadTab> {
   }
 
   Future<void> _initialize() async {
-    await _loadSavedLayout();
-    await _loadMembers();
+    try {
+      await _loadSavedLayout();
+      await _loadMembers();
+    } finally {
+      if (mounted) setState(() => _isLoadingSquad = false);
+    }
   }
 
   Future<void> _loadSavedLayout() async {
@@ -2909,17 +2933,7 @@ class _SquadTabState extends State<_SquadTab> {
           final scaleX = pitchWidth / _canvasWidth;
           final scaleY = (bgHeight + benchHeight) / _canvasTotalHeight;
 
-          final displayMembers = _members.isNotEmpty
-              ? _members
-              : [
-                  {
-                    'player_id': 'fallback',
-                    'players': {
-                      'player_name': 'Wacha',
-                      'image_url': null,
-                    },
-                  },
-                ];
+          final displayMembers = _members;
 
           final currentSize = Size(_canvasWidth, _canvasTotalHeight);
           final missingOffsets = displayMembers.any((member) {
@@ -3044,99 +3058,123 @@ class _SquadTabState extends State<_SquadTab> {
                       fit: BoxFit.contain,
                     ),
                   ),
-                  for (final member in displayMembers)
-                    Builder(
-                      builder: (context) {
-                        final memberId = (member['player_id'] ?? '').toString();
-                        if (memberId.isEmpty) return const SizedBox.shrink();
-                        final player =
-                            member['players'] as Map<String, dynamic>?;
-                        final name =
-                            player?['player_name'] as String? ?? 'Player';
-                        final imageUrl = player?['image_url'] as String? ?? '';
-                        final offset =
-                            _playerOffsets[memberId] ??
-                            Offset(
-                              (_canvasWidth - _playerSize) / 2,
-                              canvasPitchTop +
-                                  (_canvasPitchHeight - _playerSize) / 2,
-                            );
-                        final isDragging = _isDragging.contains(memberId);
-                        return AnimatedPositioned(
-                          duration: isDragging
-                              ? Duration.zero
-                              : const Duration(milliseconds: 220),
-                          curve: Curves.easeOut,
-                          left: offset.dx * scaleX,
-                          top: offset.dy * scaleY,
-                          child: GestureDetector(
-                            onTap: () async {
-                              if (memberId == 'fallback') return;
-                              if (_isEditing) {
-                                await _showPlayerActionsSheet(
-                                  playerId: memberId,
-                                  playerName: name,
-                                  imageUrl: imageUrl,
-                                );
-                                return;
-                              }
-                              if (!mounted) return;
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      PlayerProfilePage(playerId: memberId),
+                  if (_isLoadingSquad)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AppShimmer(
+                          child: Stack(
+                            children: [
+                              for (final offset in _squadShimmerOffsets)
+                                Positioned(
+                                  left: offset.dx * scaleX,
+                                  top: offset.dy * scaleY,
+                                  child: const _SquadPitchPlayerShimmer(),
                                 ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    for (final member in displayMembers)
+                      Builder(
+                        builder: (context) {
+                          final memberId =
+                              (member['player_id'] ?? '').toString();
+                          if (memberId.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          final player =
+                              member['players'] as Map<String, dynamic>?;
+                          final name =
+                              player?['player_name'] as String? ?? 'Player';
+                          final imageUrl =
+                              player?['image_url'] as String? ?? '';
+                          final offset =
+                              _playerOffsets[memberId] ??
+                              Offset(
+                                (_canvasWidth - _playerSize) / 2,
+                                canvasPitchTop +
+                                    (_canvasPitchHeight - _playerSize) / 2,
                               );
-                            },
-                            onPanStart: _isEditing
-                                ? (_) {
-                                    setState(() {
-                                      _isDragging.add(memberId);
-                                    });
-                                  }
-                                : null,
-                            onPanUpdate: _isEditing
-                                ? (details) {
-                                    setState(() {
+                          final isDragging = _isDragging.contains(memberId);
+                          return AnimatedPositioned(
+                            duration: isDragging
+                                ? Duration.zero
+                                : const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            left: offset.dx * scaleX,
+                            top: offset.dy * scaleY,
+                            child: GestureDetector(
+                              onTap: () async {
+                                if (memberId == 'fallback') return;
+                                if (_isEditing) {
+                                  await _showPlayerActionsSheet(
+                                    playerId: memberId,
+                                    playerName: name,
+                                    imageUrl: imageUrl,
+                                  );
+                                  return;
+                                }
+                                if (!mounted) return;
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => PlayerProfilePage(
+                                      playerId: memberId,
+                                    ),
+                                  ),
+                                );
+                              },
+                              onPanStart: _isEditing
+                                  ? (_) {
+                                      setState(() {
+                                        _isDragging.add(memberId);
+                                      });
+                                    }
+                                  : null,
+                              onPanUpdate: _isEditing
+                                  ? (details) {
+                                      setState(() {
+                                        final current =
+                                            _playerOffsets[memberId] ?? offset;
+                                        _playerOffsets[memberId] = clampOffset(
+                                          current +
+                                              Offset(
+                                                details.delta.dx / scaleX,
+                                                details.delta.dy / scaleY,
+                                              ),
+                                        );
+                                      });
+                                    }
+                                  : null,
+                              onPanEnd: _isEditing
+                                  ? (_) {
                                       final current =
                                           _playerOffsets[memberId] ?? offset;
-                                      _playerOffsets[memberId] = clampOffset(
-                                        current +
-                                            Offset(
-                                              details.delta.dx / scaleX,
-                                              details.delta.dy / scaleY,
-                                            ),
-                                      );
-                                    });
-                                  }
-                                : null,
-                            onPanEnd: _isEditing
-                                ? (_) {
-                                    final current =
-                                        _playerOffsets[memberId] ?? offset;
-                                    setState(() {
-                                      _isDragging.remove(memberId);
-                                      final shouldBeOnBench =
-                                          current.dy >=
-                                          (canvasPitchBottom - snapZoneHeight);
-                                      if (shouldBeOnBench) {
-                                        _isOnBench.add(memberId);
-                                      } else {
-                                        _isOnBench.remove(memberId);
-                                      }
-                                    });
-                                  }
-                                : null,
-                            child: TeamPlayer(
-                              name: name,
-                              imageAsset: imageUrl,
-                              showCaptainBadge: _captainId == memberId,
+                                      setState(() {
+                                        _isDragging.remove(memberId);
+                                        final shouldBeOnBench =
+                                            current.dy >=
+                                            (canvasPitchBottom -
+                                                snapZoneHeight);
+                                        if (shouldBeOnBench) {
+                                          _isOnBench.add(memberId);
+                                        } else {
+                                          _isOnBench.remove(memberId);
+                                        }
+                                      });
+                                    }
+                                  : null,
+                              child: TeamPlayer(
+                                name: name,
+                                imageAsset: imageUrl,
+                                showCaptainBadge: _captainId == memberId,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  if (_canEditLineup)
+                          );
+                        },
+                      ),
+                  if (_canEditLineup && !_isLoadingSquad)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -3222,6 +3260,32 @@ class _SquadTabState extends State<_SquadTab> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _SquadPitchPlayerShimmer extends StatelessWidget {
+  const _SquadPitchPlayerShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 60,
+      height: 60,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          Positioned(
+            top: 0,
+            child: ShimmerBox(width: 57, height: 57, borderRadius: 999),
+          ),
+          Positioned(
+            bottom: 0,
+            child: ShimmerBox(width: 48, height: 19, borderRadius: 8),
+          ),
+        ],
       ),
     );
   }
@@ -3730,10 +3794,7 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
                 sliver: SliverToBoxAdapter(
                   child: _isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(24.0),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
+                      ? const GuestHomeMatchListShimmer(padded: false)
                       : _error != null
                       ? Padding(
                           padding: const EdgeInsets.all(24.0),
@@ -4271,7 +4332,10 @@ class _TeamStandingsTabState extends State<_TeamStandingsTab> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading && _leagues.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: DetailTableShimmer(),
+      );
     }
 
     if (_leagues.isEmpty) {
@@ -4330,10 +4394,7 @@ class _TeamStandingsTabState extends State<_TeamStandingsTab> {
             ),
 
             if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const DetailTableShimmer()
             else if (_error != null)
               Column(
                 mainAxisSize: MainAxisSize.min,
@@ -4749,11 +4810,13 @@ class _TeamStatsTabState extends State<_TeamStatsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: DetailTableShimmer(),
+      );
     }
     if (_error != null) {
       return Center(
@@ -5147,7 +5210,7 @@ class _TeamTopPlayersFullSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
-                '${section.allPlayers.length} players Â· ranked by ${section.title.toLowerCase()}',
+                '${section.allPlayers.length} players · ranked by ${section.title.toLowerCase()}',
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -5601,7 +5664,7 @@ class _TeamVideosTabState extends State<_TeamVideosTab> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const DetailVideoGridShimmer();
     }
     if (_error != null) {
       return Center(

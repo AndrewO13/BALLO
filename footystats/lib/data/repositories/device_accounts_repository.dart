@@ -17,6 +17,9 @@ class DeviceAccountsRepository {
 
   static const _prefsKey = 'ballo.device_accounts.v1';
 
+  /// How many signed-in accounts this device can keep at once.
+  static const maxStoredAccounts = 3;
+
   final SupabaseClient _client;
   final UserProfileRepository _profiles;
 
@@ -67,6 +70,10 @@ class DeviceAccountsRepository {
     } catch (_) {}
 
     final accounts = await list();
+    final alreadyStored = accounts.any((account) => account.userId == user.id);
+    if (!alreadyStored && accounts.length >= maxStoredAccounts) {
+      return;
+    }
     final next = DeviceAccount(
       userId: user.id,
       refreshToken: session.refreshToken!,

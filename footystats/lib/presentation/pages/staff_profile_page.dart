@@ -24,11 +24,23 @@ import 'team_detail_page.dart';
 
 /// Simpler profile for coaches, scouts, agents and other technical staff.
 class StaffProfilePage extends ConsumerStatefulWidget {
-  const StaffProfilePage({super.key, this.viewedUserId, this.refreshTick = 0});
+  const StaffProfilePage({
+    super.key,
+    this.viewedUserId,
+    this.refreshTick = 0,
+    this.showFollowButton = false,
+    this.isFollowing = false,
+    this.isUpdatingFollow = false,
+    this.onFollow,
+  });
 
   /// Null means the signed-in user (Account tab).
   final String? viewedUserId;
   final int refreshTick;
+  final bool showFollowButton;
+  final bool isFollowing;
+  final bool isUpdatingFollow;
+  final VoidCallback? onFollow;
 
   @override
   ConsumerState<StaffProfilePage> createState() => _StaffProfilePageState();
@@ -307,6 +319,10 @@ class _StaffProfilePageState extends ConsumerState<StaffProfilePage>
                         followers: _followers,
                         formatCount: _formatCount,
                         showEditButton: _isOwnProfile,
+                        showFollowButton: widget.showFollowButton,
+                        isFollowing: widget.isFollowing,
+                        isUpdatingFollow: widget.isUpdatingFollow,
+                        onFollow: widget.onFollow,
                         heroTag: 'staff-profile-photo-$userId',
                         toneA: _heroToneA,
                         toneB: _heroToneB,
@@ -394,6 +410,10 @@ class _StaffProfileHeader extends StatelessWidget {
     required this.followers,
     required this.formatCount,
     required this.showEditButton,
+    this.showFollowButton = false,
+    this.isFollowing = false,
+    this.isUpdatingFollow = false,
+    this.onFollow,
     required this.heroTag,
     required this.onEdit,
     this.onPhotoTap,
@@ -406,6 +426,10 @@ class _StaffProfileHeader extends StatelessWidget {
   final int followers;
   final String Function(int) formatCount;
   final bool showEditButton;
+  final bool showFollowButton;
+  final bool isFollowing;
+  final bool isUpdatingFollow;
+  final VoidCallback? onFollow;
   final Object heroTag;
   final VoidCallback onEdit;
   final VoidCallback? onPhotoTap;
@@ -509,6 +533,32 @@ class _StaffProfileHeader extends StatelessWidget {
                           minimumSize: const Size(60, 40),
                         ),
                         child: const Icon(Icons.edit_outlined, size: 20),
+                      ),
+                    ] else if (showFollowButton) ...[
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        onPressed: isUpdatingFollow ? null : onFollow,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: isFollowing
+                              ? colorScheme.surfaceContainerHigh
+                              : colorScheme.primaryContainer,
+                          foregroundColor: isFollowing
+                              ? colorScheme.onSurface
+                              : colorScheme.onPrimaryContainer,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(999),
+                            ),
+                          ),
+                          padding: const EdgeInsets.only(
+                            left: 17,
+                            right: 17,
+                            top: 12,
+                            bottom: 12,
+                          ),
+                          minimumSize: const Size(60, 40),
+                        ),
+                        child: Text(isFollowing ? 'Following' : 'Follow'),
                       ),
                     ],
                   ],

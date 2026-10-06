@@ -81,10 +81,52 @@ class _SwitchAccountSheetState extends State<_SwitchAccountSheet> {
   Future<void> _addAccount() async {
     await _repo.captureCurrent();
     if (!mounted) return;
+    final accounts = await _repo.list();
+    if (!mounted) return;
+    if (accounts.length >= DeviceAccountsRepository.maxStoredAccounts) {
+      await _showAccountLimitWall();
+      return;
+    }
     Navigator.of(context).pop();
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const WelcomePage()));
+  }
+
+  Future<void> _showAccountLimitWall() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            icon: Icon(
+              Icons.block,
+              size: 36,
+              color: colorScheme.onSurface,
+            ),
+            title: const Text('Account limit reached'),
+            content: Text(
+              'This device can keep ${DeviceAccountsRepository.maxStoredAccounts} '
+              'accounts signed in at once. Sign out of one to add another.',
+              style: textTheme.bodyMedium,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Got it'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override

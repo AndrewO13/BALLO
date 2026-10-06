@@ -23,16 +23,3 @@ final mainNavScrollToTopProvider =
     NotifierProvider<MainNavScrollToTopNotifier, Map<int, int>>(
       MainNavScrollToTopNotifier.new,
     );
-
-/// Increments when the home challenge pill should open profile badges.
-class ProfileRevealBadgesNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-
-  void request() => state = state + 1;
-}
-
-final profileRevealBadgesProvider =
-    NotifierProvider<ProfileRevealBadgesNotifier, int>(
-      ProfileRevealBadgesNotifier.new,
-    );

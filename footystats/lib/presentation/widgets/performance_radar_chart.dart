@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/utils/match_stats_aggregation.dart';
 
-/// Radar chart for ATT / SHT / DEF / GKP / DIS (0–10 per axis).
+/// Radar chart for Attack / Shooting / Defence / Keeping / Discipline (0–10).
 ///
 /// Loads [match_player_stats] from Supabase per player. Year mode averages
 /// per-match axis scores so players with different records produce different shapes.
@@ -20,6 +20,7 @@ class PerformanceRadarChart extends StatefulWidget {
     this.compareMatchId,
     this.primaryLabel = 'You',
     this.compareLabel = 'Compare',
+    this.showScoreReadout = true,
   });
 
   final String playerId;
@@ -29,15 +30,55 @@ class PerformanceRadarChart extends StatefulWidget {
   final String? compareMatchId;
   final String primaryLabel;
   final String compareLabel;
+  final bool showScoreReadout;
 
   @override
   State<PerformanceRadarChart> createState() => _PerformanceRadarChartState();
 }
 
+class _RadarAxis {
+  const _RadarAxis({
+    required this.shortLabel,
+    required this.fullLabel,
+    required this.meaning,
+  });
+
+  final String shortLabel;
+  final String fullLabel;
+  final String meaning;
+}
+
 class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
-  static const _labels = <String>['ATT', 'SHT', 'DEF', 'GKP', 'DIS'];
+  static const _axes = <_RadarAxis>[
+    _RadarAxis(
+      shortLabel: 'Attack',
+      fullLabel: 'Attack',
+      meaning: 'Goals and assists',
+    ),
+    _RadarAxis(
+      shortLabel: 'Shot',
+      fullLabel: 'Shooting',
+      meaning: 'Shots and shots on target',
+    ),
+    _RadarAxis(
+      shortLabel: 'Defend',
+      fullLabel: 'Defence',
+      meaning: 'Tackles',
+    ),
+    _RadarAxis(
+      shortLabel: 'Keep',
+      fullLabel: 'Keeping',
+      meaning: 'Saves — mainly for goalkeepers',
+    ),
+    _RadarAxis(
+      shortLabel: 'Disc.',
+      fullLabel: 'Discipline',
+      meaning: 'Staying out of the book',
+    ),
+  ];
   static const _axisMax = 10.0;
   static const _axisTickCount = 5;
+  static const _typicalScore = 6.0;
 
   late Future<List<List<double>>> _dataFuture;
 
@@ -114,7 +155,7 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
     // Bench / unused squad: no minutes → flat chart (matches DB p_share = 0).
     if (minutes <= 0) {
       if (activity <= 0 && rating <= 0) {
-        return List<double>.filled(_labels.length, 0);
+        return List<double>.filled(_axes.length, 0);
       }
       // Legacy rows with events but no frozen lineup minutes.
       final impact = math.min(0.9, 0.55 + 0.08 * activity);
@@ -172,15 +213,15 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
 
   List<double> _averageAxes(List<List<double>> perMatchAxes) {
     if (perMatchAxes.isEmpty) {
-      return List<double>.filled(_labels.length, 0);
+      return List<double>.filled(_axes.length, 0);
     }
-    final sums = List<double>.filled(_labels.length, 0);
+    final sums = List<double>.filled(_axes.length, 0);
     for (final axes in perMatchAxes) {
-      for (var i = 0; i < _labels.length; i++) {
+      for (var i = 0; i < _axes.length; i++) {
         sums[i] += axes[i];
       }
     }
-    return [for (var i = 0; i < _labels.length; i++) sums[i] / perMatchAxes.length];
+    return [for (var i = 0; i < _axes.length; i++) sums[i] / perMatchAxes.length];
   }
 
   Future<List<Map<String, dynamic>>> _fetchMatchStatRows({
@@ -220,7 +261,7 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
     String? matchId,
   }) async {
     if (targetPlayerId.isEmpty) {
-      return List<double>.filled(_labels.length, 0);
+      return List<double>.filled(_axes.length, 0);
     }
 
     final rows = await _fetchMatchStatRows(
@@ -229,7 +270,7 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
       matchId: matchId,
     );
     if (rows.isEmpty) {
-      return List<double>.filled(_labels.length, 0);
+      return List<double>.filled(_axes.length, 0);
     }
 
     final isSingleMatch = matchId != null && matchId.isNotEmpty;
@@ -240,7 +281,7 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
               .toList();
 
     if (source.isEmpty) {
-      return List<double>.filled(_labels.length, 0);
+      return List<double>.filled(_axes.length, 0);
     }
 
     final perMatch = source.map(_axesForMatchRow).toList();
@@ -251,35 +292,43 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
       .map((v) => RadarEntry(value: _toAxisValue(v)))
       .toList();
 
-  RadarDataSet _axisAnchorDataSet() => RadarDataSet(
+  RadarDataSet _constantDataSet(double value, {Color? borderColor}) =>
+      RadarDataSet(
         fillColor: Colors.transparent,
-        borderColor: Colors.transparent,
-        borderWidth: 0,
+        borderColor: borderColor ?? Colors.transparent,
+        borderWidth: borderColor == null ? 0 : 1,
         entryRadius: 0,
         dataEntries: List.generate(
-          _labels.length,
-          (_) => const RadarEntry(value: _axisMax),
+          _axes.length,
+          (_) => RadarEntry(value: value),
         ),
       );
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     const primaryBorder = Color(0xFF2E7DFF);
     const compareBorder = Color(0xFFFF7A00);
-    const primaryFill = Color(0x332E7DFF);
+    const primaryFill = Color(0x402E7DFF);
     const compareFill = Color(0x33FF7A00);
 
     return FutureBuilder<List<List<double>>>(
       future: _dataFuture,
       builder: (context, snapshot) {
         final datasets =
-            snapshot.data ?? [List<double>.filled(_labels.length, 0)];
+            snapshot.data ?? [List<double>.filled(_axes.length, 0)];
         final values = datasets.first;
         final compareValues = datasets.length > 1
             ? datasets[1]
-            : List<double>.filled(_labels.length, 0);
+            : List<double>.filled(_axes.length, 0);
         final loading = snapshot.connectionState == ConnectionState.waiting;
+        final scores = values.map(_toAxisValue).toList();
+        final compareScores = compareValues.map(_toAxisValue).toList();
+        var strongestIndex = 0;
+        for (var i = 1; i < scores.length; i++) {
+          if (scores[i] > scores[strongestIndex]) strongestIndex = i;
+        }
 
         return Column(
           children: [
@@ -298,43 +347,51 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
                     RadarChartData(
                       radarShape: RadarShape.polygon,
                       tickCount: _axisTickCount,
-                      ticksTextStyle: TextStyle(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.8),
-                        fontSize: 10,
+                      ticksTextStyle: const TextStyle(
+                        color: Colors.transparent,
+                        fontSize: 0,
+                      ),
+                      titleTextStyle: textTheme.labelLarge?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w600,
                       ),
                       radarBackgroundColor: Colors.transparent,
                       radarBorderData: BorderSide(
-                        color: cs.outline.withValues(alpha: 0.3),
+                        color: cs.outline.withValues(alpha: 0.35),
                         width: 1,
                       ),
                       gridBorderData: BorderSide(
-                        color: cs.outline.withValues(alpha: 0.25),
+                        color: cs.outline.withValues(alpha: 0.2),
                         width: 1,
                       ),
                       tickBorderData: BorderSide(
-                        color: cs.outline.withValues(alpha: 0.25),
+                        color: cs.outline.withValues(alpha: 0.18),
                         width: 1,
                       ),
-                      getTitle: (index, angle) => RadarChartTitle(
-                        text: _labels[index % _labels.length],
-                        angle: angle,
-                        positionPercentageOffset: 0.16,
+                      getTitle: (index, _) => RadarChartTitle(
+                        text: _axes[index % _axes.length].shortLabel,
+                        angle: 0,
+                        positionPercentageOffset: 0.18,
                       ),
                       dataSets: [
-                        _axisAnchorDataSet(),
+                        _constantDataSet(_axisMax),
+                        _constantDataSet(
+                          _typicalScore,
+                          borderColor: cs.outline.withValues(alpha: 0.55),
+                        ),
                         RadarDataSet(
                           fillColor: primaryFill,
                           borderColor: primaryBorder,
-                          borderWidth: 2,
-                          entryRadius: 2.5,
+                          borderWidth: 2.4,
+                          entryRadius: 3,
                           dataEntries: _axisEntries(values),
                         ),
                         if (_hasComparison)
                           RadarDataSet(
                             fillColor: compareFill,
                             borderColor: compareBorder,
-                            borderWidth: 2,
-                            entryRadius: 2.5,
+                            borderWidth: 2.4,
+                            entryRadius: 3,
                             dataEntries: _axisEntries(compareValues),
                           ),
                       ],
@@ -358,9 +415,118 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
                 ],
               ),
             ),
+            if (widget.showScoreReadout) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    Icons.hexagon_outlined,
+                    size: 12,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Grey ring = typical (~${_typicalScore.toStringAsFixed(0)}/10)',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _AttributeReadout(
+                axes: _axes,
+                scores: scores,
+                compareScores: _hasComparison ? compareScores : null,
+                primaryColor: primaryBorder,
+                compareColor: compareBorder,
+                strongestIndex: strongestIndex,
+                loading: loading,
+              ),
+            ],
           ],
         );
       },
+    );
+  }
+}
+
+class _AttributeReadout extends StatelessWidget {
+  const _AttributeReadout({
+    required this.axes,
+    required this.scores,
+    required this.primaryColor,
+    required this.compareColor,
+    required this.strongestIndex,
+    required this.loading,
+    this.compareScores,
+  });
+
+  final List<_RadarAxis> axes;
+  final List<double> scores;
+  final List<double>? compareScores;
+  final Color primaryColor;
+  final Color compareColor;
+  final int strongestIndex;
+  final bool loading;
+
+  String _format(double score) => score.toStringAsFixed(1);
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        for (var i = 0; i < axes.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: Tooltip(
+              message: '${axes[i].fullLabel}: ${axes[i].meaning}',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                decoration: BoxDecoration(
+                  color: i == strongestIndex && !loading
+                      ? primaryColor.withValues(alpha: 0.12)
+                      : colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      axes[i].fullLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      loading ? '—' : _format(scores[i]),
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: primaryColor,
+                      ),
+                    ),
+                    if (compareScores != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        loading ? '—' : _format(compareScores![i]),
+                        style: textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: compareColor,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

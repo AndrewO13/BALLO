@@ -33,18 +33,27 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
 
   bool _isSubmitting = false;
   bool _emailConfirmed = false;
+  late final String? _confirmedAtOnOpen;
   late final StreamSubscription<AuthState> _authSubscription;
 
   @override
   void initState() {
     super.initState();
+    _confirmedAtOnOpen =
+        Supabase.instance.client.auth.currentUser?.emailConfirmedAt;
     _authSubscription =
         Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (!mounted || _emailConfirmed) return;
-      if (data.event == AuthChangeEvent.signedIn && data.session != null) {
-        unawaited(_completeVerification());
-      }
+      if (!_didConfirmEmailAfterOpen(data.session?.user)) return;
+      unawaited(_completeVerification());
     });
+  }
+
+  bool _didConfirmEmailAfterOpen(User? user) {
+    if (user == null || user.isAnonymous) return false;
+    final confirmedAt = user.emailConfirmedAt;
+    if (confirmedAt == null || confirmedAt.isEmpty) return false;
+    return confirmedAt != _confirmedAtOnOpen;
   }
 
   @override

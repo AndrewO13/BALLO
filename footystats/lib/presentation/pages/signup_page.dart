@@ -78,6 +78,13 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> _onOAuthComplete() async {
     try {
+      final alreadyRegistered =
+          await _onboardingRepository.currentUserAlreadyRegistered();
+      if (!mounted) return;
+      if (alreadyRegistered) {
+        await _rejectExistingOAuthAccount();
+        return;
+      }
       await showCommunityGuidelinesModal(context, requireAccept: true);
       if (!mounted) return;
       await _onboardingRepository.saveDraftProfile(widget.draft);
@@ -93,6 +100,21 @@ class _SignUpPageState extends State<SignUpPage> {
         SnackBar(content: Text('Could not save your profile: $error')),
       );
     }
+  }
+
+  Future<void> _rejectExistingOAuthAccount() async {
+    final messenger = ScaffoldMessenger.of(context);
+    await Supabase.instance.client.auth.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('An account with this email already exists'),
+      ),
+    );
   }
 
   Future<void> _resendVerificationAndContinue() async {
@@ -133,6 +155,7 @@ class _SignUpPageState extends State<SignUpPage> {
     if (!isValid) return;
 
     setState(() => _isSubmitting = true);
+    _awaitingOAuthSignIn = false;
 
     try {
       final supabase = Supabase.instance.client;

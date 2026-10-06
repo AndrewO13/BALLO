@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/utils/app_video_cache.dart';
 import '../../core/utils/explore_video_controller.dart';
+import '../../core/utils/guest_mode.dart';
 import '../../core/utils/share_boot_overlay.dart';
 import '../../core/utils/video_share.dart';
 import '../../core/widgets/media_placeholders.dart';
+import '../providers/favourited_players_provider.dart';
 import '../widgets/content_safety_sheets.dart';
 import '../widgets/guest_account_sheet.dart';
 
@@ -524,6 +527,7 @@ class _VideoPageState extends State<_VideoPage> {
     final client = Supabase.instance.client;
     final uid = client.auth.currentUser?.id;
     if (uid == null || widget.item.uploaderUserId == null) return;
+    if (GuestMode.isGuest) return;
     final newVal = !_isFollowing;
     setState(() => _isFollowing = newVal);
     try {
@@ -611,35 +615,62 @@ class _VideoPageState extends State<_VideoPage> {
           Positioned(
             right: 12,
             bottom: MediaQuery.of(context).padding.bottom + 100,
-            child: _ActionColumn(
-              isLiked: _isLiked,
-              likeCount: _likeCount,
-              isFollowing: _isFollowing,
-              showFollow:
-                  !_isViewerPoster &&
-                  !widget.item.isUploaderDeleted &&
-                  widget.item.uploaderUserId != null &&
-                  widget.item.uploaderUserId!.isNotEmpty,
-              showReport: !_isViewerPoster,
-              onLike: _toggleLike,
-              onFollow: _toggleFollow,
-              onShare: _share,
-              onReport: () async {
-                final user = Supabase.instance.client.auth.currentUser;
-                if (user == null || user.isAnonymous) {
-                  await showGuestAccountSheet(
-                    context,
-                    message:
-                        'Create a free Ballo account to report content and '
-                        'help keep the community safe.',
-                  );
-                  return;
-                }
-                await showReportContentSheet(
-                  context,
-                  videoId: widget.item.videoId,
-                  uploaderUserId: widget.item.uploaderUserId,
-                  uploaderName: widget.item.uploaderName,
+            child: Consumer(
+              builder: (context, ref, _) {
+                final uploaderId = widget.item.uploaderUserId;
+                final canActOnUploader =
+                    !_isViewerPoster &&
+                    !widget.item.isUploaderDeleted &&
+                    uploaderId != null &&
+                    uploaderId.isNotEmpty;
+                final isGuest = GuestMode.isGuest;
+                final isFavourited = isGuest &&
+                    canActOnUploader &&
+                    ref.watch(favouritedPlayersProvider).any(
+                      (player) => player.id == uploaderId,
+                    );
+                return _ActionColumn(
+                  isLiked: _isLiked,
+                  likeCount: _likeCount,
+                  isFollowing: _isFollowing,
+                  showFollow: !isGuest && canActOnUploader,
+                  showFavourite: isGuest && canActOnUploader,
+                  isFavourited: isFavourited,
+                  showReport: !_isViewerPoster,
+                  onLike: _toggleLike,
+                  onFollow: _toggleFollow,
+                  onFavourite: () {
+                    if (uploaderId == null || uploaderId.isEmpty) return;
+                    final name = widget.item.uploaderName?.trim();
+                    ref.read(favouritedPlayersProvider.notifier).toggle(
+                      FavouritedPlayer(
+                        id: uploaderId,
+                        name: (name != null && name.isNotEmpty)
+                            ? name
+                            : 'Player',
+                        imageUrl: widget.item.uploaderAvatar,
+                      ),
+                    );
+                  },
+                  onShare: _share,
+                  onReport: () async {
+                    final user = Supabase.instance.client.auth.currentUser;
+                    if (user == null || user.isAnonymous) {
+                      await showGuestAccountSheet(
+                        context,
+                        message:
+                            'Create a free Ballo account to report content and '
+                            'help keep the community safe.',
+                      );
+                      return;
+                    }
+                    await showReportContentSheet(
+                      context,
+                      videoId: widget.item.videoId,
+                      uploaderUserId: widget.item.uploaderUserId,
+                      uploaderName: widget.item.uploaderName,
+                    );
+                  },
                 );
               },
             ),
@@ -746,9 +777,12 @@ class _ActionColumn extends StatelessWidget {
     required this.likeCount,
     required this.isFollowing,
     required this.showFollow,
+    this.showFavourite = false,
+    this.isFavourited = false,
     required this.showReport,
     required this.onLike,
     required this.onFollow,
+    this.onFavourite,
     required this.onShare,
     required this.onReport,
   });
@@ -757,9 +791,12 @@ class _ActionColumn extends StatelessWidget {
   final int likeCount;
   final bool isFollowing;
   final bool showFollow;
+  final bool showFavourite;
+  final bool isFavourited;
   final bool showReport;
   final VoidCallback onLike;
   final VoidCallback onFollow;
+  final VoidCallback? onFavourite;
   final VoidCallback onShare;
   final VoidCallback onReport;
 
@@ -790,7 +827,17 @@ class _ActionColumn extends StatelessWidget {
             onTap: onReport,
           ),
         ],
-        if (showFollow) ...[
+        if (showFavourite) ...[
+          const SizedBox(height: 20),
+          _ActionButton(
+            icon: isFavourited
+                ? Icons.star_rounded
+                : Icons.star_outline_rounded,
+            label: isFavourited ? 'Saved' : 'Favourite',
+            color: isFavourited ? const Color(0xFFFFC107) : Colors.white,
+            onTap: onFavourite ?? () {},
+          ),
+        ] else if (showFollow) ...[
           const SizedBox(height: 20),
           _ActionButton(
             icon: isFollowing

@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_assets.dart';
 import '../../core/utils/dominant_image_color.dart';
+import '../../core/utils/guest_mode.dart';
 import '../../core/utils/scroll_to_top.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
@@ -15,9 +16,10 @@ import '../../core/constants/countries.dart';
 import '../../data/repositories/leaderboard_repository.dart';
 import '../../data/repositories/player_stats_repository.dart';
 import '../../data/repositories/user_profile_repository.dart';
-import '../../domain/models/player_badge.dart';
 import '../../domain/models/player_year_team_stats.dart';
+import '../../domain/models/managed_player.dart';
 import '../../domain/models/user_profile.dart';
+import 'edit_managed_player_page.dart';
 import 'edit_profile_page.dart';
 import 'league_video_player_page.dart';
 import '../../data/repositories/leagues_repository.dart';
@@ -47,6 +49,7 @@ import 'create_match_entry_page.dart';
 import 'create_team_league_page.dart';
 import 'fixture.dart';
 import 'matches.dart' show DodecagonIndicator;
+import 'team_detail_page.dart';
 
 /// Profile tabs and scroll layout. When [viewedPlayerId] is null, shows the signed-in user.
 class ProfileScrollView extends ConsumerStatefulWidget {
@@ -54,11 +57,19 @@ class ProfileScrollView extends ConsumerStatefulWidget {
     super.key,
     this.viewedPlayerId,
     this.refreshTick = 0,
+    this.showFollowButton = false,
+    this.isFollowing = false,
+    this.isUpdatingFollow = false,
+    this.onFollow,
   });
 
   /// If null, the current auth user is shown (main Profile tab).
   final String? viewedPlayerId;
   final int refreshTick;
+  final bool showFollowButton;
+  final bool isFollowing;
+  final bool isUpdatingFollow;
+  final VoidCallback? onFollow;
 
   @override
   ConsumerState<ProfileScrollView> createState() => _ProfileScrollViewState();
@@ -73,7 +84,6 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
   Color? _headerTabBackdrop;
   int _tabViewGeneration = 0;
   int _lastTabIndex = 0;
-  final GlobalKey _badgesSectionKey = GlobalKey();
 
   @override
   void initState() {
@@ -127,47 +137,6 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
     super.dispose();
   }
 
-  void _revealBadges() {
-    final needsOverviewTab = _tabController.index != 0;
-    if (needsOverviewTab) {
-      _tabController.animateTo(0);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBadgesSection(attempt: 0, delayAfterTabChange: needsOverviewTab);
-    });
-  }
-
-  void _scrollToBadgesSection({
-    required int attempt,
-    required bool delayAfterTabChange,
-  }) {
-    if (!mounted) return;
-    if (delayAfterTabChange && attempt == 0) {
-      Future<void>.delayed(const Duration(milliseconds: 280), () {
-        _scrollToBadgesSection(attempt: 1, delayAfterTabChange: false);
-      });
-      return;
-    }
-    final targetContext = _badgesSectionKey.currentContext;
-    if (targetContext == null) {
-      if (attempt < 8) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToBadgesSection(
-            attempt: attempt + 1,
-            delayAfterTabChange: false,
-          );
-        });
-      }
-      return;
-    }
-    Scrollable.ensureVisible(
-      targetContext,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOut,
-      alignment: 0.08,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (widget.viewedPlayerId == null) {
@@ -178,10 +147,6 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
           animateScrollControllerToTop(_outerScrollController);
         },
       );
-      ref.listen<int>(profileRevealBadgesProvider, (previous, next) {
-        if (previous == next) return;
-        _revealBadges();
-      });
     }
 
     final uid = Supabase.instance.client.auth.currentUser?.id;
@@ -250,6 +215,10 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                         child: _ProfileCard(
                           playerId: effectiveId,
                           showEditButton: isOwnProfile,
+                          showFollowButton: widget.showFollowButton,
+                          isFollowing: widget.isFollowing,
+                          isUpdatingFollow: widget.isUpdatingFollow,
+                          onFollow: widget.onFollow,
                           refreshTick: widget.refreshTick,
                           onTabBackdrop: _onHeaderTabBackdrop,
                         ),
@@ -323,7 +292,6 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                       profilePlayerId: effectiveId,
                       isOwnProfile: isOwnProfile,
                       onGoToMatchesTab: () => _tabController.animateTo(1),
-                      badgesSectionKey: _badgesSectionKey,
                     ),
                   ),
                   KeyedSubtree(
@@ -367,7 +335,6 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                       profilePlayerId: effectiveId,
                       isOwnProfile: isOwnProfile,
                       onGoToMatchesTab: () => _tabController.animateTo(1),
-                      badgesSectionKey: _badgesSectionKey,
                     ),
                   ),
                   KeyedSubtree(
@@ -413,14 +380,12 @@ class _ProfileTabContent extends StatelessWidget {
   final String profilePlayerId;
   final bool isOwnProfile;
   final VoidCallback? onGoToMatchesTab;
-  final Key? badgesSectionKey;
 
   const _ProfileTabContent({
     required this.title,
     required this.profilePlayerId,
     required this.isOwnProfile,
     this.onGoToMatchesTab,
-    this.badgesSectionKey,
   });
 
   @override
@@ -437,7 +402,11 @@ class _ProfileTabContent extends StatelessWidget {
             onGoToMatchesTab: onGoToMatchesTab,
           ),
           const SizedBox(height: 16),
-          _TeamFormSection(onGoToMatchesTab: onGoToMatchesTab),
+          _TeamFormSection(
+            profilePlayerId: profilePlayerId,
+            isOwnProfile: isOwnProfile,
+            onGoToMatchesTab: onGoToMatchesTab,
+          ),
           const SizedBox(height: 16),
           _ClubHistorySection(
             profilePlayerId: profilePlayerId,
@@ -447,11 +416,6 @@ class _ProfileTabContent extends StatelessWidget {
           _TrophiesSection(
             profilePlayerId: profilePlayerId,
             isOwnProfile: isOwnProfile,
-          ),
-          const SizedBox(height: 16),
-          _BadgesSection(
-            key: badgesSectionKey,
-            profilePlayerId: profilePlayerId,
           ),
           const SizedBox(height: 16),
           _ProfileSocialsSection(profilePlayerId: profilePlayerId),
@@ -2494,29 +2458,32 @@ class _AttributesSectionState extends State<_AttributesSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with title and info icon
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Attributes', style: Theme.of(context).textTheme.titleSmall),
+              Expanded(
+                child: Text(
+                  'Attributes',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
+                tooltip: 'How scores are calculated',
                 onPressed: () {
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text('Attributes'),
                       content: const Text(
-                        'The radar chart shows 5 performance attributes, each scored from 0 to 10 (higher is better). '
-                        'Scores average only matches where you had minutes on the pitch (from the locked line-up and substitutions), '
-                        'weighted like match ratings:\n\n'
-                        'ATT (Attacking): goals and assists.\n'
-                        'SHT (Shooting): shots and shots on target.\n'
-                        'DEF (Defending): tackles.\n'
-                        'GKP (Goalkeeping): saves — mainly relevant for goalkeepers.\n'
-                        'DIS (Discipline): fewer yellow/red cards gives a higher score.\n\n'
-                        'An average performance sits around the middle rings (~6). '
-                        'Use the year slider to compare different years.',
+                        'Each spoke is one part of the game, scored 0–10. '
+                        'Higher is better. Scores average matches where they played minutes.\n\n'
+                        'Attack — goals and assists\n'
+                        'Shooting — shots and shots on target\n'
+                        'Defence — tackles\n'
+                        'Keeping — saves (mainly for goalkeepers)\n'
+                        'Discipline — fewer yellow and red cards\n\n'
+                        'The grey ring is a typical score (~6). '
+                        'Use the year slider to compare seasons.',
                       ),
                       actions: [
                         TextButton(
@@ -2533,10 +2500,10 @@ class _AttributesSectionState extends State<_AttributesSection> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           // Radar chart
           SizedBox(
-            height: 300,
+            height: 368,
             child: PerformanceRadarChart(
               key: ValueKey(
                 'attrs-${widget.profilePlayerId}-$selectedYear-'
@@ -2563,33 +2530,37 @@ class _AttributesSectionState extends State<_AttributesSection> {
               const SizedBox(width: 8),
               // Text field
               Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  onChanged: _onSearchChanged,
-                  decoration: InputDecoration(
-                    labelText: 'Search to compare',
-                    suffixIcon: _isSearching
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : (_searchController.text.isNotEmpty
-                              ? IconButton(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {
-                                      _searchResults = const [];
-                                      _selectedComparisonPlayer = null;
-                                    });
-                                  },
-                                  icon: const Icon(Icons.close),
-                                )
-                              : null),
+                child: Focus(
+                  canRequestFocus:
+                      ModalRoute.of(context)?.isCurrent ?? true,
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      labelText: 'Search to compare',
+                      suffixIcon: _isSearching
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : (_searchController.text.isNotEmpty
+                                ? IconButton(
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchResults = const [];
+                                        _selectedComparisonPlayer = null;
+                                      });
+                                    },
+                                    icon: const Icon(Icons.close),
+                                  )
+                                : null),
+                    ),
                   ),
                 ),
               ),
@@ -2890,7 +2861,7 @@ class _NextMatchSection extends StatelessWidget {
                     children: [
                       Text(league, style: textTheme.labelSmall),
                       const SizedBox(width: 4),
-                      Text('Â·', style: textTheme.labelSmall),
+                      Text('·', style: textTheme.labelSmall),
                       const SizedBox(width: 4),
                       Text(_dateLabel(date), style: textTheme.labelSmall),
                     ],
@@ -2906,8 +2877,14 @@ class _NextMatchSection extends StatelessWidget {
 }
 
 class _TeamFormSection extends StatefulWidget {
-  const _TeamFormSection({this.onGoToMatchesTab});
+  const _TeamFormSection({
+    required this.profilePlayerId,
+    required this.isOwnProfile,
+    this.onGoToMatchesTab,
+  });
 
+  final String profilePlayerId;
+  final bool isOwnProfile;
   final VoidCallback? onGoToMatchesTab;
 
   @override
@@ -2943,9 +2920,8 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
     });
 
     try {
-      final client = Supabase.instance.client;
-      final userId = client.auth.currentUser?.id;
-      if (userId == null) {
+      final userId = widget.profilePlayerId;
+      if (userId.isEmpty) {
         setState(() {
           _teams = [];
           _selectedTeamId = null;
@@ -3018,21 +2994,26 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
         title: 'Team form',
         child: HomeSectionEmptyState(
           embedded: true,
-          message:
-              'Join a team to track your last six results with scores and gameweeks.',
-          actionLabel: 'Find a team',
-          actionIcon: Icons.search,
-          onAction: () async {
-            await _profileOpenFindTeam(context);
-            if (!mounted) return;
-            await _load();
-          },
-          secondaryActionLabel: 'Create team',
-          onSecondaryAction: () async {
-            await _profileOpenCreateTeam(context);
-            if (!mounted) return;
-            await _load();
-          },
+          message: widget.isOwnProfile
+              ? 'Join a team to track your last six results with scores and gameweeks.'
+              : 'This player is not in a team yet. Recent form appears after they join one.',
+          actionLabel: widget.isOwnProfile ? 'Find a team' : null,
+          actionIcon: widget.isOwnProfile ? Icons.search : null,
+          onAction: widget.isOwnProfile
+              ? () async {
+                  await _profileOpenFindTeam(context);
+                  if (!mounted) return;
+                  await _load();
+                }
+              : null,
+          secondaryActionLabel: widget.isOwnProfile ? 'Create team' : null,
+          onSecondaryAction: widget.isOwnProfile
+              ? () async {
+                  await _profileOpenCreateTeam(context);
+                  if (!mounted) return;
+                  await _load();
+                }
+              : null,
         ),
       );
     }
@@ -3138,48 +3119,63 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Column(
-                          children: [
-                            // Game week
-                            Text(
-                              gwLabel.isNotEmpty ? gwLabel : '—',
-                              style: textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 8),
-                            // Opponent logo
-                            CircleAvatar(
-                              backgroundColor: Colors.transparent,
-                              backgroundImage: _logoProvider(opponent.logoPath),
-                            ),
-                            const SizedBox(height: 8),
-                            // Opponent short form
-                            Text(
-                              opponent.shortForm,
-                              style: textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Score pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: scoreColor,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                scoreText,
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: isDraw
-                                      ? colorScheme.onSurface
-                                      : Colors.white,
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: opponent.id.isEmpty
+                                ? null
+                                : () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => TeamDetailPage(
+                                          teamId: opponent.id,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            child: Column(
+                              children: [
+                                Text(
+                                  gwLabel.isNotEmpty ? gwLabel : '—',
+                                  style: textTheme.bodySmall,
                                 ),
-                              ),
+                                const SizedBox(height: 8),
+                                CircleAvatar(
+                                  backgroundColor: Colors.transparent,
+                                  backgroundImage: _logoProvider(
+                                    opponent.logoPath,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  opponent.shortForm,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: scoreColor,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Text(
+                                    scoreText,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: isDraw
+                                          ? colorScheme.onSurface
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                         if (index < _recentMatches.length - 1)
                           const SizedBox(width: 24),
@@ -3232,7 +3228,9 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
       final stints = await _teamsRepo.getMembershipHistoryForPlayer(
         widget.profilePlayerId,
       );
-      final viewerId = Supabase.instance.client.auth.currentUser?.id;
+      final viewerId = GuestMode.isGuest
+          ? null
+          : Supabase.instance.client.auth.currentUser?.id;
       Set<String> active = {};
       Set<String> pending = {};
       if (viewerId != null && stints.isNotEmpty) {
@@ -3283,6 +3281,9 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
 
   /// Leave / Join / Pending for the signed-in viewer (or profile player when [isOwnProfile]).
   _ClubRowAction _actionForRow(TeamMembershipStint stint) {
+    if (GuestMode.isGuest) {
+      return _ClubRowAction.none;
+    }
     final viewerId = Supabase.instance.client.auth.currentUser?.id;
     if (viewerId == null) {
       return _ClubRowAction.none;
@@ -3347,6 +3348,7 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
   }
 
   Future<void> _onJoinPressed(String teamId) async {
+    if (GuestMode.isGuest) return;
     final viewerId = Supabase.instance.client.auth.currentUser?.id;
     if (viewerId == null) {
       ScaffoldMessenger.of(
@@ -3513,27 +3515,49 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
 
             return Column(
               children: [
-                Row(
-                  children: [
-                    _teamLogoAvatar(stint),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: stint.teamId.isEmpty
+                        ? null
+                        : () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    TeamDetailPage(teamId: stint.teamId),
+                              ),
+                            );
+                          },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
                         children: [
-                          Text(stint.displayName, style: textTheme.bodySmall),
-                          const SizedBox(height: 4),
-                          Text(
-                            _yearsLabel(stint),
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                          _teamLogoAvatar(stint),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  stint.displayName,
+                                  style: textTheme.bodySmall,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _yearsLabel(stint),
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                          ?trailing,
                         ],
                       ),
                     ),
-                    ?trailing,
-                  ],
+                  ),
                 ),
                 if (index < _stints.length - 1) ...[
                   const SizedBox(height: 8),
@@ -3656,7 +3680,7 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
             }
             return y != null ? 'Season ($y)' : 'Season';
           })
-          .join(' Â· ');
+          .join(' · ');
       final logoId = list.first['logo_id']?.toString();
       rows.add(
         _ProfileTrophyRow(
@@ -3879,203 +3903,6 @@ class _ProfileTrophyLeagueThumb extends StatelessWidget {
   }
 }
 
-class _BadgesSection extends StatefulWidget {
-  const _BadgesSection({super.key, required this.profilePlayerId});
-
-  final String profilePlayerId;
-
-  @override
-  State<_BadgesSection> createState() => _BadgesSectionState();
-}
-
-class _BadgesSectionState extends State<_BadgesSection> {
-  late Future<PlayerAllTimeStats?> _statsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _statsFuture = PlayerStatsRepository().getPlayerAllTimeStats(
-      widget.profilePlayerId,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _BadgesSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.profilePlayerId != widget.profilePlayerId) {
-      _statsFuture = PlayerStatsRepository().getPlayerAllTimeStats(
-        widget.profilePlayerId,
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<PlayerAllTimeStats?>(
-      future: _statsFuture,
-      builder: (context, snapshot) {
-        final stats = snapshot.data;
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Badges', style: Theme.of(context).textTheme.titleSmall),
-                  IconButton(
-                    icon: const Icon(Icons.info_outline),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Badges'),
-                          content: const Text(
-                            'Earn badges by reaching career milestones in finished '
-                            'matches. Each earned badge adds bonus points to your '
-                            'leaderboard total.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    iconSize: 20,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...PlayerBadges.all.asMap().entries.map((entry) {
-                final index = entry.key;
-                final badge = entry.value;
-                final progress = badge.progressFor(stats);
-                final percentage = badge.progressPercentFor(stats);
-                final earned = badge.isEarned(stats);
-
-                return Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: SvgPicture.asset(
-                            badge.svgPath,
-                            width: 36,
-                            height: 36,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                Icons.emoji_events,
-                                size: 24,
-                                color: Theme.of(context).colorScheme.primary,
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            badge.pointsLabel,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: earned
-                                      ? Theme.of(context).colorScheme.primary
-                                      : null,
-                                ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                badge.name,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                badge.objective,
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: SizedBox(
-                                      height: 2,
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(2),
-                                        child: LinearProgressIndicator(
-                                          year2023: false,
-                                          value: progress,
-                                          minHeight: 2,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Theme.of(
-                                                  context,
-                                                ).colorScheme.primary,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '$percentage%',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelSmall,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (index < PlayerBadges.all.length - 1) ...[
-                      const SizedBox(height: 16),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Theme.of(context).colorScheme.outlineVariant,
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ],
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _TimelineSlider extends StatelessWidget {
   const _TimelineSlider({
     required this.years,
@@ -4107,12 +3934,20 @@ class _ProfileCard extends StatefulWidget {
   const _ProfileCard({
     required this.playerId,
     required this.showEditButton,
+    this.showFollowButton = false,
+    this.isFollowing = false,
+    this.isUpdatingFollow = false,
+    this.onFollow,
     this.refreshTick = 0,
     this.onTabBackdrop,
   });
 
   final String playerId;
   final bool showEditButton;
+  final bool showFollowButton;
+  final bool isFollowing;
+  final bool isUpdatingFollow;
+  final VoidCallback? onFollow;
   final int refreshTick;
   final ValueChanged<Color>? onTabBackdrop;
 
@@ -4309,7 +4144,11 @@ class _ProfileCardState extends State<_ProfileCard> {
                             iconColor: nameOn,
                           ),
                         ),
-                        if (widget.showEditButton) ...[
+                        if (widget.showEditButton ||
+                            profile?.canBeEditedBy(
+                                  Supabase.instance.client.auth.currentUser?.id,
+                                ) ==
+                                true) ...[
                           const SizedBox(width: 12),
                           FilledButton(
                             onPressed: profile == null
@@ -4318,9 +4157,29 @@ class _ProfileCardState extends State<_ProfileCard> {
                                     final saved = await Navigator.of(context)
                                         .push<bool>(
                                           MaterialPageRoute(
-                                            builder: (_) => EditProfilePage(
-                                              profile: profile,
-                                            ),
+                                            builder: (_) =>
+                                                widget.showEditButton
+                                                ? EditProfilePage(
+                                                    profile: profile,
+                                                  )
+                                                : EditManagedPlayerPage(
+                                                    player:
+                                                        ManagedPlayer.fromProfile(
+                                                      id: profile.id,
+                                                      playerName:
+                                                          profile.playerName ??
+                                                          'Player',
+                                                      username:
+                                                          profile.username ??
+                                                          '',
+                                                      position:
+                                                          profile.position,
+                                                      imageUrl:
+                                                          profile.imageUrl,
+                                                      loginEnabledAt: profile
+                                                          .loginEnabledAt,
+                                                    ),
+                                                  ),
                                           ),
                                         );
                                     if (saved == true && mounted) {
@@ -4344,6 +4203,36 @@ class _ProfileCardState extends State<_ProfileCard> {
                               minimumSize: const Size(60, 40),
                             ),
                             child: const Icon(Icons.edit_outlined, size: 20),
+                          ),
+                        ] else if (widget.showFollowButton) ...[
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            onPressed: widget.isUpdatingFollow
+                                ? null
+                                : widget.onFollow,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: widget.isFollowing
+                                  ? colorScheme.surfaceContainerHigh
+                                  : colorScheme.primaryContainer,
+                              foregroundColor: widget.isFollowing
+                                  ? colorScheme.onSurface
+                                  : colorScheme.onPrimaryContainer,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(999),
+                                ),
+                              ),
+                              padding: const EdgeInsets.only(
+                                left: 17,
+                                right: 17,
+                                top: 12,
+                                bottom: 12,
+                              ),
+                              minimumSize: const Size(60, 40),
+                            ),
+                            child: Text(
+                              widget.isFollowing ? 'Following' : 'Follow',
+                            ),
                           ),
                         ],
                       ],

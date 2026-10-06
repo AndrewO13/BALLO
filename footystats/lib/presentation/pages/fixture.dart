@@ -34,6 +34,7 @@ import '../providers/video_upload_queue_provider.dart';
 import '../widgets/media_access_sheet.dart';
 import '../widgets/performance_radar_chart.dart';
 import '../widgets/video_upload_progress_overlay.dart';
+import '../widgets/video_upload_progress_snack.dart';
 import '../widgets/match_live_status.dart';
 import '../widgets/match_odds_chips.dart';
 import '../widgets/squad/squad_pitch_view.dart';
@@ -538,8 +539,71 @@ final fixtureFeaturedPlayersProvider = FutureProvider.autoDispose
 class _FixturePageState extends ConsumerState<FixturePage> {
   bool _isUploadingMatchVideo = false;
   bool _showEditOverlay = false;
+  String? _uploadSnackJobId;
+
+  VideoUploadJob? _uploadJobForMatch(List<VideoUploadJob> jobs) {
+    for (final job in jobs) {
+      if (job.matchId == widget.matchId) return job;
+    }
+    return null;
+  }
+
+  String _uploadErrorMessage(String? error) {
+    var text = error?.trim() ?? '';
+    if (text.startsWith('Bad state: ')) {
+      text = text.substring('Bad state: '.length);
+    }
+    if (text.isEmpty) return 'Could not add video';
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<List<VideoUploadJob>>(videoUploadQueueProvider, (
+      previous,
+      next,
+    ) {
+      if (!mounted) return;
+      final prevJob = _uploadJobForMatch(previous ?? const []);
+      final nextJob = _uploadJobForMatch(next);
+      final messenger = ScaffoldMessenger.of(context);
+
+      if (nextJob != null && !nextJob.isFailed) {
+        if (_uploadSnackJobId == nextJob.id) return;
+        _uploadSnackJobId = nextJob.id;
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              duration: const Duration(minutes: 15),
+              content: VideoUploadProgressSnackContent(matchId: widget.matchId),
+            ),
+          );
+        return;
+      }
+
+      if (nextJob != null && nextJob.isFailed) {
+        if (_uploadSnackJobId != nextJob.id) return;
+        _uploadSnackJobId = null;
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(_uploadErrorMessage(nextJob.error))),
+          );
+        return;
+      }
+
+      if (nextJob == null &&
+          prevJob != null &&
+          !prevJob.isFailed &&
+          _uploadSnackJobId == prevJob.id) {
+        _uploadSnackJobId = null;
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Video added')));
+      }
+    });
+
     final asyncMatch = ref.watch(fixtureMatchProvider(widget.matchId));
     return asyncMatch.when(
       loading: () => Scaffold(
@@ -689,6 +753,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     MatchModel match,
     bool isLeagueOwner,
   ) {
+    if (GuestMode.isGuest) return null;
     if (isLeagueOwner) {
       return _FixtureHintedFab(
         prefsKey: 'fixture_officiate_fab_hint_seen',
@@ -740,6 +805,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     BuildContext context,
     MatchModel match,
   ) async {
+    if (GuestMode.isGuest) return;
     try {
       if (!await ensureMediaAccess(context, MediaAccessKind.videos)) return;
       final picker = ImagePicker();
@@ -791,27 +857,15 @@ class _FixturePageState extends ConsumerState<FixturePage> {
         return;
       }
 
-      final messenger = ScaffoldMessenger.of(context);
-      unawaited(
-        ref
-            .read(videoUploadQueueProvider.notifier)
-            .enqueue(
-              localVideoPath: xFile.path,
-              originalFileName: xFile.name,
-              match: match,
-              uploaderUserId: userId,
-            )
-            .then((_) {
-              messenger.showSnackBar(
-                const SnackBar(content: Text('Video added')),
-              );
-            })
-            .catchError((Object e) {
-              messenger.showSnackBar(
-                SnackBar(content: Text('Could not add video: $e')),
-              );
-            }),
-      );
+      ref
+          .read(videoUploadQueueProvider.notifier)
+          .enqueue(
+            localVideoPath: xFile.path,
+            originalFileName: xFile.name,
+            match: match,
+            uploaderUserId: userId,
+          )
+          .ignore();
     } catch (e) {
       if (!context.mounted) return;
       if (await presentMediaAccessSheetIfNeeded(
@@ -974,6 +1028,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     final hasVideos = videos.isNotEmpty;
     final hasUploads = uploadJobs.isNotEmpty;
     final hasContent = hasVideos || hasUploads;
+    final canUpload = !GuestMode.isGuest;
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
@@ -1040,23 +1095,27 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'No highlight uploaded yet. Add the first clip.',
+                      canUpload
+                          ? 'No highlight uploaded yet. Add the first clip.'
+                          : 'No highlights uploaded yet.',
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  FilledButton.tonalIcon(
-                    onPressed: _isUploadingMatchVideo
-                        ? null
-                        : () => _handleAddMatchVideoFromDialog(
-                            dialogContext,
-                            match,
-                          ),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add'),
-                  ),
+                  if (canUpload) ...[
+                    const SizedBox(width: 10),
+                    FilledButton.tonalIcon(
+                      onPressed: _isUploadingMatchVideo
+                          ? null
+                          : () => _handleAddMatchVideoFromDialog(
+                              dialogContext,
+                              match,
+                            ),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add'),
+                    ),
+                  ],
                 ],
               ),
             )
@@ -1065,7 +1124,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               children: [
                 Expanded(
                   child: SizedBox(
-                    height: 130,
+                    height: 148,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemBuilder: (context, index) {
@@ -1094,13 +1153,15 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                _MatchStoryAddButton(
-                  onPressed: () => _handleAddMatchVideoFromDialog(
-                    dialogContext,
-                    match,
+                if (canUpload) ...[
+                  const SizedBox(width: 10),
+                  _MatchStoryAddButton(
+                    onPressed: () => _handleAddMatchVideoFromDialog(
+                      dialogContext,
+                      match,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           if (hasVideos) ...[
@@ -1479,8 +1540,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               )
             else
               IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () {},
+                icon: const Icon(Icons.add_rounded),
+                tooltip: 'Add clip',
+                onPressed: () => _pickAndEnqueueMatchVideo(context, match),
               ),
           ],
         ),
@@ -2898,6 +2960,7 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
         child: SizedBox(
           width: width,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
@@ -2954,13 +3017,14 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 job.isFailed ? 'Failed' : 'Uploading',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w600,
+                      height: 1.1,
                     ),
               ),
               const SizedBox(height: 2),
@@ -2971,6 +3035,7 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       fontSize: 10,
+                      height: 1.1,
                     ),
               ),
             ],
@@ -3027,6 +3092,7 @@ class _MatchStoryCircle extends StatelessWidget {
         child: SizedBox(
           width: width,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
@@ -3126,6 +3192,7 @@ class _MatchStoryCircle extends StatelessWidget {
               Row(
                 children: [
                   CircleAvatar(
+                    radius: 8,
                     backgroundColor: colorScheme.surfaceContainerHighest,
                     child: ClipOval(
                       child: SizedBox(
@@ -3163,6 +3230,7 @@ class _MatchStoryCircle extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.w600,
+                            height: 1.1,
                           ),
                     ),
                   ),
@@ -3176,6 +3244,7 @@ class _MatchStoryCircle extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       fontSize: 10,
+                      height: 1.1,
                     ),
               ),
             ],
@@ -4341,6 +4410,7 @@ class _FeaturedPlayersSection extends ConsumerWidget {
                     year: year,
                     primaryLabel: teamAPlayer.name,
                     compareLabel: teamBPlayer.name,
+                    showScoreReadout: false,
                   )
                 : Center(
                     child: Text(
@@ -5858,7 +5928,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
           SnackBar(
             content: Text(
               gkLabel != null
-                  ? 'Missed shot: ${shooter.name} Â· save: $gkLabel ($minute\')'
+                  ? 'Missed shot: ${shooter.name} · save: $gkLabel ($minute\')'
                   : 'Missed shot: ${shooter.name} ($minute\')',
             ),
           ),
@@ -7047,27 +7117,27 @@ String _formatUndoEventLabel(MatchEventDisplay e) {
     case 'penalty_goal':
       if (player != null && player.isNotEmpty) {
         if (secondary != null && secondary.isNotEmpty) {
-          return 'Goal Â· $player ($secondary) Â· $minuteLabel';
+          return 'Goal · $player ($secondary) · $minuteLabel';
         }
-        return 'Goal Â· $player Â· $minuteLabel';
+        return 'Goal · $player · $minuteLabel';
       }
-      return 'Goal Â· $minuteLabel';
+      return 'Goal · $minuteLabel';
     case 'own_goal':
-      return 'Own goal Â· ${player ?? 'Player'} Â· $minuteLabel';
+      return 'Own goal · ${player ?? 'Player'} · $minuteLabel';
     case 'yellow_card':
-      return 'Yellow card Â· ${player ?? 'Player'} Â· $minuteLabel';
+      return 'Yellow card · ${player ?? 'Player'} · $minuteLabel';
     case 'red_card':
-      return 'Red card Â· ${player ?? 'Player'} Â· $minuteLabel';
+      return 'Red card · ${player ?? 'Player'} · $minuteLabel';
     case 'substitution':
-      return 'Substitution Â· ${player ?? 'On'} Â· ${secondary ?? 'Off'} Â· $minuteLabel';
+      return 'Substitution · ${player ?? 'On'} · ${secondary ?? 'Off'} · $minuteLabel';
     case 'shot':
-      return 'Missed shot Â· ${player ?? 'Player'} Â· $minuteLabel';
+      return 'Missed shot · ${player ?? 'Player'} · $minuteLabel';
     case 'save':
-      return 'Save Â· ${player ?? 'Player'} Â· $minuteLabel';
+      return 'Save · ${player ?? 'Player'} · $minuteLabel';
     case 'tackle':
-      return 'Tackle Â· ${player ?? 'Player'} Â· $minuteLabel';
+      return 'Tackle · ${player ?? 'Player'} · $minuteLabel';
     default:
-      return '${e.eventType} Â· $minuteLabel';
+      return '${e.eventType} · $minuteLabel';
   }
 }
 

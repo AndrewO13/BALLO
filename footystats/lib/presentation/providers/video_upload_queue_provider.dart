@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/config/env_config.dart';
+import '../../core/utils/guest_mode.dart';
 import '../../core/utils/picked_video.dart';
 import '../../core/utils/video_thumbnail_bytes.dart';
 import '../../core/utils/video_upload_prep.dart';
@@ -98,7 +99,10 @@ class VideoUploadQueue extends Notifier<List<VideoUploadJob>> {
     required String uploaderUserId,
     Uint8List? thumbnailBytes,
     int? durationSeconds,
-  }) async {
+  }  ) async {
+    if (GuestMode.isGuest) {
+      throw StateError('Guests cannot upload videos.');
+    }
     final job = VideoUploadJob(
       id: const Uuid().v4(),
       matchId: match.id,

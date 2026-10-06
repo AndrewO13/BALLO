@@ -16,6 +16,7 @@ class UsernameAvailabilityField extends StatefulWidget {
     this.textInputAction = TextInputAction.done,
     this.onFieldSubmitted,
     this.autofocus = false,
+    this.showStatusBanner = true,
   });
 
   final TextEditingController controller;
@@ -24,6 +25,7 @@ class UsernameAvailabilityField extends StatefulWidget {
   final TextInputAction textInputAction;
   final ValueChanged<String>? onFieldSubmitted;
   final bool autofocus;
+  final bool showStatusBanner;
 
   @override
   State<UsernameAvailabilityField> createState() =>
@@ -171,8 +173,10 @@ class _UsernameAvailabilityFieldState extends State<UsernameAvailabilityField> {
             return null;
           },
         ),
-        const SizedBox(height: 8),
-        _StatusBanner(result: _result, colorScheme: colorScheme, textTheme: textTheme),
+        if (widget.showStatusBanner) ...[
+          const SizedBox(height: 8),
+          _StatusBanner(result: _result, colorScheme: colorScheme, textTheme: textTheme),
+        ],
         if (_result.status == UsernameAvailability.taken &&
             _result.suggestions.isNotEmpty) ...[
           const SizedBox(height: 12),

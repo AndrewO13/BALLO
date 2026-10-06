@@ -46,9 +46,6 @@ declare
   v_match_b5 uuid := 'a8848484-8848-4848-8848-884848484848';
   v_match_b6 uuid := 'a8858585-8858-4858-8858-885858585858';
   v_match_b7 uuid := 'a8868686-8868-4868-8868-886868686868';
-  v_video1 uuid := 'a9999999-9999-4999-8999-999999999999';
-  v_video2 uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  v_video3 uuid := 'aaaabbbb-aabb-4abb-8abb-aaaabbbbaaaa';
   -- Historical radar fixtures (calendar years on the Profile year slider)
   v_hist_season uuid := 'a55bbbbb-55bb-45bb-85bb-55bbbbbbbbbb';
   v_hist_gw uuid := 'a66eeeee-66ee-46ee-86ee-66eeeeeeeeee';
@@ -70,12 +67,6 @@ declare
   v_fan1 uuid := 'ab666666-b666-4666-8666-b66666666666';
   v_fan2 uuid := 'ab777777-b777-4777-8777-b77777777777';
   v_fan3 uuid := 'ab888888-b888-4888-8888-b88888888888';
-  v_sample_video text := 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-  v_sample_thumb text := 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg';
-  v_sample_video2 text := 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
-  v_sample_thumb2 text := 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerEscapes.jpg';
-  v_sample_video3 text := 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4';
-  v_sample_thumb3 text := 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerJoyrides.jpg';
   -- Demo crests are re-hosted in Supabase Storage ("Profile images/team logos/demo/").
   -- crests.football-data.org sends no CORS headers, so Flutter web (CanvasKit)
   -- cannot decode those images and logos render as placeholders in the browser.
@@ -398,14 +389,14 @@ begin
     goals, assists, shots, shots_on_target, tackles, saves,
     rating, yellow_cards, red_cards, clean_sheets
   ) values
-    (v_match1, v_user_id, v_team_a, 90, 15, 6, 22, 18, 16, 0, 9.6, 0, 0, 0),
-    (v_match2, v_user_id, v_team_a, 90, 14, 5, 20, 16, 15, 0, 9.4, 0, 0, 1),
-    (v_match3, v_user_id, v_team_a, 90, 16, 7, 24, 19, 14, 0, 9.8, 0, 0, 0),
-    (v_match4, v_user_id, v_team_a, 88, 12, 4, 18, 14, 18, 0, 9.1, 1, 0, 0),
-    (v_match5, v_user_id, v_team_a, 90, 15, 6, 21, 17, 17, 0, 9.7, 0, 0, 1),
-    (v_match6, v_user_id, v_team_a, 90, 17, 8, 25, 20, 15, 0, 9.9, 0, 0, 0),
+    (v_match1, v_user_id, v_team_a, 90, 15, 6, 22, 18, 16, 0, 4.6, 0, 0, 0),
+    (v_match2, v_user_id, v_team_a, 90, 14, 5, 20, 16, 15, 0, 8.9, 0, 0, 1),
+    (v_match3, v_user_id, v_team_a, 90, 16, 7, 24, 19, 14, 0, 7.9, 0, 0, 0),
+    (v_match4, v_user_id, v_team_a, 88, 12, 4, 18, 14, 18, 0, 10.0, 1, 0, 0),
+    (v_match5, v_user_id, v_team_a, 90, 15, 6, 21, 17, 17, 0, 5.3, 0, 0, 1),
+    (v_match6, v_user_id, v_team_a, 90, 17, 8, 25, 20, 15, 0, 9.4, 0, 0, 0),
     -- Current finished gameweek (Home rings default here)
-    (v_match7, v_user_id, v_team_a, 90, 16, 6, 23, 18, 17, 0, 9.5, 0, 0, 0),
+    (v_match7, v_user_id, v_team_a, 90, 16, 6, 23, 18, 17, 0, 6.7, 0, 0, 0),
     (v_match1, v_teammate1, v_team_a, 90, 1, 2, 4, 2, 8, 0, 7.4, 0, 0, 0),
     (v_match7, v_teammate1, v_team_a, 85, 0, 2, 3, 1, 6, 0, 7.1, 0, 0, 0)
   on conflict (match_id, player_id) do update set
@@ -456,24 +447,6 @@ begin
     (v_fan3, v_user_id),
     (v_teammate1, v_user_id)
   on conflict (follower_user_id, following_user_id) do nothing;
-
-  --------------------------------------------------------------------
-  -- Explore videos (approved)
-  --------------------------------------------------------------------
-  insert into public.videos (
-    id, match_id, uploader_user_id, duration_seconds,
-    video_url, thumbnail_url, moderation_status, moderated_at
-  ) values
-    (v_video1, v_match7, v_user_id, 15, v_sample_video, v_sample_thumb, 'approved', now()),
-    (v_video2, v_match7, v_user_id, 15, v_sample_video2, v_sample_thumb2, 'approved', now()),
-    (v_video3, v_match1, v_user_id, 15, v_sample_video3, v_sample_thumb3, 'approved', now())
-  on conflict (id) do update set
-    match_id = excluded.match_id,
-    uploader_user_id = excluded.uploader_user_id,
-    video_url = excluded.video_url,
-    thumbnail_url = excluded.thumbnail_url,
-    moderation_status = 'approved',
-    moderated_at = now();
 
   --------------------------------------------------------------------
   -- Historical matches for Profile radar (year slider: current−5 … current)

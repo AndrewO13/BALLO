@@ -40,7 +40,7 @@ class _PerformanceChartState extends State<PerformanceChart> {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final bool isLight = colorScheme.brightness == Brightness.light;
-    const chartHeight = 200.0;
+    const chartHeight = 132.0;
 
     final gameweekData = widget.gameweekRatings;
 
@@ -165,7 +165,7 @@ class _PerformanceChartState extends State<PerformanceChart> {
                       : (isLight
                             ? colorScheme.primary
                             : const Color(0xfff2fff1)),
-                  width: 39,
+                  width: 44,
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),

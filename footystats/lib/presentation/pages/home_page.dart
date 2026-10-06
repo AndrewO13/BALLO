@@ -21,7 +21,6 @@ import '../../domain/models/league_model.dart';
 import '../../domain/models/team_model.dart';
 import '../../domain/models/user_profile.dart';
 import '../widgets/app_search_page.dart';
-import '../widgets/home/challenge_widget.dart';
 import '../widgets/home/gameweek_header.dart';
 import '../widgets/home/home_page_shimmer.dart';
 import '../widgets/home/home_section_empty_state.dart';
@@ -77,7 +76,6 @@ class _HomePageState extends ConsumerState<HomePage>
 
   int _selectedIndex = 0;
   int _matchesActivationNonce = 0;
-  int _badgeTrackerRefreshTick = 0;
   final ScrollController _playerHomeScrollController = ScrollController();
   final CarouselController _matchCarouselController = CarouselController();
   final UserProfileRepository _profileRepository = UserProfileRepository();
@@ -964,9 +962,6 @@ class _HomePageState extends ConsumerState<HomePage>
       _loadUserTeams(),
       ref.refresh(homeThisWeekMatchesProvider.future),
     ]);
-    if (mounted) {
-      setState(() => _badgeTrackerRefreshTick++);
-    }
   }
 
   bool get _showHomeShimmer =>
@@ -1008,13 +1003,9 @@ class _HomePageState extends ConsumerState<HomePage>
           if (_useFanShell)
             GuestHomeContent(
               activationNonce: _matchesActivationNonce,
-              heading: _isStaff
-                  ? 'Welcome to the sidelines!'
-                  : 'Welcome to the stands!',
-              subtitle: _isStaff
-                  ? 'Create teams, run leagues, and keep an eye on the players that matter'
-                  : 'All the action, none of the running',
             )
+          else if (_isLoadingProfile)
+            const GuestHomePageShimmer()
           else
             _buildHomeContent(context),
           if (_useFanShell)
@@ -1047,15 +1038,8 @@ class _HomePageState extends ConsumerState<HomePage>
     ).push(MaterialPageRoute(builder: (_) => const CreateTeamOrLeaguePage()));
   }
 
-  void _openProfileBadges() {
-    if (_selectedIndex != MainNavTab.account) {
-      setState(() => _selectedIndex = MainNavTab.account);
-    }
-    ref.read(profileRevealBadgesProvider.notifier).request();
-  }
-
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-    if (_selectedIndex == 0 && _useFanShell) {
+    if (_selectedIndex == 0 && (_useFanShell || _isLoadingProfile)) {
       return AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
@@ -1127,62 +1111,51 @@ class _HomePageState extends ConsumerState<HomePage>
         automaticallyImplyLeading: false,
         elevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: Stack(
-          alignment: Alignment.center,
-          children: [
-            Row(
-              children: [
-                ChallengeWidget(
-                  refreshTick: _badgeTrackerRefreshTick,
-                  onPressed: _openProfileBadges,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Search',
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const AppSearchPage(),
-                      ),
-                    );
-                  },
-                ),
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _pendingInvitesStream(),
-                  builder: (context, snapshot) {
-                    final count = (snapshot.data ?? const []).length;
-                    return IconButton(
-                      icon: Badge(
-                        isLabelVisible: count > 0,
-                        label: Text(count > 99 ? '99+' : '$count'),
-                        child: const Icon(Icons.notifications_outlined),
-                      ),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const NotificationsPage(),
-                          ),
-                        );
-                      },
-                      tooltip: 'Notifications',
-                    );
-                  },
-                ),
-              ],
-            ),
-            Center(
-              child: SizedBox(
-                height: 32,
-                child: SvgPicture.asset(
-                  AppAssets.balloLogo,
-                  height: 32,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ],
+        centerTitle: false,
+        titleSpacing: 16,
+        title: SizedBox(
+          height: 32,
+          child: SvgPicture.asset(
+            AppAssets.balloLogo,
+            height: 32,
+            fit: BoxFit.contain,
+            alignment: Alignment.centerLeft,
+          ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AppSearchPage(),
+                ),
+              );
+            },
+          ),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _pendingInvitesStream(),
+            builder: (context, snapshot) {
+              final count = (snapshot.data ?? const []).length;
+              return IconButton(
+                icon: Badge(
+                  isLabelVisible: count > 0,
+                  label: Text(count > 99 ? '99+' : '$count'),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const NotificationsPage(),
+                    ),
+                  );
+                },
+                tooltip: 'Notifications',
+              );
+            },
+          ),
+        ],
       );
     } else if (_selectedIndex == 1) {
       if (_useFanShell) {
@@ -1503,7 +1476,7 @@ class _HomePageState extends ConsumerState<HomePage>
               Center(
                 child: Container(
                   width: double.infinity,
-                  height: 365 * AppResponsive.layoutScaleOf(context),
+                  height: 297 * AppResponsive.layoutScaleOf(context),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(28),

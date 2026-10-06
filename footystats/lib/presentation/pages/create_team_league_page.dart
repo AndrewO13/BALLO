@@ -8,12 +8,19 @@ import '../../core/utils/content_moderation_guards.dart';
 import '../../core/utils/username_rules.dart';
 import '../../data/repositories/leagues_repository.dart';
 import '../../data/repositories/teams_repository.dart';
+import '../../data/repositories/managed_players_repository.dart';
 import '../../data/repositories/user_profile_repository.dart';
 import '../../domain/models/league_format.dart';
+import '../../domain/models/managed_player.dart';
+import '../widgets/add_to_matches_shimmer.dart';
 import '../widgets/country_picker_section.dart';
+import '../widgets/created_managed_player_tile.dart';
 import '../widgets/league_format_fields.dart';
 import '../widgets/media_access_sheet.dart';
 import 'create_match_entry_page.dart';
+import 'create_players_page.dart';
+import 'edit_managed_player_page.dart';
+import 'player_profile_page.dart';
 import 'team_detail_page.dart';
 import 'league_detail_page.dart';
 
@@ -27,10 +34,13 @@ class CreateTeamOrLeaguePage extends StatefulWidget {
 class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
   List<Map<String, dynamic>> _leagues = [];
   List<Map<String, dynamic>> _teams = [];
+  List<ManagedPlayer> _createdPlayers = const [];
   bool _isLoading = true;
+  bool _isStaff = false;
 
   final _leaguesRepository = LeaguesRepository();
   final _teamsRepository = TeamsRepository();
+  final _managedPlayersRepository = ManagedPlayersRepository();
 
   @override
   void initState() {
@@ -46,15 +56,28 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       if (user == null) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isStaff = false;
+            _createdPlayers = const [];
+          });
+        }
         return;
       }
 
       final leagues = await _leaguesRepository.getLeaguesForUser(user.id);
       final teams = await _teamsRepository.getTeamsForUser(user.id);
+      final profile = await UserProfileRepository().getCurrentProfile();
+      final isStaff = profile?.isTechnicalStaff == true;
+      final createdPlayers = isStaff
+          ? await _managedPlayersRepository.listCreatedByCurrentUser()
+          : const <ManagedPlayer>[];
 
       if (mounted) {
         setState(() {
+          _isStaff = isStaff;
+          _createdPlayers = createdPlayers;
           _leagues = leagues
               .map(
                 (league) => <String, dynamic>{
@@ -97,7 +120,7 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
         centerTitle: false,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? AddToMatchesPageShimmer(includeStaffSections: _isStaff)
           : RefreshIndicator(
               onRefresh: _loadUserContent,
               child: SingleChildScrollView(
@@ -158,6 +181,23 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
                           _loadUserContent();
                         },
                       ),
+                      if (_isStaff) ...[
+                        const SizedBox(height: 12),
+                        _ChoiceCard(
+                          icon: Icons.person_add_alt_1_outlined,
+                          title: 'Create players',
+                          subtitle:
+                              'Add one or more player accounts for your teams. You can set a login later if they want to claim the profile.',
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CreatePlayersPage(),
+                              ),
+                            );
+                            _loadUserContent();
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 32),
                       // Section 2: Leagues
                       Text(
@@ -239,12 +279,85 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
                             ),
                           ),
                         ),
+                      if (_isStaff) ...[
+                        const SizedBox(height: 32),
+                        Text(
+                          'Players you created',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        if (_createdPlayers.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              'None yet. New players will show up here so you can add a login later.',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        else
+                          ..._createdPlayers.map(
+                            (player) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12.0),
+                              child: CreatedManagedPlayerTile(
+                                player: player,
+                                onOpenProfile: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => PlayerProfilePage(
+                                        playerId: player.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                onSetLogin: () => _setCreatedPlayerLogin(player),
+                                onEdit: player.canCreatorEdit
+                                    ? () => _editCreatedPlayer(player)
+                                    : null,
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
     );
+  }
+
+  Future<void> _editCreatedPlayer(ManagedPlayer player) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => EditManagedPlayerPage(player: player),
+      ),
+    );
+    if (saved == true && mounted) {
+      await _loadUserContent();
+    }
+  }
+
+  Future<void> _setCreatedPlayerLogin(ManagedPlayer player) async {
+    final saved = await showSetManagedPlayerLoginDialog(
+      context: context,
+      player: player,
+    );
+    if (saved && mounted) {
+      await _loadUserContent();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Share the email and temporary password with ${player.playerName} so they can sign in.',
+          ),
+        ),
+      );
+    }
   }
 }
 

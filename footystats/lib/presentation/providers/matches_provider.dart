@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/utils/guest_mode.dart';
 import '../../data/repositories/matches_repository.dart';
+import '../../data/repositories/user_profile_repository.dart';
+import '../../domain/models/account_type.dart';
 import '../../domain/models/league_model.dart';
 import '../../domain/models/match_model.dart';
 import '../../domain/models/season_model.dart';
@@ -10,6 +13,7 @@ import '../../domain/models/team_model.dart';
 import 'league_teams_provider.dart';
 import 'leagues_provider.dart';
 import 'seasons_provider.dart';
+import 'teams_provider.dart';
 
 final matchesRepositoryProvider = Provider<MatchesRepository>((ref) {
   return MatchesRepository();
@@ -98,27 +102,42 @@ final selectedGameweekLabelProvider = Provider.autoDispose<String?>((ref) {
   );
 });
 
-/// Leagues the user participates in (created or has team in).
+/// Guests and technical staff browse every league/season/team, not just
+/// ones they belong to.
+final matchesFilterAppWideProvider = FutureProvider.autoDispose<bool>((
+  ref,
+) async {
+  if (GuestMode.isGuest) return true;
+  final profile = await UserProfileRepository().getCurrentProfile();
+  return AccountType.fromDb(profile?.accountType) != AccountType.player;
+});
+
+/// Leagues for the matches filter. Players see leagues they belong to;
+/// guests and staff see every league.
 final matchesFilterLeaguesProvider =
     FutureProvider.autoDispose<List<LeagueModel>>((ref) async {
+      final repo = ref.watch(leaguesRepositoryProvider);
+      final appWide = await ref.watch(matchesFilterAppWideProvider.future);
+      if (appWide) return repo.getAllLeagues();
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return [];
-      final repo = ref.watch(leaguesRepositoryProvider);
       return repo.getLeaguesForUser(userId);
     });
 
-/// Seasons for matches filter. If league selected, that league's seasons;
-/// else seasons from all user's leagues.
+/// Seasons for matches filter. If a league is selected, that league's seasons;
+/// otherwise every season in the current league set (all leagues for guests/staff).
 final matchesFilterSeasonsProvider =
     FutureProvider.autoDispose<List<SeasonModel>>((ref) async {
-      final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
       final selectedLeague = ref.watch(selectedMatchesLeagueProvider);
-      if (leagues.isEmpty) return [];
-      final leagueIds = selectedLeague != null
-          ? [selectedLeague]
-          : leagues.map((l) => l.id).toList();
       final seasonsRepo = ref.watch(seasonsRepositoryProvider);
-      return seasonsRepo.getSeasonsForLeagues(leagueIds);
+      if (selectedLeague != null && selectedLeague.isNotEmpty) {
+        return seasonsRepo.getSeasonsForLeagues([selectedLeague]);
+      }
+      final appWide = await ref.watch(matchesFilterAppWideProvider.future);
+      if (appWide) return seasonsRepo.getAllSeasons();
+      final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
+      if (leagues.isEmpty) return [];
+      return seasonsRepo.getSeasonsForLeagues(leagues.map((l) => l.id).toList());
     });
 
 /// Gameweeks for matches filter. From selected season or all user's seasons.
@@ -134,19 +153,30 @@ final matchesFilterGameweeksProvider =
       return seasonsRepo.getGameweeksForSeasons(seasonIds);
     });
 
-/// Teams in leagues the user participates in. If a league is selected, only
-/// teams in that league; otherwise teams from all user's leagues.
+/// Teams for the matches filter. If a league is selected, teams in that league;
+/// otherwise every team guests/staff can see, or teams from the player's leagues.
 final matchesFilterTeamsProvider = FutureProvider.autoDispose<List<TeamModel>>((
   ref,
 ) async {
-  final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
   final selectedLeague = ref.watch(selectedMatchesLeagueProvider);
+  if (selectedLeague != null && selectedLeague.isNotEmpty) {
+    return ref
+        .watch(leagueTeamsRepositoryProvider)
+        .getTeamsInLeagues([selectedLeague]);
+  }
+  final appWide = await ref.watch(matchesFilterAppWideProvider.future);
+  if (appWide) {
+    final teams = await ref.watch(teamsRepositoryProvider).getAllTeams();
+    teams.sort(
+      (a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+    );
+    return teams;
+  }
+  final leagues = await ref.watch(matchesFilterLeaguesProvider.future);
   if (leagues.isEmpty) return [];
-  final leagueIds = selectedLeague != null
-      ? [selectedLeague]
-      : leagues.map((l) => l.id).toList();
-  final leagueTeamsRepo = ref.watch(leagueTeamsRepositoryProvider);
-  return leagueTeamsRepo.getTeamsInLeagues(leagueIds);
+  return ref
+      .watch(leagueTeamsRepositoryProvider)
+      .getTeamsInLeagues(leagues.map((l) => l.id).toList());
 });
 
 /// How far back the unfiltered matches list reaches. Older matches are still
@@ -276,6 +306,36 @@ final matchesGroupedByDateProvider =
         },
         loading: () => <String, List<MatchModel>>{},
         error: (_, _) => <String, List<MatchModel>>{},
+      );
+    });
+
+/// Newest finished results from days before today, for guest/staff home.
+///
+/// Respects the same league/season/team filters as [matchesProvider]. Capped
+/// so the landing page stays scannable; older days stay on the date arrows.
+const _guestHomeRecentResultsLimit = 8;
+
+final guestHomeRecentCompletedProvider =
+    Provider.autoDispose<List<MatchModel>>((ref) {
+      final asyncMatches = ref.watch(matchesProvider);
+      return asyncMatches.when(
+        data: (list) {
+          final today = normalizeMatchCalendarDate(DateTime.now());
+          final recent = list.where((m) {
+            if (m.status != MatchStatus.fullTime) return false;
+            if (m.teamAScore == null || m.teamBScore == null) return false;
+            return normalizeMatchCalendarDate(m.matchDate).isBefore(today);
+          }).toList();
+          recent.sort((a, b) {
+            final dateCmp = b.matchDate.compareTo(a.matchDate);
+            if (dateCmp != 0) return dateCmp;
+            return b.matchTime.compareTo(a.matchTime);
+          });
+          if (recent.length <= _guestHomeRecentResultsLimit) return recent;
+          return recent.sublist(0, _guestHomeRecentResultsLimit);
+        },
+        loading: () => const <MatchModel>[],
+        error: (_, _) => const <MatchModel>[],
       );
     });
 
@@ -453,6 +513,14 @@ String formatMatchClock(Duration d) {
   final m = d.inMinutes;
   final s = d.inSeconds % 60;
   return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
+
+/// Date label for recent results ("Yesterday" or e.g. "Tue 2 Dec").
+String formatRecentMatchDateLabel(String key) {
+  final today = normalizeMatchCalendarDate(DateTime.now());
+  final yesterday = today.subtract(const Duration(days: 1));
+  if (key == _dateKey(yesterday)) return 'Yesterday';
+  return formatMatchDateKey(key);
 }
 
 /// Formatted date for display (e.g. "Tue 2 Dec") from "yyyy-MM-dd".

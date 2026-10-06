@@ -239,16 +239,19 @@ Deno.serve(async (req: Request) => {
         return json({ error: "max 15 frames" }, 400);
       }
 
-      // Batch frames in groups of 5 to stay under payload limits.
-      for (let i = 0; i < frames.length; i += 5) {
-        const chunk = frames.slice(i, i + 5);
-        const input = chunk.map((f: string) => ({
-          type: "image_url",
-          image_url: { url: toDataUrl(f) },
-        }));
-        const result = await callOpenAI(apiKey, input);
+      // omni-moderation-latest allows only one image per request.
+      for (const frame of frames) {
+        const result = await callOpenAI(apiKey, [
+          {
+            type: "image_url",
+            image_url: { url: toDataUrl(frame) },
+          },
+        ]);
         scores = mergeScores(scores, result.category_scores);
         flagged = flagged || result.flagged;
+        if (decideFromScores(scores, sportsContext).decision === "reject") {
+          break;
+        }
       }
     } else {
       return json({

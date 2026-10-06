@@ -177,12 +177,14 @@ flutter:
     - lib/assets/images/pitch bg.png
     - lib/assets/images/match bg.jpeg
     - lib/assets/images/onboarding bg.png
+    - lib/assets/images/onboarding bg2.jpeg
     - lib/assets/images/fox.png
     - lib/assets/images/ball.png
     - lib/assets/images/emoji.png
     - lib/assets/images/slide 1.png
     - lib/assets/images/slide 2.png
     - lib/assets/images/slide 3.png
+    - lib/assets/images/slide 4.png
     - lib/assets/images/empty states/404.png
     - lib/assets/images/empty states/connection.png
     - lib/assets/images/empty states/no matches.png

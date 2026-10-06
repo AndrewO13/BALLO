@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/countries.dart';
+import '../../core/utils/dismiss_keyboard.dart';
 import '../../core/widgets/media_placeholders.dart';
 import '../../data/repositories/players_repository.dart';
 import '../../domain/models/league_model.dart';
@@ -291,6 +292,8 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
   }
 
   void _openResult(_SearchItem item) {
+    _focusNode.unfocus();
+    dismissKeyboard();
     if (item.type == 'League') {
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -585,6 +588,8 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
                       team: team,
                       isStarred: favouritedTeamIds.contains(team.id),
                       onTap: () {
+                        _focusNode.unfocus();
+                        dismissKeyboard();
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => TeamDetailPage(teamId: team.id),

@@ -34,6 +34,16 @@ class LeaguesRepository {
     return list.map(LeagueModel.fromJson).toList();
   }
 
+  /// Every league on the app, for guest/staff match filters.
+  Future<List<LeagueModel>> getAllLeagues() async {
+    final res = await _client
+        .from('leagues')
+        .select('id, league_name, logo_id, created_by, created_at')
+        .order('league_name', ascending: true);
+    final list = List<Map<String, dynamic>>.from(res as List);
+    return list.map(LeagueModel.fromJson).toList();
+  }
+
   /// Leagues the user participates in: created by user OR has a team in the league
   /// (user is a player on a team that is in the league via league_team_memberships).
   Future<List<LeagueModel>> getLeaguesForUser(String userId) async {

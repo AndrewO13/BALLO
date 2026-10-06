@@ -129,7 +129,7 @@ class _PerformanceChartShimmer extends StatelessWidget {
     return Center(
       child: ShimmerBox(
         width: width,
-        height: 365,
+        height: 297,
         borderRadius: 28,
       ),
     );
@@ -220,6 +220,172 @@ class HomeTeamSectionShimmer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const AppShimmer(child: _TeamCardShimmer());
+  }
+}
+
+/// Full guest/staff home skeleton: date filters and match groups.
+class GuestHomePageShimmer extends StatelessWidget {
+  const GuestHomePageShimmer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: AppShimmer(
+            child: Column(
+              children: [
+                _DateFilterChipsShimmer(),
+                SizedBox(height: 12),
+                _DateHeaderShimmer(),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: const GuestHomeMatchListShimmer(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Match-group cards for the guest/staff home list while fixtures load.
+class GuestHomeMatchListShimmer extends StatelessWidget {
+  const GuestHomeMatchListShimmer({super.key, this.padded = true});
+
+  final bool padded;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padded
+          ? EdgeInsets.fromLTRB(
+              AppResponsive.horizontalInset(context),
+              2,
+              AppResponsive.horizontalInset(context),
+              16 * AppResponsive.layoutScaleOf(context),
+            )
+          : EdgeInsets.zero,
+      child: const Column(
+        children: [
+          _MatchGroupCardShimmer(),
+          _MatchGroupCardShimmer(matchCount: 2),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateFilterChipsShimmer extends StatelessWidget {
+  const _DateFilterChipsShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(child: ShimmerBox(height: 40, borderRadius: 12)),
+        SizedBox(width: 8),
+        Expanded(child: ShimmerBox(height: 40, borderRadius: 12)),
+        SizedBox(width: 8),
+        Expanded(child: ShimmerBox(height: 40, borderRadius: 12)),
+      ],
+    );
+  }
+}
+
+class _DateHeaderShimmer extends StatelessWidget {
+  const _DateHeaderShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 48,
+      child: Row(
+        children: [
+          ShimmerBox(width: 36, height: 36, borderRadius: 999),
+          Spacer(),
+          ShimmerBox(width: 88, height: 22, borderRadius: 8),
+          Spacer(),
+          ShimmerBox(width: 36, height: 36, borderRadius: 999),
+        ],
+      ),
+    );
+  }
+}
+
+class _MatchGroupCardShimmer extends StatelessWidget {
+  const _MatchGroupCardShimmer({this.matchCount = 3});
+
+  final int matchCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: AppShimmer(
+        child: Column(
+          children: [
+            const Row(
+              children: [
+                ShimmerBox(width: 36, height: 36, borderRadius: 8),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShimmerBox(width: 140, height: 14, borderRadius: 4),
+                      SizedBox(height: 6),
+                      ShimmerBox(width: 88, height: 12, borderRadius: 4),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                ShimmerBox(width: 26, height: 26, borderRadius: 6),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < matchCount; i++) const _MatchRowShimmer(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchRowShimmer extends StatelessWidget {
+  const _MatchRowShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(child: ShimmerBox(height: 14, borderRadius: 6)),
+          SizedBox(width: 8),
+          ShimmerBox(width: 28, height: 28, borderRadius: 999),
+          SizedBox(width: 16),
+          ShimmerBox(width: 56, height: 28, borderRadius: 8),
+          SizedBox(width: 16),
+          ShimmerBox(width: 28, height: 28, borderRadius: 999),
+          SizedBox(width: 8),
+          Expanded(child: ShimmerBox(height: 14, borderRadius: 6)),
+        ],
+      ),
+    );
   }
 }
 

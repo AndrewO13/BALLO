@@ -17,6 +17,7 @@ import '../providers/match_timer_adapter_provider.dart';
 import '../providers/favourited_leagues_provider.dart';
 import '../providers/matches_provider.dart';
 import '../providers/match_video_seen_provider.dart';
+import '../widgets/home/home_page_shimmer.dart';
 import '../widgets/match_list_score_pill.dart';
 import '../widgets/match_live_status.dart';
 import '../widgets/matches_filter_chips.dart';
@@ -115,6 +116,135 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
 
   String _dateToKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  bool _isCalendarToday(DateTime date) {
+    return normalizeMatchCalendarDate(date) ==
+        normalizeMatchCalendarDate(DateTime.now());
+  }
+
+  List<
+    ({
+      String scrollKey,
+      String dateLabel,
+      List<MatchModel> matches,
+      MatchModel? leagueHeaderMatch,
+    })
+  >
+  _leagueGroupsOnDate({
+    required String dateKey,
+    required List<MatchModel> dayMatches,
+    required String dateLabel,
+    String scrollPrefix = '',
+  }) {
+    final byLeague = <String, List<MatchModel>>{};
+    for (final match in dayMatches) {
+      final leagueId = match.leagueId != null && match.leagueId!.isNotEmpty
+          ? match.leagueId!
+          : 'unknown';
+      byLeague.putIfAbsent(leagueId, () => []).add(match);
+    }
+    final leagueIds = byLeague.keys.toList()
+      ..sort(
+        (a, b) => (byLeague[a]!.first.leagueName ?? '').toLowerCase().compareTo(
+          (byLeague[b]!.first.leagueName ?? '').toLowerCase(),
+        ),
+      );
+    return [
+      for (final leagueId in leagueIds)
+        (
+          scrollKey: '$scrollPrefix${dateKey}_$leagueId',
+          dateLabel: dateLabel,
+          matches: byLeague[leagueId]!,
+          leagueHeaderMatch: byLeague[leagueId]!.first,
+        ),
+    ];
+  }
+
+  List<Widget> _matchGroupWidgets(
+    BuildContext context,
+    List<
+      ({
+        String scrollKey,
+        String dateLabel,
+        List<MatchModel> matches,
+        MatchModel? leagueHeaderMatch,
+      })
+    >
+    groups,
+  ) {
+    return [
+      for (final group in groups) ...[
+        KeyedSubtree(
+          key: _dateGroupKeys.putIfAbsent(group.scrollKey, () => GlobalKey()),
+          child: _buildMatchListGroup(
+            context,
+            dateLabel: group.leagueHeaderMatch == null
+                ? group.dateLabel
+                : null,
+            leagueHeaderMatch: group.leagueHeaderMatch,
+            matches: group.matches
+                .map(
+                  (m) => _buildMatchCardFromModel(
+                    context,
+                    m,
+                    group.dateLabel,
+                  ),
+                )
+                .expand((w) => [w, const SizedBox(height: 2)])
+                .toList()
+              ..removeLast(),
+            firstMatchId: group.matches.isNotEmpty
+                ? group.matches.first.id
+                : null,
+          ),
+        ),
+        const SizedBox(height: 2),
+      ],
+    ];
+  }
+
+  Widget _recentResultsSection(
+    BuildContext context, {
+    required List<MatchModel> recent,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final byDate = <String, List<MatchModel>>{};
+    for (final match in recent) {
+      byDate.putIfAbsent(_dateToKey(match.matchDate), () => []).add(match);
+    }
+    final dateKeys = byDate.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text('Recent results', style: textTheme.titleLarge),
+        const SizedBox(height: 8),
+        for (final dateKey in dateKeys) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 2),
+            child: Text(
+              formatRecentMatchDateLabel(dateKey),
+              style: textTheme.titleSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          ..._matchGroupWidgets(
+            context,
+            _leagueGroupsOnDate(
+              dateKey: dateKey,
+              dayMatches: [...byDate[dateKey]!]
+                ..sort((a, b) => a.matchTime.compareTo(b.matchTime)),
+              dateLabel: formatRecentMatchDateLabel(dateKey),
+              scrollPrefix: 'recent_',
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   void _scrollToRequestedDateIfNeeded(
@@ -431,6 +561,12 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
     final selectedGw = ref.watch(selectedGameweekProvider);
     final selectedTeam = ref.watch(selectedMatchesTeamProvider);
     final selectedCalendarDate = ref.watch(selectedMatchesCalendarDateProvider);
+    final recentCompleted = widget.useDateNavigation
+        ? ref.watch(guestHomeRecentCompletedProvider)
+        : const <MatchModel>[];
+    final viewingToday =
+        widget.useDateNavigation && _isCalendarToday(selectedCalendarDate);
+    final showRecentResults = viewingToday && recentCompleted.isNotEmpty;
     final hasActiveFilters =
         selectedLeague != null ||
         selectedSeason != null ||
@@ -488,36 +624,16 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                 String dateLabel,
                 List<MatchModel> matches,
                 MatchModel? leagueHeaderMatch,
-              })> groups;
+              })>
+              groups;
 
               if (widget.useDateNavigation) {
                 final dateKey = _dateToKey(selectedCalendarDate);
-                final dayMatches = grouped[dateKey] ?? [];
-                final byLeague = <String, List<MatchModel>>{};
-                for (final match in dayMatches) {
-                  final leagueId =
-                      match.leagueId != null && match.leagueId!.isNotEmpty
-                      ? match.leagueId!
-                      : 'unknown';
-                  byLeague.putIfAbsent(leagueId, () => []).add(match);
-                }
-                final leagueIds = byLeague.keys.toList()
-                  ..sort(
-                    (a, b) => (byLeague[a]!.first.leagueName ?? '')
-                        .toLowerCase()
-                        .compareTo(
-                          (byLeague[b]!.first.leagueName ?? '').toLowerCase(),
-                        ),
-                  );
-                groups = [
-                  for (final leagueId in leagueIds)
-                    (
-                      scrollKey: '${dateKey}_$leagueId',
-                      dateLabel: formatMatchDateKey(dateKey),
-                      matches: byLeague[leagueId]!,
-                      leagueHeaderMatch: byLeague[leagueId]!.first,
-                    ),
-                ];
+                groups = _leagueGroupsOnDate(
+                  dateKey: dateKey,
+                  dayMatches: grouped[dateKey] ?? [],
+                  dateLabel: formatMatchDateKey(dateKey),
+                );
               } else {
                 final dateKeys = grouped.keys.toList()..sort();
                 groups = [
@@ -533,7 +649,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                 _scrollToRequestedDateIfNeeded(dateKeys, requestedJumpDate);
               }
 
-              if (groups.isEmpty) {
+              if (groups.isEmpty && !showRecentResults) {
                 if (widget.useDateNavigation) {
                   return SliverFillRemaining(
                     hasScrollBody: false,
@@ -590,45 +706,41 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (final group in groups) ...[
-                        KeyedSubtree(
-                          key: _dateGroupKeys.putIfAbsent(
-                            group.scrollKey,
-                            () => GlobalKey(),
-                          ),
-                          child: _buildMatchListGroup(
-                            context,
-                            dateLabel: group.leagueHeaderMatch == null
-                                ? group.dateLabel
-                                : null,
-                            leagueHeaderMatch: group.leagueHeaderMatch,
-                            matches: group.matches
-                                .map(
-                                  (m) => _buildMatchCardFromModel(
+                      if (groups.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 4),
+                          child: Text(
+                            hasActiveFilters
+                                ? 'No matches today for these filters'
+                                : 'No matches today',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
                                     context,
-                                    m,
-                                    group.dateLabel,
-                                  ),
-                                )
-                                .expand((w) => [w, const SizedBox(height: 2)])
-                                .toList()
-                              ..removeLast(),
-                            firstMatchId: group.matches.isNotEmpty
-                                ? group.matches.first.id
-                                : null,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                           ),
+                        )
+                      else
+                        ..._matchGroupWidgets(context, groups),
+                      if (showRecentResults)
+                        _recentResultsSection(
+                          context,
+                          recent: recentCompleted,
                         ),
-                        const SizedBox(height: 2),
-                      ],
                     ],
                   ),
                 ),
               );
             },
-            loading: () => const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => widget.useDateNavigation
+                ? const SliverToBoxAdapter(
+                    child: GuestHomeMatchListShimmer(),
+                  )
+                : const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
             error: (err, _) => SliverFillRemaining(
               hasScrollBody: false,
               child: Center(

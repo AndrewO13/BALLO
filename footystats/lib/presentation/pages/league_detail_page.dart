@@ -9,6 +9,7 @@ import 'package:path/path.dart' as path;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/countries.dart';
+import '../../core/utils/guest_mode.dart';
 import '../../core/utils/connection_error.dart';
 import '../../core/utils/content_moderation_guards.dart';
 import '../../core/utils/username_rules.dart';
@@ -27,6 +28,7 @@ import 'fixture.dart';
 import '../widgets/media_access_sheet.dart';
 import 'matches.dart' show DodecagonIndicator;
 import 'create_team_league_page.dart';
+import '../providers/favourited_leagues_provider.dart';
 import '../providers/league_teams_provider.dart';
 import '../providers/match_timer_adapter_provider.dart';
 import '../providers/matches_provider.dart';
@@ -38,7 +40,9 @@ import 'league_create_matches_page.dart';
 import 'league_rejected_applications_page.dart';
 import 'league_video_player_page.dart';
 import '../widgets/create_season_bottom_sheet.dart';
+import '../widgets/home/home_page_shimmer.dart';
 import '../widgets/home/home_section_empty_state.dart';
+import '../widgets/page_content_shimmers.dart';
 import '../widgets/league_format_fields.dart';
 import '../widgets/match_date_picker_dialog.dart';
 import '../widgets/matches_filter_chips.dart';
@@ -272,6 +276,9 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
   }
 
   Future<void> _handleEndSeason() async {
+    final createdBy = _league?['created_by']?.toString();
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (createdBy == null || createdBy != currentUserId) return;
     final seasonsAsync = ref.read(allSeasonsForLeagueProvider(widget.leagueId));
     final seasons = seasonsAsync.value ?? [];
     final ongoing = seasons.where((s) => s.status == 'ongoing').firstOrNull;
@@ -354,6 +361,7 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
   }
 
   Future<void> _handleJoinLeague() async {
+    if (GuestMode.isGuest) return;
     final currentUser = Supabase.instance.client.auth.currentUser;
     if (currentUser == null) {
       if (!mounted) return;
@@ -569,7 +577,7 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const SizedBox.shrink(), centerTitle: false),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const EntityDetailPageShimmer(),
       );
     }
 
@@ -631,6 +639,9 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
         : '${countryCodeToFlag(countryCode)} ${countryCodeToName(countryCode)}';
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     final isOwner = createdBy != null && createdBy == currentUserId;
+    final isLeagueFavourited = ref.watch(favouritedLeaguesProvider).any(
+      (league) => league.id == widget.leagueId,
+    );
     final headerToneA = _headerToneA ?? colorScheme.surfaceContainerHigh;
     final headerToneB = _headerToneB ?? colorScheme.surfaceContainer;
     final headerToneC = _headerToneC ?? colorScheme.surfaceContainerLow;
@@ -666,7 +677,36 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
         title: const SizedBox.shrink(),
         centerTitle: false,
         actions: [
-          if (!isOwner)
+          if (GuestMode.isGuest)
+            IconButton(
+              style: IconButton.styleFrom(
+                fixedSize: const Size(48, 48),
+                padding: EdgeInsets.zero,
+              ),
+              icon: Icon(
+                isLeagueFavourited
+                    ? Icons.star_rounded
+                    : Icons.star_outline_rounded,
+                color: isLeagueFavourited
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+                size: 26,
+              ),
+              onPressed: () {
+                ref.read(favouritedLeaguesProvider.notifier).toggle(
+                  FavouritedLeague(
+                    id: widget.leagueId,
+                    name: leagueName,
+                    country: countryCode,
+                    logoId: logoUrl,
+                  ),
+                );
+              },
+              tooltip: isLeagueFavourited
+                  ? 'Remove from favourites'
+                  : 'Add to favourites',
+            )
+          else if (!isOwner)
             IconButton(
               onPressed: _handleJoinLeague,
               icon: Icon(_hasJoined ? Icons.add : Icons.login),
@@ -762,16 +802,17 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                     ],
                   ),
                 ),
-                const PopupMenuItem<String>(
-                  value: 'add_teams',
-                  child: Row(
-                    children: [
-                      Icon(Icons.group_add),
-                      SizedBox(width: 16),
-                      Text('Add teams to league'),
-                    ],
+                if (!GuestMode.isGuest)
+                  const PopupMenuItem<String>(
+                    value: 'add_teams',
+                    child: Row(
+                      children: [
+                        Icon(Icons.group_add),
+                        SizedBox(width: 16),
+                        Text('Add teams to league'),
+                      ],
+                    ),
                   ),
-                ),
                 ..._buildSeasonMenuItems(colorScheme),
                 PopupMenuItem<String>(
                   value: 'delete',
@@ -980,7 +1021,7 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                                               [
                                                 'Est. $estYear',
                                                 ?countryLabel,
-                                              ].join(' Â· '),
+                                              ].join(' · '),
                                               style: textTheme.bodySmall
                                                   ?.copyWith(
                                                     color: colorScheme
@@ -1152,12 +1193,15 @@ class _LeagueDetailPageState extends ConsumerState<LeagueDetailPage>
                 key: ValueKey('league-tab-5-$_tabViewGeneration'),
                 child: _LeagueTeamsTab(
                   leagueId: widget.leagueId,
-                  showOwnerActions: isOwner,
+                  showOwnerActions: isOwner && !GuestMode.isGuest,
                 ),
               ),
               KeyedSubtree(
                 key: ValueKey('league-tab-6-$_tabViewGeneration'),
-                child: _LeagueSeasonsTab(leagueId: widget.leagueId),
+                child: _LeagueSeasonsTab(
+                  leagueId: widget.leagueId,
+                  canCreateSeason: isOwner,
+                ),
               ),
               KeyedSubtree(
                 key: ValueKey('league-tab-7-$_tabViewGeneration'),
@@ -1383,16 +1427,23 @@ class _LeagueTeamsTab extends ConsumerWidget {
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Padding(
+        padding: EdgeInsets.all(16),
+        child: DetailListShimmer(),
+      ),
       error: (err, _) => Center(child: Text('Error: $err')),
     );
   }
 }
 
 class _LeagueSeasonsTab extends ConsumerStatefulWidget {
-  const _LeagueSeasonsTab({required this.leagueId});
+  const _LeagueSeasonsTab({
+    required this.leagueId,
+    required this.canCreateSeason,
+  });
 
   final String leagueId;
+  final bool canCreateSeason;
 
   @override
   ConsumerState<_LeagueSeasonsTab> createState() => _LeagueSeasonsTabState();
@@ -1400,6 +1451,7 @@ class _LeagueSeasonsTab extends ConsumerStatefulWidget {
 
 class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
   Future<void> _showCreateSeasonDialog() async {
+    if (!widget.canCreateSeason) return;
     final result = await showCreateSeasonBottomSheet(
       context,
       helperText:
@@ -1496,7 +1548,7 @@ class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
                 ),
               ),
             ),
-            if (isUpcoming) ...[
+            if (widget.canCreateSeason && isUpcoming) ...[
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () async {
@@ -1528,7 +1580,7 @@ class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Start season'),
               ),
-            ] else if (isOngoing) ...[
+            ] else if (widget.canCreateSeason && isOngoing) ...[
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () async {
@@ -1587,16 +1639,22 @@ class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
           children: [
             Expanded(
               child: seasons.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: AppEmptyState(
                         imageAsset: AppAssets.seasonEmpty,
                         title: 'No seasons yet',
-                        subtitle:
-                            'Create a season to organize fixtures, standings, and stats for this league.',
+                        subtitle: widget.canCreateSeason
+                            ? 'Create a season to organize fixtures, standings, and stats for this league.'
+                            : 'Seasons appear here once the league creator adds one.',
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        16,
+                        16,
+                        widget.canCreateSeason ? 8 : 16,
+                      ),
                       itemCount: seasons.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
@@ -1719,37 +1777,41 @@ class _LeagueSeasonsTabState extends ConsumerState<_LeagueSeasonsTab> {
                       },
                     ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (hasUpcoming) ...[
-                      Text(
-                        'There is already an upcoming season. End it before creating a new one.',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+            if (widget.canCreateSeason)
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (hasUpcoming) ...[
+                        Text(
+                          'There is already an upcoming season. End it before creating a new one.',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
+                        const SizedBox(height: 8),
+                      ],
+                      FilledButton.icon(
+                        onPressed: hasUpcoming ? null : _showCreateSeasonDialog,
+                        icon: const Icon(Icons.add, size: 20),
+                        label: const Text('Create season'),
                       ),
-                      const SizedBox(height: 8),
                     ],
-                    FilledButton.icon(
-                      onPressed: hasUpcoming ? null : _showCreateSeasonDialog,
-                      icon: const Icon(Icons.add, size: 20),
-                      label: const Text('Create season'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Padding(
+        padding: EdgeInsets.all(16),
+        child: DetailListShimmer(),
+      ),
       error: (err, _) => Center(child: Text('Error: $err')),
     );
   }
@@ -2041,14 +2103,7 @@ class _LeagueOverviewTab extends ConsumerWidget {
                 ),
               );
             },
-            loading: () => Container(
-              padding: const EdgeInsets.all(24.0),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => const DetailSectionCardShimmer(height: 120),
             error: (err, _) => _LeagueOverviewSectionCard(
               title: leagueName,
               child: const HomeSectionEmptyState(
@@ -2509,12 +2564,7 @@ class _TeamOfTheWeekSectionState extends State<_TeamOfTheWeekSection> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_loading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const DetailSectionCardShimmer(height: 180);
     }
 
     final data = _data ?? TeamOfTheWeekSelection.empty();
@@ -2795,16 +2845,7 @@ class _FeaturedMatchSection extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _LeagueOverviewSectionCard(
             title: 'Featured match',
-            child: const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            ),
+            child: const DetailInlineShimmer(),
           );
         }
         final match = snapshot.data;
@@ -3079,7 +3120,7 @@ class _LeagueTeamStatsTabState extends ConsumerState<_LeagueTeamStatsTab> {
           children: [
             seasonDropdown,
             const SizedBox(height: 24),
-            const Center(child: CircularProgressIndicator()),
+            const DetailTableShimmer(),
           ],
         ),
       );
@@ -3424,7 +3465,7 @@ class _LeagueTeamStatsFullSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
-                '${section.allTeams.length} teams Â· ranked by ${section.title.toLowerCase()}',
+                '${section.allTeams.length} teams · ranked by ${section.title.toLowerCase()}',
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -3702,10 +3743,7 @@ class _LeagueStandingsTabState extends ConsumerState<_LeagueStandingsTab> {
             ),
             const SizedBox(height: 16),
             if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const DetailTableShimmer()
             else if (_error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -4374,10 +4412,7 @@ class _LeagueMatchesTabState extends ConsumerState<_LeagueMatchesTab> {
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
                 sliver: SliverToBoxAdapter(
                   child: _isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(24.0),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
+                      ? const GuestHomeMatchListShimmer(padded: false)
                       : _error != null
                       ? Padding(
                           padding: const EdgeInsets.all(24.0),
@@ -4837,7 +4872,7 @@ class _LeaguePlayerStatsTabState extends ConsumerState<_LeaguePlayerStatsTab> {
           children: [
             seasonDropdown,
             const SizedBox(height: 24),
-            const Center(child: CircularProgressIndicator()),
+            const DetailTableShimmer(),
           ],
         ),
       );
@@ -5223,7 +5258,7 @@ class _LeaguePlayerStatsFullSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
-                '${section.allPlayers.length} players Â· ranked by ${section.title.toLowerCase()}',
+                '${section.allPlayers.length} players · ranked by ${section.title.toLowerCase()}',
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -5656,7 +5691,7 @@ class _LeagueVideosTabState extends State<_LeagueVideosTab> {
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const DetailVideoGridShimmer();
     }
     if (_error != null) {
       return Center(

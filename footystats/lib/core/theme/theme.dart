@@ -337,15 +337,43 @@ class MaterialTheme {
 
 
   ThemeData theme(ColorScheme colorScheme) => ThemeData(
-     useMaterial3: true,
-     brightness: colorScheme.brightness,
-     colorScheme: colorScheme,
-     textTheme: textTheme.apply(
-       bodyColor: colorScheme.onSurface,
-       displayColor: colorScheme.onSurface,
-     ),
-     scaffoldBackgroundColor: colorScheme.background,
-     canvasColor: colorScheme.surface,
+    useMaterial3: true,
+    brightness: colorScheme.brightness,
+    colorScheme: colorScheme,
+    textTheme: textTheme.apply(
+      bodyColor: colorScheme.onSurface,
+      displayColor: colorScheme.onSurface,
+    ),
+    scaffoldBackgroundColor: colorScheme.surface,
+    canvasColor: colorScheme.surface,
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colorScheme.surfaceContainerHighest,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      elevation: 10,
+      backgroundColor: colorScheme.inverseSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: colorScheme.inversePrimary.withValues(alpha: 0.55),
+          width: 1.2,
+        ),
+      ),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(
+        color: colorScheme.onInverseSurface,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      actionTextColor: colorScheme.inversePrimary,
+      showCloseIcon: true,
+      closeIconColor: colorScheme.onInverseSurface.withValues(alpha: 0.85),
+      disabledActionTextColor: colorScheme.onInverseSurface.withValues(
+        alpha: 0.55,
+      ),
+      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
+    ),
   );
 
 
