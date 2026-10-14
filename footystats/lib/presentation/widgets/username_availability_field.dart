@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/utils/username_rules.dart';
 import '../../data/repositories/username_repository.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Username input with debounced availability checks and suggestions.
 class UsernameAvailabilityField extends StatefulWidget {
@@ -101,7 +102,9 @@ class _UsernameAvailabilityFieldState extends State<UsernameAvailabilityField> {
     }
 
     setState(() {
-      _result = const UsernameCheckResult(status: UsernameAvailability.checking);
+      _result = const UsernameCheckResult(
+        status: UsernameAvailability.checking,
+      );
     });
     widget.onAvailabilityChanged?.call(_result);
 
@@ -175,7 +178,11 @@ class _UsernameAvailabilityFieldState extends State<UsernameAvailabilityField> {
         ),
         if (widget.showStatusBanner) ...[
           const SizedBox(height: 8),
-          _StatusBanner(result: _result, colorScheme: colorScheme, textTheme: textTheme),
+          _StatusBanner(
+            result: _result,
+            colorScheme: colorScheme,
+            textTheme: textTheme,
+          ),
         ],
         if (_result.status == UsernameAvailability.taken &&
             _result.suggestions.isNotEmpty) ...[
@@ -205,28 +212,28 @@ class _UsernameAvailabilityFieldState extends State<UsernameAvailabilityField> {
   Widget? _buildSuffixIcon(ColorScheme colorScheme) {
     return switch (_result.status) {
       UsernameAvailability.checking => Padding(
-          padding: const EdgeInsets.all(12),
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary,
-            ),
+        padding: const EdgeInsets.all(12),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: colorScheme.primary,
           ),
         ),
+      ),
       UsernameAvailability.available => Icon(
-          Icons.check_circle,
-          color: colorScheme.primary,
-        ),
+        Icons.check_circle,
+        color: colorScheme.primary,
+      ),
       UsernameAvailability.taken => Icon(
-          Icons.cancel,
-          color: colorScheme.error,
-        ),
+        Icons.cancel,
+        color: colorScheme.error,
+      ),
       UsernameAvailability.invalid => Icon(
-          Icons.error_outline,
-          color: colorScheme.error,
-        ),
+        Icons.error_outline,
+        color: colorScheme.error,
+      ),
       UsernameAvailability.idle => null,
     };
   }
@@ -247,35 +254,35 @@ class _StatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (message, bg, fg, icon) = switch (result.status) {
       UsernameAvailability.idle => (
-          '3–20 characters. Letters, numbers, and underscores.',
-          colorScheme.surfaceContainerHighest,
-          colorScheme.onSurfaceVariant,
-          Icons.info_outline,
-        ),
+        '3–20 characters. Letters, numbers, and underscores.',
+        colorScheme.surfaceContainerHighest,
+        colorScheme.onSurfaceVariant,
+        Icons.info_outline,
+      ),
       UsernameAvailability.checking => (
-          'Checking availability…',
-          colorScheme.surfaceContainerHighest,
-          colorScheme.onSurfaceVariant,
-          null,
-        ),
+        'Checking availability…',
+        colorScheme.surfaceContainerHighest,
+        colorScheme.onSurfaceVariant,
+        null,
+      ),
       UsernameAvailability.available => (
-          'Username is available',
-          colorScheme.primaryContainer.withValues(alpha: 0.45),
-          colorScheme.primary,
-          Icons.check_circle_outline,
-        ),
+        'Username is available',
+        colorScheme.primaryContainer.withValues(alpha: 0.45),
+        colorScheme.primary,
+        Icons.check_circle_outline,
+      ),
       UsernameAvailability.taken => (
-          'Username is already taken',
-          colorScheme.errorContainer.withValues(alpha: 0.55),
-          colorScheme.error,
-          Icons.block,
-        ),
+        'Username is already taken',
+        colorScheme.errorContainer.withValues(alpha: 0.55),
+        colorScheme.error,
+        Icons.block,
+      ),
       UsernameAvailability.invalid => (
-          'Use 3–20 characters: letters, numbers, underscores',
-          colorScheme.errorContainer.withValues(alpha: 0.4),
-          colorScheme.error,
-          Icons.error_outline,
-        ),
+        'Use 3–20 characters: letters, numbers, underscores',
+        colorScheme.errorContainer.withValues(alpha: 0.4),
+        colorScheme.error,
+        Icons.error_outline,
+      ),
     };
 
     return AnimatedSwitcher(
@@ -285,7 +292,7 @@ class _StatusBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.largeRadius,
         ),
         child: Row(
           children: [

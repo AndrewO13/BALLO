@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/widgets/media_placeholders.dart';
 import '../../data/repositories/managed_players_repository.dart';
 import '../../domain/models/managed_player.dart';
+import '../../core/theme/app_shape.dart';
 
 class CreatedManagedPlayerTile extends StatelessWidget {
   const CreatedManagedPlayerTile({
@@ -25,7 +26,7 @@ class CreatedManagedPlayerTile extends StatelessWidget {
     return Card(
       clipBehavior: Clip.hardEdge,
       color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: const RoundedRectangleBorder(borderRadius: AppShape.card),
       child: InkWell(
         splashColor: colorScheme.primary.withAlpha(30),
         onTap: onOpenProfile,
@@ -69,10 +70,7 @@ class CreatedManagedPlayerTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   if (player.canCreatorEdit && onEdit != null)
-                    TextButton(
-                      onPressed: onEdit,
-                      child: const Text('Edit'),
-                    ),
+                    TextButton(onPressed: onEdit, child: const Text('Edit')),
                   TextButton(
                     onPressed: onSetLogin,
                     child: Text(player.hasLogin ? 'Update login' : 'Set login'),
@@ -143,9 +141,9 @@ class _SetManagedPlayerLoginDialogState
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 

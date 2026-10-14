@@ -1,5 +1,7 @@
 import "package:flutter/material.dart";
 
+import "app_shape.dart";
+
 class MaterialTheme {
   final TextTheme textTheme;
 
@@ -335,7 +337,6 @@ class MaterialTheme {
     return theme(darkHighContrastScheme());
   }
 
-
   ThemeData theme(ColorScheme colorScheme) => ThemeData(
     useMaterial3: true,
     brightness: colorScheme.brightness,
@@ -346,16 +347,50 @@ class MaterialTheme {
     ),
     scaffoldBackgroundColor: colorScheme.surface,
     canvasColor: colorScheme.surface,
+    cardTheme: const CardThemeData(
+      shape: RoundedRectangleBorder(borderRadius: AppShape.card),
+      clipBehavior: Clip.antiAlias,
+    ),
+    dialogTheme: const DialogThemeData(
+      shape: RoundedRectangleBorder(borderRadius: AppShape.dialog),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      shape: RoundedRectangleBorder(borderRadius: AppShape.sheet),
+      clipBehavior: Clip.antiAlias,
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      shape: RoundedRectangleBorder(borderRadius: AppShape.fab),
+    ),
+    popupMenuTheme: const PopupMenuThemeData(
+      shape: RoundedRectangleBorder(borderRadius: AppShape.menu),
+    ),
+    menuTheme: const MenuThemeData(
+      style: MenuStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: AppShape.menu),
+        ),
+      ),
+    ),
+    filledButtonTheme: const FilledButtonThemeData(
+      style: ButtonStyle(shape: WidgetStatePropertyAll(AppShape.button)),
+    ),
+    outlinedButtonTheme: const OutlinedButtonThemeData(
+      style: ButtonStyle(shape: WidgetStatePropertyAll(AppShape.button)),
+    ),
+    elevatedButtonTheme: const ElevatedButtonThemeData(
+      style: ButtonStyle(shape: WidgetStatePropertyAll(AppShape.button)),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colorScheme.surfaceContainerHighest,
+      border: const OutlineInputBorder(borderRadius: AppShape.extraSmallRadius),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       elevation: 10,
       backgroundColor: colorScheme.inverseSurface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.snack,
         side: BorderSide(
           color: colorScheme.inversePrimary.withValues(alpha: 0.55),
           width: 1.2,
@@ -376,9 +411,7 @@ class MaterialTheme {
     ),
   );
 
-
-  List<ExtendedColor> get extendedColors => [
-  ];
+  List<ExtendedColor> get extendedColors => [];
 }
 
 class ExtendedColor {

@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Story-style capsule ring around the score pill when [hasVideo].
 ///
@@ -53,7 +54,7 @@ class MatchListScorePill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: AppShape.fullRadius,
       ),
       child: text,
     );
@@ -69,10 +70,7 @@ class MatchListScorePill extends StatelessWidget {
             alpha: colorScheme.brightness == Brightness.dark ? 0.42 : 0.28,
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(_ringWidth),
-          child: pill,
-        ),
+        child: Padding(padding: const EdgeInsets.all(_ringWidth), child: pill),
       );
     }
 
@@ -80,7 +78,7 @@ class MatchListScorePill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
       ),
       child: text,
     );

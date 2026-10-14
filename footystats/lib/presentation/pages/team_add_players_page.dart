@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
+import '../../core/theme/app_shape.dart';
 
 class TeamAddPlayersPage extends StatefulWidget {
   const TeamAddPlayersPage({super.key, required this.teamId});
@@ -160,8 +161,8 @@ class _TeamAddPlayersPageState extends State<TeamAddPlayersPage> {
       });
 
       if (!mounted) return;
-      final playerName = (player['player_name']?.toString().trim().isNotEmpty ??
-              false)
+      final playerName =
+          (player['player_name']?.toString().trim().isNotEmpty ?? false)
           ? player['player_name'].toString().trim()
           : 'Player';
       setState(() {
@@ -199,9 +200,7 @@ class _TeamAddPlayersPageState extends State<TeamAddPlayersPage> {
               decoration: InputDecoration(
                 hintText: 'Search by player name or username',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                border: OutlineInputBorder(borderRadius: AppShape.fullRadius),
               ),
               autofocus: true,
             ),
@@ -266,8 +265,8 @@ class _PlayerSearchListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    final playerName = (player['player_name']?.toString().trim().isNotEmpty ??
-            false)
+    final playerName =
+        (player['player_name']?.toString().trim().isNotEmpty ?? false)
         ? player['player_name'].toString().trim()
         : 'Unknown player';
     final username = player['username']?.toString().trim() ?? '';
@@ -278,7 +277,7 @@ class _PlayerSearchListItem extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Row(
         children: [

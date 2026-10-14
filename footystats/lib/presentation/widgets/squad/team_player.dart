@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/widgets/media_placeholders.dart';
 import '../../../domain/models/lineup_player_match_stats.dart';
+import '../../../core/theme/app_shape.dart';
 
 class SquadCaptainBadge extends StatelessWidget {
   const SquadCaptainBadge({super.key});
@@ -44,10 +45,7 @@ class _LineupStatIcon extends StatelessWidget {
     return SizedBox(
       width: _size,
       height: _size,
-      child: SvgPicture.asset(
-        assetPath,
-        fit: BoxFit.contain,
-      ),
+      child: SvgPicture.asset(assetPath, fit: BoxFit.contain),
     );
   }
 }
@@ -82,13 +80,10 @@ class TeamPlayer extends StatelessWidget {
     final cardState = stats?.cardState ?? LineupCardState.none;
     final (pillColor, pillTextColor) = switch (cardState) {
       LineupCardState.yellow => (
-          const Color(0xFFFBC02D),
-          const Color(0xFF3E2723),
-        ),
-      LineupCardState.red => (
-          const Color(0xFFE53935),
-          Colors.white,
-        ),
+        const Color(0xFFFBC02D),
+        const Color(0xFF3E2723),
+      ),
+      LineupCardState.red => (const Color(0xFFE53935), Colors.white),
       LineupCardState.none => (colorScheme.primary, colorScheme.onPrimary),
     };
 
@@ -124,7 +119,10 @@ class TeamPlayer extends StatelessWidget {
                 children: [
                   if (stats.hasGoal) ...[
                     const _LineupStatIcon(AppAssets.matchGoalIcon),
-                    if (stats.hasAssist || stats.hasTackle || stats.subbedIn || stats.subbedOut)
+                    if (stats.hasAssist ||
+                        stats.hasTackle ||
+                        stats.subbedIn ||
+                        stats.subbedOut)
                       const SizedBox(height: 1),
                   ],
                   if (stats.hasAssist) ...[
@@ -155,7 +153,7 @@ class TeamPlayer extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
                   color: pillColor,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: AppShape.fullRadius,
                 ),
                 child: Center(
                   child: Text(

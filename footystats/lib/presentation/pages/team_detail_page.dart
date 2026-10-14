@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,6 +19,8 @@ import '../../core/widgets/media_placeholders.dart';
 import 'create_match_entry_page.dart';
 import '../widgets/home/home_page_shimmer.dart';
 import '../widgets/home/home_section_empty_state.dart';
+import '../widgets/collapsing_page_header.dart';
+import '../widgets/tab_body_underlap_clip.dart';
 import '../widgets/media_access_sheet.dart';
 import '../widgets/page_content_shimmers.dart';
 import '../../data/repositories/leagues_repository.dart';
@@ -45,6 +48,7 @@ import '../widgets/squad/team_player.dart';
 import '../widgets/image_upload_card.dart';
 import 'team_add_players_page.dart';
 import 'team_rejected_applications_page.dart';
+import '../../core/theme/app_shape.dart';
 
 const String _kTeamDetailAllSeasonsId = '__all_seasons__';
 
@@ -191,6 +195,7 @@ class _TeamDetailPageState extends State<TeamDetailPage>
   bool _isJoining = false;
   late final ScrollController _outerScrollController;
   late final TabController _tabController;
+  final _identityReveal = ValueNotifier<double>(0);
   bool _isHeaderCollapsed = false;
   int _tabViewGeneration = 0;
   int _lastTabIndex = 0;
@@ -236,15 +241,31 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     final collapsed =
         _outerScrollController.hasClients &&
         _outerScrollController.offset > 0.5;
-    if (collapsed == _isHeaderCollapsed) return;
-    setState(() {
-      _isHeaderCollapsed = collapsed;
-    });
+    if (collapsed != _isHeaderCollapsed) {
+      setState(() {
+        _isHeaderCollapsed = collapsed;
+      });
+    }
+    if (!_outerScrollController.hasClients) return;
+    const collapseRange = 230.0 - (kTextTabBarHeight + 2);
+    final progress = (_outerScrollController.offset / collapseRange).clamp(
+      0.0,
+      1.0,
+    );
+    final reveal = ((progress - 0.4) / 0.6).clamp(0.0, 1.0);
+    if (reveal != 0 &&
+        reveal != 1 &&
+        (_identityReveal.value - reveal).abs() < 0.02) {
+      return;
+    }
+    if (_identityReveal.value == reveal) return;
+    _identityReveal.value = reveal;
   }
 
   @override
   void dispose() {
     _outerScrollController.removeListener(_handleOuterScroll);
+    _identityReveal.dispose();
     _outerScrollController.dispose();
     _tabController.removeListener(_handleTabIndexChanged);
     _tabController.dispose();
@@ -267,8 +288,9 @@ class _TeamDetailPageState extends State<TeamDetailPage>
 
       if (response != null && mounted) {
         final logoUrl = response['logo_id'] as String?;
-        final videoCount =
-            await TeamsRepository().getTeamVideoCount(widget.teamId);
+        final videoCount = await TeamsRepository().getTeamVideoCount(
+          widget.teamId,
+        );
         setState(() {
           _team = response;
           _videoCount = videoCount;
@@ -534,9 +556,9 @@ class _TeamDetailPageState extends State<TeamDetailPage>
         try {
           await supabase.from('teams').delete().eq('id', widget.teamId);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Team deleted')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Team deleted')));
           Navigator.of(context).popUntil((route) => route.isFirst);
         } catch (error) {
           if (!mounted) return;
@@ -678,23 +700,16 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const SizedBox.shrink(), centerTitle: false),
-        body: const EntityDetailPageShimmer(circularLogo: true),
+      return _teamDetailShell(
+        context,
+        const EntityDetailPageShimmer(circularLogo: true),
       );
     }
 
     if (_loadError != null) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: const SizedBox.shrink(),
-          centerTitle: false,
-        ),
-        body: Center(
+      return _teamDetailShell(
+        context,
+        Center(
           child: AppConnectionErrorState(
             title: isConnectionError(_loadError)
                 ? 'No connection'
@@ -709,19 +724,13 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     }
 
     if (_team == null) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: const SizedBox.shrink(),
-          centerTitle: false,
-        ),
-        body: const Center(
+      return _teamDetailShell(
+        context,
+        const Center(
           child: AppNotFoundState(
             title: 'Team not found',
-            subtitle: 'This team may have been removed or the link is incorrect.',
+            subtitle:
+                'This team may have been removed or the link is incorrect.',
           ),
         ),
       );
@@ -742,62 +751,57 @@ class _TeamDetailPageState extends State<TeamDetailPage>
     final headerToneC = _headerToneC ?? colorScheme.surfaceContainerLow;
     final logoRingColor = _logoRingColor ?? colorScheme.primaryContainer;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const SizedBox.shrink(),
-        centerTitle: false,
-        actions: [
-          if (!isOwner) ...[
-            IconButton(
-              icon: SvgPicture.asset(
-                AppAssets.teamCompareIcon,
-                width: 24,
-                height: 24,
-                colorFilter: ColorFilter.mode(
-                  colorScheme.onSurface,
-                  BlendMode.srcIn,
-                ),
-              ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        TeamComparisonPage(baseTeamId: widget.teamId),
-                  ),
-                );
-              },
-              tooltip: 'Compare team',
+    final headerActions = <Widget>[
+      if (!isOwner) ...[
+        IconButton(
+          icon: SvgPicture.asset(
+            AppAssets.teamCompareIcon,
+            width: 24,
+            height: 24,
+            colorFilter: ColorFilter.mode(
+              colorScheme.onSurface,
+              BlendMode.srcIn,
             ),
-            if (_isMember)
-              IconButton(
-                icon: Icon(Icons.logout, color: colorScheme.error),
-                onPressed: _handleLeaveTeam,
-                tooltip: 'Leave team',
+          ),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => TeamComparisonPage(baseTeamId: widget.teamId),
               ),
-            if (!_isMember && !_hasJoined)
-              if (GuestMode.isGuest)
-                Consumer(
-                  builder: (context, ref, _) {
-                    final isStarred = ref.watch(favouritedTeamsProvider).any(
-                      (team) => team.id == widget.teamId,
-                    );
-                    return IconButton(
-                      style: IconButton.styleFrom(
-                        fixedSize: const Size(48, 48),
-                        padding: EdgeInsets.zero,
-                      ),
-                      icon: Icon(
-                        isStarred
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        color: isStarred
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                        size: 26,
-                      ),
-                      onPressed: () async {
-                        final wasFavourited = isStarred;
-                        await ref.read(favouritedTeamsProvider.notifier).toggle(
+            );
+          },
+          tooltip: 'Compare team',
+        ),
+        if (_isMember)
+          IconButton(
+            icon: Icon(Icons.logout, color: colorScheme.error),
+            onPressed: _handleLeaveTeam,
+            tooltip: 'Leave team',
+          ),
+        if (!_isMember && !_hasJoined)
+          if (GuestMode.isGuest)
+            Consumer(
+              builder: (context, ref, _) {
+                final isStarred = ref
+                    .watch(favouritedTeamsProvider)
+                    .any((team) => team.id == widget.teamId);
+                return IconButton(
+                  style: IconButton.styleFrom(
+                    fixedSize: const Size(48, 48),
+                    padding: EdgeInsets.zero,
+                  ),
+                  icon: Icon(
+                    isStarred ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: isStarred
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                    size: 26,
+                  ),
+                  onPressed: () async {
+                    final wasFavourited = isStarred;
+                    await ref
+                        .read(favouritedTeamsProvider.notifier)
+                        .toggle(
                           FavouritedTeam(
                             id: widget.teamId,
                             name: teamName,
@@ -806,206 +810,226 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                             favouriteCount: favouriteCount,
                           ),
                         );
-                        if (!mounted) return;
-                        setState(() {
-                          final nextCount = (favouriteCount + (wasFavourited ? -1 : 1))
-                              .clamp(0, 1 << 30);
-                          _team = {
-                            ...?_team,
-                            'favourite_count': nextCount,
-                          };
-                        });
-                      },
-                      tooltip: isStarred
-                          ? 'Remove from favourites'
-                          : 'Add to favourites',
-                    );
+                    if (!mounted) return;
+                    setState(() {
+                      final nextCount =
+                          (favouriteCount + (wasFavourited ? -1 : 1)).clamp(
+                            0,
+                            1 << 30,
+                          );
+                      _team = {...?_team, 'favourite_count': nextCount};
+                    });
                   },
-                )
-              else
-                IconButton(
-                  onPressed: _isJoining ? null : _handleJoinTeam,
-                  icon: _isJoining
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.login),
-                  tooltip: 'Join team',
-                ),
-          ] else if (_isDeleting)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else ...[
-            IconButton(
-              icon: SvgPicture.asset(
-                AppAssets.teamCompareIcon,
-                width: 24,
-                height: 24,
-                colorFilter: ColorFilter.mode(
-                  colorScheme.onSurface,
-                  BlendMode.srcIn,
-                ),
-              ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        TeamComparisonPage(baseTeamId: widget.teamId),
-                  ),
+                  tooltip: isStarred
+                      ? 'Remove from favourites'
+                      : 'Add to favourites',
                 );
               },
-              tooltip: 'Compare team',
+            )
+          else
+            IconButton(
+              onPressed: _isJoining ? null : _handleJoinTeam,
+              icon: _isJoining
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.login),
+              tooltip: 'Join team',
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              tooltip: 'More options',
-              onSelected: (value) {
-                switch (value) {
-                  case 'manage_applications':
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) =>
-                            TeamManageApplicationsPage(teamId: widget.teamId),
-                      ),
-                    );
-                    break;
-                  case 'rejected_applications':
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) =>
-                            TeamRejectedApplicationsPage(teamId: widget.teamId),
-                      ),
-                    );
-                    break;
-                  case 'add_players':
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) =>
-                            TeamAddPlayersPage(teamId: widget.teamId),
-                      ),
-                    );
-                    break;
-                  case 'leave_team':
-                    _handleOwnerLeaveTeam();
-                    break;
-                  case 'delete':
-                    _deleteTeam();
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem<String>(
-                  value: 'manage_applications',
-                  child: Row(
-                    children: [
-                      Icon(Icons.how_to_reg),
-                      SizedBox(width: 16),
-                      Text('Manage applications'),
-                    ],
+      ] else if (_isDeleting)
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        )
+      else ...[
+        IconButton(
+          icon: SvgPicture.asset(
+            AppAssets.teamCompareIcon,
+            width: 24,
+            height: 24,
+            colorFilter: ColorFilter.mode(
+              colorScheme.onSurface,
+              BlendMode.srcIn,
+            ),
+          ),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => TeamComparisonPage(baseTeamId: widget.teamId),
+              ),
+            );
+          },
+          tooltip: 'Compare team',
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert),
+          tooltip: 'More options',
+          onSelected: (value) {
+            switch (value) {
+              case 'manage_applications':
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) =>
+                        TeamManageApplicationsPage(teamId: widget.teamId),
                   ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'rejected_applications',
-                  child: Row(
-                    children: [
-                      Icon(Icons.cancel),
-                      SizedBox(width: 16),
-                      Text('Rejected applications'),
-                    ],
+                );
+                break;
+              case 'rejected_applications':
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) =>
+                        TeamRejectedApplicationsPage(teamId: widget.teamId),
                   ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'add_players',
-                  child: Row(
-                    children: [
-                      Icon(Icons.person_add),
-                      SizedBox(width: 16),
-                      Text('Add players to team'),
-                    ],
+                );
+                break;
+              case 'add_players':
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) =>
+                        TeamAddPlayersPage(teamId: widget.teamId),
                   ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'leave_team',
-                  child: Row(
-                    children: [
-                      Icon(Icons.exit_to_app),
-                      SizedBox(width: 16),
-                      Text('Leave team'),
-                    ],
+                );
+                break;
+              case 'leave_team':
+                _handleOwnerLeaveTeam();
+                break;
+              case 'delete':
+                _deleteTeam();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem<String>(
+              value: 'manage_applications',
+              child: Row(
+                children: [
+                  Icon(Icons.how_to_reg),
+                  SizedBox(width: 16),
+                  Text('Manage applications'),
+                ],
+              ),
+            ),
+            const PopupMenuItem<String>(
+              value: 'rejected_applications',
+              child: Row(
+                children: [
+                  Icon(Icons.cancel),
+                  SizedBox(width: 16),
+                  Text('Rejected applications'),
+                ],
+              ),
+            ),
+            const PopupMenuItem<String>(
+              value: 'add_players',
+              child: Row(
+                children: [
+                  Icon(Icons.person_add),
+                  SizedBox(width: 16),
+                  Text('Add players to team'),
+                ],
+              ),
+            ),
+            const PopupMenuItem<String>(
+              value: 'leave_team',
+              child: Row(
+                children: [
+                  Icon(Icons.exit_to_app),
+                  SizedBox(width: 16),
+                  Text('Leave team'),
+                ],
+              ),
+            ),
+            PopupMenuItem<String>(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline, color: colorScheme.error),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Delete team',
+                    style: TextStyle(color: colorScheme.error),
                   ),
-                ),
-                PopupMenuItem<String>(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_outline, color: colorScheme.error),
-                      const SizedBox(width: 16),
-                      Text(
-                        'Delete team',
-                        style: TextStyle(color: colorScheme.error),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-        ],
+        ),
+      ],
+    ];
+
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
       ),
-      body: DefaultTabController(
-        length: 7,
-        child: NestedScrollView(
-          controller: _outerScrollController,
-          physics: _isSquadEditingActive
-              ? const NeverScrollableScrollPhysics()
-              : const ClampingScrollPhysics(),
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              SliverAppBar(
-                pinned: true,
-                primary: false,
-                toolbarHeight: 0,
-                expandedHeight: 230,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                shadowColor: Colors.transparent,
-                backgroundColor: Colors.transparent,
-                surfaceTintColor: Colors.transparent,
-                flexibleSpace: FlexibleSpaceBar(
-                  collapseMode: CollapseMode.parallax,
-                  background: Builder(
-                    builder: (context) {
-                      final settings = context
-                          .dependOnInheritedWidgetOfExactType<
-                            FlexibleSpaceBarSettings
-                          >();
-                      final minExtent = settings?.minExtent ?? kToolbarHeight;
-                      final maxExtent = settings?.maxExtent ?? 240;
-                      final currentExtent =
-                          settings?.currentExtent ?? maxExtent;
-                      final collapseRange = (maxExtent - minExtent).clamp(
-                        1.0,
-                        double.infinity,
-                      );
-                      final t = ((currentExtent - minExtent) / collapseRange)
-                          .clamp(0.0, 1.0);
-                      final fadeOpacity = (0.15 + (0.85 * t)).clamp(0.0, 1.0);
-                      return Opacity(
-                        opacity: fadeOpacity,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 16.0),
+      child: Scaffold(
+        body: DefaultTabController(
+          length: 7,
+          child: NestedScrollView(
+            controller: _outerScrollController,
+            physics: _isSquadEditingActive
+                ? const NeverScrollableScrollPhysics()
+                : const ClampingScrollPhysics(),
+            headerSliverBuilder: (context, innerBoxIsScrolled) {
+              return [
+                CollapsingPageHeader.sliver(
+                  context: context,
+                  title: '',
+                  showTitle: false,
+                  leading: const BackButton(),
+                  middle: CollapsedBarIdentity(
+                    reveal: _identityReveal,
+                    name: teamName,
+                    subtitle: shortForm.trim().isEmpty
+                        ? 'Est. $estYear'
+                        : shortForm.trim(),
+                    image: CollapsedBarLogo(imageUrl: logoUrl),
+                  ),
+                  actions: headerActions,
+                ),
+                SliverAppBar(
+                  pinned: true,
+                  primary: false,
+                  toolbarHeight: 0,
+                  expandedHeight: 230,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  shadowColor: Colors.transparent,
+                  backgroundColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  flexibleSpace: FlexibleSpaceBar(
+                    collapseMode: CollapseMode.parallax,
+                    background: Builder(
+                      builder: (context) {
+                        final settings = context
+                            .dependOnInheritedWidgetOfExactType<
+                              FlexibleSpaceBarSettings
+                            >();
+                        final minExtent = settings?.minExtent ?? kToolbarHeight;
+                        final maxExtent = settings?.maxExtent ?? 240;
+                        final currentExtent =
+                            settings?.currentExtent ?? maxExtent;
+                        final collapseRange = (maxExtent - minExtent).clamp(
+                          1.0,
+                          double.infinity,
+                        );
+                        final t = ((currentExtent - minExtent) / collapseRange)
+                            .clamp(0.0, 1.0);
+                        final fadeOpacity = (0.15 + (0.85 * t)).clamp(0.0, 1.0);
+                        return Opacity(
+                          opacity: fadeOpacity,
                           child: ClipRRect(
                             borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(28),
-                              topRight: Radius.circular(28),
+                              topLeft: Radius.circular(AppShape.medium),
+                              topRight: Radius.circular(AppShape.medium),
                             ),
                             child: Container(
                               width: double.infinity,
@@ -1026,7 +1050,9 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                                   gradient: RadialGradient(
                                     center: const Alignment(-0.85, -0.65),
                                     colors: [
-                                      colorScheme.primary.withValues(alpha: 0.22),
+                                      colorScheme.primary.withValues(
+                                        alpha: 0.22,
+                                      ),
                                       Colors.transparent,
                                     ],
                                   ),
@@ -1034,7 +1060,8 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                                 child: Padding(
                                   padding: const EdgeInsets.all(16.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Row(
@@ -1065,7 +1092,10 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                                                         logoUrl.isNotEmpty
                                                     ? ClipOval(
                                                         child: Image(
-                                                          image: appCachedImageProvider(logoUrl),
+                                                          image:
+                                                              appCachedImageProvider(
+                                                                logoUrl,
+                                                              ),
                                                           width: 64,
                                                           height: 64,
                                                           fit: BoxFit.cover,
@@ -1138,20 +1168,20 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                                               style: FilledButton.styleFrom(
                                                 shape:
                                                     const RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.all(
-                                                    Radius.circular(999),
-                                                  ),
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.only(
+                                                      borderRadius:
+                                                          BorderRadius.all(
+                                                            Radius.circular(
+                                                              AppShape.full,
+                                                            ),
+                                                          ),
+                                                    ),
+                                                padding: const EdgeInsets.only(
                                                   left: 17,
                                                   right: 17,
                                                   top: 12,
                                                   bottom: 12,
                                                 ),
-                                                minimumSize:
-                                                    const Size(60, 40),
+                                                minimumSize: const Size(60, 40),
                                               ),
                                               child: const Icon(
                                                 Icons.edit_outlined,
@@ -1189,110 +1219,121 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(kTextTabBarHeight + 2),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOut,
-                    decoration: BoxDecoration(
-                      color: _isHeaderCollapsed
-                          ? colorScheme.surface
-                          : Colors.transparent,
-                      border: Border(
-                        bottom: BorderSide(
-                          color: colorScheme.outlineVariant,
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.start,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      dividerHeight: 0,
-                      dividerColor: Colors.transparent,
-                      labelColor: colorScheme.onSurface,
-                      unselectedLabelColor: colorScheme.onSurfaceVariant,
-                      indicatorColor: colorScheme.primary,
-                      tabs: const [
-                        Tab(text: 'Overview'),
-                        Tab(text: 'Matches'),
-                        Tab(text: 'Standings'),
-                        Tab(text: 'Stats'),
-                        Tab(text: 'Top players'),
-                        Tab(text: 'Squad'),
-                        Tab(text: 'Videos'),
-                      ],
+                        );
+                      },
                     ),
                   ),
-                ),
-              ),
-            ];
-          },
-          body: TabBarView(
-            controller: _tabController,
-            physics: _isSquadEditingActive
-                ? const NeverScrollableScrollPhysics()
-                : null,
-            children: [
-              KeyedSubtree(
-                key: ValueKey('team-tab-0-$_tabViewGeneration'),
-                child: _TeamOverviewTab(
-                  teamId: widget.teamId,
-                  team: _team!,
-                  showAdminActions: _isAdmin,
-                  onOpenMatchesTab: () => _tabController.animateTo(1),
-                  onCreateMatch: () {
-                    Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const CreateMatchEntryPage(),
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(kTextTabBarHeight + 2),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: _isHeaderCollapsed
+                            ? colorScheme.surface
+                            : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: colorScheme.outlineVariant,
+                            width: 1,
+                          ),
+                        ),
                       ),
-                    );
-                  },
+                      child: TabBar(
+                        controller: _tabController,
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        dividerHeight: 0,
+                        dividerColor: Colors.transparent,
+                        labelColor: colorScheme.onSurface,
+                        unselectedLabelColor: colorScheme.onSurfaceVariant,
+                        indicatorColor: colorScheme.primary,
+                        tabs: const [
+                          Tab(text: 'Overview'),
+                          Tab(text: 'Matches'),
+                          Tab(text: 'Standings'),
+                          Tab(text: 'Stats'),
+                          Tab(text: 'Top players'),
+                          Tab(text: 'Squad'),
+                          Tab(text: 'Videos'),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
+              ];
+            },
+            body: TabBodyUnderlapClip(
+              controller: _outerScrollController,
+              barMaxExtent:
+                  MediaQuery.paddingOf(context).top +
+                  CollapsingPageHeader.pinnedRow,
+              barMinExtent:
+                  MediaQuery.paddingOf(context).top +
+                  CollapsingPageHeader.pinnedRow,
+              heroMaxExtent: 230,
+              heroMinExtent: kTextTabBarHeight + 2,
+              child: TabBarView(
+                controller: _tabController,
+                physics: _isSquadEditingActive
+                    ? const NeverScrollableScrollPhysics()
+                    : null,
+                children: [
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-0-$_tabViewGeneration'),
+                    child: _TeamOverviewTab(
+                      teamId: widget.teamId,
+                      team: _team!,
+                      showAdminActions: _isAdmin,
+                      onOpenMatchesTab: () => _tabController.animateTo(1),
+                      onCreateMatch: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const CreateMatchEntryPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-1-$_tabViewGeneration'),
+                    child: _TeamMatchesTab(
+                      teamId: widget.teamId,
+                      showCreateMatchCta: _isAdmin,
+                    ),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-2-$_tabViewGeneration'),
+                    child: _TeamStandingsTab(teamId: widget.teamId),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-3-$_tabViewGeneration'),
+                    child: _TeamSummaryStatsTab(teamId: widget.teamId),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-4-$_tabViewGeneration'),
+                    child: _TeamStatsTab(teamId: widget.teamId),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-5-$_tabViewGeneration'),
+                    child: _SquadTab(
+                      teamId: widget.teamId,
+                      onEditingChanged: (isEditing) {
+                        if (_isSquadEditingActive == isEditing) return;
+                        setState(() {
+                          _isSquadEditingActive = isEditing;
+                        });
+                      },
+                    ),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey('team-tab-6-$_tabViewGeneration'),
+                    child: _TeamVideosTab(teamId: widget.teamId),
+                  ),
+                ],
               ),
-              KeyedSubtree(
-                key: ValueKey('team-tab-1-$_tabViewGeneration'),
-                child: _TeamMatchesTab(
-                  teamId: widget.teamId,
-                  showCreateMatchCta: _isAdmin,
-                ),
-              ),
-              KeyedSubtree(
-                key: ValueKey('team-tab-2-$_tabViewGeneration'),
-                child: _TeamStandingsTab(teamId: widget.teamId),
-              ),
-              KeyedSubtree(
-                key: ValueKey('team-tab-3-$_tabViewGeneration'),
-                child: _TeamSummaryStatsTab(teamId: widget.teamId),
-              ),
-              KeyedSubtree(
-                key: ValueKey('team-tab-4-$_tabViewGeneration'),
-                child: _TeamStatsTab(teamId: widget.teamId),
-              ),
-              KeyedSubtree(
-                key: ValueKey('team-tab-5-$_tabViewGeneration'),
-                child: _SquadTab(
-                  teamId: widget.teamId,
-                  onEditingChanged: (isEditing) {
-                    if (_isSquadEditingActive == isEditing) return;
-                    setState(() {
-                      _isSquadEditingActive = isEditing;
-                    });
-                  },
-                ),
-              ),
-              KeyedSubtree(
-                key: ValueKey('team-tab-6-$_tabViewGeneration'),
-                child: _TeamVideosTab(teamId: widget.teamId),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1300,14 +1341,36 @@ class _TeamDetailPageState extends State<TeamDetailPage>
   }
 }
 
+Widget _teamDetailShell(BuildContext context, Widget body) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+    ),
+    child: Scaffold(
+      body: Column(
+        children: [
+          CollapsingPageHeader.bar(
+            context: context,
+            title: '',
+            shrinkOffset: 0,
+            showTitle: false,
+            leading: const BackButton(),
+          ),
+          Expanded(child: body),
+        ],
+      ),
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Team Overview Tab – upcoming match card
 // ---------------------------------------------------------------------------
 class _TeamOverviewSectionCard extends StatelessWidget {
-  const _TeamOverviewSectionCard({
-    required this.title,
-    required this.child,
-  });
+  const _TeamOverviewSectionCard({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -1317,7 +1380,7 @@ class _TeamOverviewSectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1459,18 +1522,21 @@ class _TeamOverviewTab extends StatelessWidget {
                     message: showAdminActions
                         ? 'Schedule a fixture for this team and it will appear here when it is upcoming or live.'
                         : 'This team has no upcoming or live fixtures right now.',
-                    actionLabel:
-                        showAdminActions ? 'Create match' : 'View matches',
+                    actionLabel: showAdminActions
+                        ? 'Create match'
+                        : 'View matches',
                     actionIcon: showAdminActions
                         ? Icons.add
                         : Icons.calendar_month_outlined,
                     onAction: showAdminActions
                         ? onCreateMatch
                         : onOpenMatchesTab,
-                    secondaryActionLabel:
-                        showAdminActions ? 'View matches' : null,
-                    onSecondaryAction:
-                        showAdminActions ? onOpenMatchesTab : null,
+                    secondaryActionLabel: showAdminActions
+                        ? 'View matches'
+                        : null,
+                    onSecondaryAction: showAdminActions
+                        ? onOpenMatchesTab
+                        : null,
                   ),
                 );
               }
@@ -1493,7 +1559,7 @@ class _TeamOverviewTab extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: AppShape.mediumRadius,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1501,7 +1567,7 @@ class _TeamOverviewTab extends StatelessWidget {
                         Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppShape.largeRadius,
                             onTap: () {
                               if (leagueId == null || leagueId.isEmpty) return;
                               Navigator.of(context).push(
@@ -1521,7 +1587,7 @@ class _TeamOverviewTab extends StatelessWidget {
                                     decoration: BoxDecoration(
                                       color:
                                           colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: AppShape.mediumRadius,
                                     ),
                                     child: leagueLogoProvider != null
                                         ? ClipRRect(
@@ -1562,7 +1628,7 @@ class _TeamOverviewTab extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                         InkWell(
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: AppShape.mediumRadius,
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
@@ -1878,7 +1944,7 @@ class _TeamTrophyLeagueThumb extends StatelessWidget {
     }
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppShape.smallRadius,
         child: Image(
           image: appCachedImageProvider(path),
           width: 36,
@@ -2003,17 +2069,19 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
           embedded: true,
           message:
               'Recent results from full-time matches will show here as a form guide.',
-          actionLabel: widget.showAdminActions ? 'Create match' : 'View matches',
+          actionLabel: widget.showAdminActions
+              ? 'Create match'
+              : 'View matches',
           actionIcon: widget.showAdminActions
               ? Icons.add
               : Icons.calendar_month_outlined,
           onAction: widget.showAdminActions
               ? widget.onCreateMatch
               : widget.onOpenMatchesTab,
-          secondaryActionLabel:
-              widget.showAdminActions ? 'View matches' : null,
-          onSecondaryAction:
-              widget.showAdminActions ? widget.onOpenMatchesTab : null,
+          secondaryActionLabel: widget.showAdminActions ? 'View matches' : null,
+          onSecondaryAction: widget.showAdminActions
+              ? widget.onOpenMatchesTab
+              : null,
         ),
       );
     }
@@ -2027,103 +2095,95 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_recentMatches.length, (index) {
-                  final match = _recentMatches[index];
+              final match = _recentMatches[index];
 
-                  final isTeamA = match.teamA.id == widget.teamId;
-                  final myScore = isTeamA ? match.teamAScore : match.teamBScore;
-                  final oppScore = isTeamA
-                      ? match.teamBScore
-                      : match.teamAScore;
-                  final opponent = isTeamA ? match.teamB : match.teamA;
+              final isTeamA = match.teamA.id == widget.teamId;
+              final myScore = isTeamA ? match.teamAScore : match.teamBScore;
+              final oppScore = isTeamA ? match.teamBScore : match.teamAScore;
+              final opponent = isTeamA ? match.teamB : match.teamA;
 
-                  final resultColor = (myScore != null && oppScore != null)
-                      ? (myScore > oppScore
-                            ? Colors.green
-                            : (myScore < oppScore
-                                  ? Colors.red
-                                  : colorScheme.surfaceContainerHighest))
-                      : colorScheme.surfaceContainerHighest;
+              final resultColor = (myScore != null && oppScore != null)
+                  ? (myScore > oppScore
+                        ? Colors.green
+                        : (myScore < oppScore
+                              ? Colors.red
+                              : colorScheme.surfaceContainerHighest))
+                  : colorScheme.surfaceContainerHighest;
 
-                  final scoreText = (myScore != null && oppScore != null)
-                      ? '$myScore - $oppScore'
-                      : '—';
+              final scoreText = (myScore != null && oppScore != null)
+                  ? '$myScore - $oppScore'
+                  : '—';
 
-                  final isDraw =
-                      myScore != null &&
-                      oppScore != null &&
-                      myScore == oppScore;
+              final isDraw =
+                  myScore != null && oppScore != null && myScore == oppScore;
 
-                  final gwLabel = match.gameweekNumber != null
-                      ? 'GW${match.gameweekNumber}'
-                      : (match.gameweek ?? '');
+              final gwLabel = match.gameweekNumber != null
+                  ? 'GW${match.gameweekNumber}'
+                  : (match.gameweek ?? '');
 
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: opponent.id.isEmpty ||
-                                  opponent.id == widget.teamId
-                              ? null
-                              : () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => TeamDetailPage(
-                                        teamId: opponent.id,
-                                      ),
-                                    ),
-                                  );
-                                },
-                          child: Column(
-                            children: [
-                              Text(
-                                gwLabel.isNotEmpty ? gwLabel : '—',
-                                style: textTheme.bodySmall,
-                              ),
-                              const SizedBox(height: 8),
-                              CircleAvatar(
-                                backgroundColor: Colors.transparent,
-                                backgroundImage: _logoProvider(
-                                  opponent.logoPath,
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: AppShape.largeRadius,
+                      onTap: opponent.id.isEmpty || opponent.id == widget.teamId
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      TeamDetailPage(teamId: opponent.id),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                opponent.shortForm,
-                                style: textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: resultColor,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  scoreText,
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: isDraw
-                                        ? colorScheme.onSurface
-                                        : Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
+                              );
+                            },
+                      child: Column(
+                        children: [
+                          Text(
+                            gwLabel.isNotEmpty ? gwLabel : '—',
+                            style: textTheme.bodySmall,
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          CircleAvatar(
+                            backgroundColor: Colors.transparent,
+                            backgroundImage: _logoProvider(opponent.logoPath),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            opponent.shortForm,
+                            style: textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: resultColor,
+                              borderRadius: AppShape.largeRadius,
+                            ),
+                            child: Text(
+                              scoreText,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: isDraw
+                                    ? colorScheme.onSurface
+                                    : Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      if (index < _recentMatches.length - 1)
-                        const SizedBox(width: 24),
-                    ],
-                  );
-                }),
+                    ),
+                  ),
+                  if (index < _recentMatches.length - 1)
+                    const SizedBox(width: 24),
+                ],
+              );
+            }),
           ),
         ),
       ),
@@ -2415,7 +2475,7 @@ class _TeamSummaryStatsTabState extends State<_TeamSummaryStatsTab> {
             Container(
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: AppShape.mediumRadius,
               ),
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -2768,7 +2828,9 @@ class _SquadTabState extends State<_SquadTab> {
       showDragHandle: true,
       backgroundColor: colorScheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppShape.extraLarge),
+        ),
       ),
       builder: (ctx) {
         return Padding(
@@ -2820,7 +2882,7 @@ class _SquadTabState extends State<_SquadTab> {
               Container(
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppShape.largeIncreasedRadius,
                 ),
                 child: Column(
                   children: [
@@ -3079,8 +3141,8 @@ class _SquadTabState extends State<_SquadTab> {
                     for (final member in displayMembers)
                       Builder(
                         builder: (context) {
-                          final memberId =
-                              (member['player_id'] ?? '').toString();
+                          final memberId = (member['player_id'] ?? '')
+                              .toString();
                           if (memberId.isEmpty) {
                             return const SizedBox.shrink();
                           }
@@ -3119,9 +3181,8 @@ class _SquadTabState extends State<_SquadTab> {
                                 if (!mounted) return;
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => PlayerProfilePage(
-                                      playerId: memberId,
-                                    ),
+                                    builder: (_) =>
+                                        PlayerProfilePage(playerId: memberId),
                                   ),
                                 );
                               },
@@ -3279,11 +3340,19 @@ class _SquadPitchPlayerShimmer extends StatelessWidget {
         children: [
           Positioned(
             top: 0,
-            child: ShimmerBox(width: 57, height: 57, borderRadius: 999),
+            child: ShimmerBox(
+              width: 57,
+              height: 57,
+              borderRadius: AppShape.full,
+            ),
           ),
           Positioned(
             bottom: 0,
-            child: ShimmerBox(width: 48, height: 19, borderRadius: 8),
+            child: ShimmerBox(
+              width: 48,
+              height: 19,
+              borderRadius: AppShape.small,
+            ),
           ),
         ],
       ),
@@ -3861,9 +3930,7 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
 
   void _openCreateMatch() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const CreateMatchEntryPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const CreateMatchEntryPage()),
     );
   }
 
@@ -3918,7 +3985,7 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3934,7 +4001,7 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
                     ),
                   );
                 },
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppShape.smallRadius,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4.0),
                   child: Text(
@@ -3995,7 +4062,7 @@ class _TeamMatchesTabState extends ConsumerState<_TeamMatchesTab> {
             MaterialPageRoute(builder: (_) => FixturePage(matchId: match.id)),
           );
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.mediumRadius,
         child: Container(
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -4153,16 +4220,9 @@ class _TeamStandingsTab extends StatefulWidget {
 }
 
 class _TeamStandingsTabState extends State<_TeamStandingsTab> {
-  static const _kColumnWidths = <int, TableColumnWidth>{
-    0: FlexColumnWidth(0.8), // Pos
-    1: FlexColumnWidth(2.4), // Team
-    2: FlexColumnWidth(0.7), // PL
-    3: FlexColumnWidth(0.7), // W
-    4: FlexColumnWidth(0.7), // D
-    5: FlexColumnWidth(0.7), // L
-    6: FlexColumnWidth(0.7), // GD
-    7: FlexColumnWidth(0.8), // Pts
-  };
+  static const _statLabels = ['PL', 'W', 'D', 'L', 'GD', 'PTS'];
+  static const _statWidth = 24.0;
+  static const _pointsWidth = 32.0;
 
   List<Map<String, dynamic>> _leagues = [];
   String? _selectedLeague;
@@ -4359,6 +4419,7 @@ class _TeamStandingsTabState extends State<_TeamStandingsTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -4422,148 +4483,161 @@ class _TeamStandingsTabState extends State<_TeamStandingsTab> {
                       'The table will update once this team plays matches in the league.',
                 ),
               )
-            else
-              Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 16,
-                ),
+            else ...[
+              _standingsHeader(context),
+              Material(
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: AppShape.mediumRadius,
+                clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    Table(
-                      columnWidths: _kColumnWidths,
-                      children: [_buildHeader(textTheme)],
-                    ),
-                    Divider(height: 1, color: colorScheme.outlineVariant),
-                    Table(
-                      columnWidths: _kColumnWidths,
-                      children: [
-                        for (int i = 0; i < standings.length; i++)
-                          _buildRow(context, i, standings[i]),
-                      ],
-                    ),
+                    for (var i = 0; i < standings.length; i++) ...[
+                      if (i > 0)
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      _standingsRow(context, i, standings[i]),
+                    ],
                   ],
                 ),
               ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  TableRow _buildHeader(TextTheme textTheme) {
-    Widget cell(String label) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        label,
-        style: textTheme.bodySmall,
-        textAlign: TextAlign.center,
-      ),
+  Widget _standingsHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.8,
     );
-    return TableRow(
-      children: [
-        cell('Pos'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text('Team', style: textTheme.bodySmall),
-        ),
-        cell('PL'),
-        cell('W'),
-        cell('D'),
-        cell('L'),
-        cell('GD'),
-        cell('Pts'),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Row(
+        children: [
+          SizedBox(width: 32, child: Text('#', style: style)),
+          const SizedBox(width: 8),
+          const SizedBox(width: 32),
+          const SizedBox(width: 8),
+          Expanded(child: Text('TEAM', style: style)),
+          for (final label in _statLabels)
+            SizedBox(
+              width: label == 'PTS' ? _pointsWidth : _statWidth,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label, style: style, textAlign: TextAlign.center),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  TableRow _buildRow(
+  Widget _standingsRow(
     BuildContext context,
     int index,
     Map<String, dynamic> row,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final position = (row['position'] as num?)?.toInt() ?? (index + 1);
+    final position = index + 1;
     final teamId = row['team_id']?.toString() ?? '';
     final shortForm = row['team_short_form']?.toString() ?? '—';
     final logoRaw = row['team_logo']?.toString() ?? '';
-    final played = row['played'] ?? 0;
-    final wins = row['wins'] ?? 0;
-    final draws = row['draws'] ?? 0;
-    final losses = row['losses'] ?? 0;
-    final gd = row['goal_difference'] ?? 0;
-    final pts = row['points'] ?? 0;
-
+    final values = [
+      row['played'] ?? 0,
+      row['wins'] ?? 0,
+      row['draws'] ?? 0,
+      row['losses'] ?? 0,
+      row['goal_difference'] ?? 0,
+      row['points'] ?? 0,
+    ];
     final isHighlighted = teamId == widget.teamId;
+    final logoPath = logoRaw.isEmpty
+        ? ''
+        : (resolveTeamLogoPath(logoRaw) ?? '');
 
-    Widget statCell(dynamic value, {bool bold = false}) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(
-        value.toString(),
-        style: bold
-            ? textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)
-            : textTheme.bodyMedium,
-        textAlign: TextAlign.center,
-      ),
-    );
-
-    String logoPath = logoRaw;
-    if (logoRaw.isNotEmpty) {
-      logoPath = resolveTeamLogoPath(logoRaw) ?? logoPath;
-    }
-
-    return TableRow(
-      decoration: isHighlighted
-          ? BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(30),
-            )
-          : null,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(
-            position.toString(),
-            style: textTheme.bodyMedium,
-            textAlign: TextAlign.center,
+    Widget statCell(dynamic value, {required bool points}) {
+      return SizedBox(
+        width: points ? _pointsWidth : _statWidth,
+        child: Text(
+          value.toString(),
+          textAlign: TextAlign.center,
+          style: textTheme.bodyMedium?.copyWith(
+            fontSize: 13,
+            fontWeight: points ? FontWeight.w800 : FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+      );
+    }
+
+    return Material(
+      color: isHighlighted
+          ? colorScheme.primary.withValues(alpha: 0.12)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: teamId.isEmpty
+            ? null
+            : () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TeamDetailPage(teamId: teamId),
+                  ),
+                );
+              },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Row(
             children: [
+              SizedBox(
+                width: 32,
+                child: Text(
+                  position < 10 ? '0$position' : '$position',
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: position <= 3
+                        ? colorScheme.onSurface
+                        : colorScheme.outline,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               if (logoPath.isNotEmpty)
-                ClipOval(child: _TeamStandingsLogo(path: logoPath, size: 24))
+                ClipOval(child: _TeamStandingsLogo(path: logoPath, size: 32))
               else
                 Icon(
                   Icons.groups,
-                  size: 24,
+                  size: 32,
                   color: colorScheme.onSurfaceVariant,
                 ),
               const SizedBox(width: 8),
-              Flexible(
+              Expanded(
                 child: Text(
                   shortForm,
-                  style: textTheme.bodyMedium,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
+              for (var i = 0; i < values.length; i++)
+                statCell(values[i], points: i == values.length - 1),
             ],
           ),
         ),
-        statCell(played),
-        statCell(wins),
-        statCell(draws),
-        statCell(losses),
-        statCell(gd),
-        statCell(pts, bold: true),
-      ],
+      ),
     );
   }
 }
@@ -5068,7 +5142,7 @@ class _TeamStatSectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -5436,7 +5510,9 @@ class _TeamVideosTabState extends State<_TeamVideosTab> {
       final enriched = await _enrichVideos(list);
       if (!mounted) return;
       setState(() {
-        final existing = {for (final v in _videos ?? <LeagueVideoItem>[]) v.videoId};
+        final existing = {
+          for (final v in _videos ?? <LeagueVideoItem>[]) v.videoId,
+        };
         _videos = [
           ...?_videos,
           ...enriched.where((v) => !existing.contains(v.videoId)),
@@ -5786,10 +5862,10 @@ class _TeamVideosTabState extends State<_TeamVideosTab> {
           child: Container(
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -5804,7 +5880,7 @@ class _TeamVideosTabState extends State<_TeamVideosTab> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black54,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppShape.smallRadius,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -5853,7 +5929,7 @@ class _TeamVideosTabState extends State<_TeamVideosTab> {
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5894,7 +5970,7 @@ class _TeamVideosTabState extends State<_TeamVideosTab> {
                         ),
                         decoration: BoxDecoration(
                           color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppShape.smallRadius,
                         ),
                         child: Text(
                           v.matchStatus,
@@ -6043,7 +6119,9 @@ class _TeamVideoPosterAvatar extends StatelessWidget {
     return CircleAvatar(
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       backgroundImage: hasImage
-          ? (isNetwork ? appCachedImageProvider(avatarUrl!) : AssetImage(avatarUrl!))
+          ? (isNetwork
+                ? appCachedImageProvider(avatarUrl!)
+                : AssetImage(avatarUrl!))
           : null,
       child: !hasImage
           ? Text(
@@ -6197,10 +6275,7 @@ class _EditTeamPageState extends State<_EditTeamPage> {
           '${user.id}_${DateTime.now().millisecondsSinceEpoch}${path.extension(picked.path)}';
       final filePath = '$folderName/$fileName';
       final bytes = await picked.readAsBytes();
-      await requireAllowedImage(
-        bytes,
-        contentRef: 'image:$folderName',
-      );
+      await requireAllowedImage(bytes, contentRef: 'image:$folderName');
       await supabase.storage
           .from('Profile images')
           .uploadBinary(filePath, bytes);
@@ -6247,7 +6322,8 @@ class _EditTeamPageState extends State<_EditTeamPage> {
     try {
       final teamName = _teamNameController.text.trim();
       final shortForm = _shortFormController.text.trim();
-      final nameBlock = UsernameRules.offensiveContentError(teamName) ??
+      final nameBlock =
+          UsernameRules.offensiveContentError(teamName) ??
           UsernameRules.offensiveContentError(shortForm);
       if (nameBlock != null) {
         throw StateError(nameBlock);
@@ -6359,7 +6435,7 @@ class _EditTeamPageState extends State<_EditTeamPage> {
                         folderName: 'team banners',
                       ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: AppShape.largeRadius,
                   child: Container(
                     width: double.infinity,
                     height: 150,
@@ -6488,10 +6564,7 @@ class _EditTeamPageState extends State<_EditTeamPage> {
 }
 
 class _TeamHeaderChip extends StatelessWidget {
-  const _TeamHeaderChip({
-    required this.icon,
-    required this.label,
-  });
+  const _TeamHeaderChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -6506,9 +6579,7 @@ class _TeamHeaderChip extends StatelessWidget {
       onPressed: () {},
       backgroundColor: colorScheme.surfaceContainerHighest,
       side: BorderSide.none,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(999),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppShape.fullRadius),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );
   }

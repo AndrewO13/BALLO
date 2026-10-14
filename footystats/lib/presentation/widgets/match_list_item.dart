@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../core/widgets/media_placeholders.dart';
 
 import '../../domain/models/match_model.dart';
 import '../pages/fixture.dart';
 import '../pages/matches.dart';
 import 'match_list_score_pill.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Compact match list item (home team | score/time | away team) for carousels
 /// and lists. Tapping navigates to [FixturePage].
@@ -17,6 +18,7 @@ class MatchListItem extends StatelessWidget {
   });
 
   final MatchModel match;
+
   /// Override status text (e.g. live clock). If null, uses [match.statusText].
   final String? statusText;
   final bool hasVideo;
@@ -34,7 +36,7 @@ class MatchListItem extends StatelessWidget {
           ),
         );
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppShape.mediumRadius,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -47,16 +49,10 @@ class MatchListItem extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      match.teamA.shortForm,
-                      style: textTheme.bodySmall,
-                    ),
+                    Text(match.teamA.shortForm, style: textTheme.bodySmall),
                     const SizedBox(width: 8),
                     ClipOval(
-                      child: _TeamLogo(
-                        path: match.teamA.logoPath,
-                        size: 28,
-                      ),
+                      child: _TeamLogo(path: match.teamA.logoPath, size: 28),
                     ),
                   ],
                 ),
@@ -105,16 +101,10 @@ class MatchListItem extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ClipOval(
-                      child: _TeamLogo(
-                        path: match.teamB.logoPath,
-                        size: 28,
-                      ),
+                      child: _TeamLogo(path: match.teamB.logoPath, size: 28),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      match.teamB.shortForm,
-                      style: textTheme.bodySmall,
-                    ),
+                    Text(match.teamB.shortForm, style: textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -134,8 +124,7 @@ class _TeamLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNetwork =
-        path.startsWith('http://') || path.startsWith('https://');
+    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
     return SizedBox(
       width: size,
       height: size,

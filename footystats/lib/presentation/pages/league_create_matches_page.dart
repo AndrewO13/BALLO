@@ -15,6 +15,7 @@ import '../../domain/models/team_model.dart';
 import '../widgets/create_season_bottom_sheet.dart';
 import '../widgets/fixture_autogenerate_dialog.dart';
 import 'fixture.dart';
+import '../../core/theme/app_shape.dart';
 
 class LeagueCreateMatchesPage extends ConsumerStatefulWidget {
   const LeagueCreateMatchesPage({super.key, required this.leagueId});
@@ -80,9 +81,7 @@ class _LeagueCreateMatchesPageState
 
   bool _isLeagueCreator(LeagueModel? league) {
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    return league != null &&
-        userId != null &&
-        league.createdBy == userId;
+    return league != null && userId != null && league.createdBy == userId;
   }
 
   Future<void> _showCreateSeasonDialog() async {
@@ -96,22 +95,19 @@ class _LeagueCreateMatchesPageState
 
     try {
       final repo = ref.read(seasonsRepositoryProvider);
-      await repo.createSeason(
-        leagueId: widget.leagueId,
-        seasonName: name,
-      );
+      await repo.createSeason(leagueId: widget.leagueId, seasonName: name);
       if (!mounted) return;
       ref.invalidate(allSeasonsForLeagueProvider(widget.leagueId));
       ref.invalidate(ongoingOrUpcomingSeasonProvider(widget.leagueId));
       ref.invalidate(leagueSeasonFixtureProgressProvider(widget.leagueId));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Season created')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Season created')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating season: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating season: $error')));
     }
   }
 
@@ -119,36 +115,36 @@ class _LeagueCreateMatchesPageState
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid || _teamA == null || _teamB == null || _season == null) return;
     if (_teamA!.id == _teamB!.id) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick two different teams')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pick two different teams')));
       return;
     }
     if (_matchDate == null || _matchTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick a date and time')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pick a date and time')));
       return;
     }
     final venue = _venueController.text.trim();
     if (venue.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a venue')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a venue')));
       return;
     }
     final gwText = _gameweekController.text.trim();
     if (gwText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a gameweek')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a gameweek')));
       return;
     }
     final week = int.tryParse(gwText);
     if (week == null || week < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid gameweek')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid gameweek')));
       return;
     }
 
@@ -162,8 +158,7 @@ class _LeagueCreateMatchesPageState
         week: week,
       );
       final league = ref.read(leagueByIdProvider(widget.leagueId)).value;
-      final venueImageToUse =
-          league?.defaultVenueImageUrl ?? _venueImageUrl;
+      final venueImageToUse = league?.defaultVenueImageUrl ?? _venueImageUrl;
       final id = await repo.createMatch(
         leagueId: widget.leagueId,
         seasonId: _season!.id,
@@ -182,14 +177,14 @@ class _LeagueCreateMatchesPageState
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => FixturePage(matchId: id)),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Match created')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Match created')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating match: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating match: $error')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -221,8 +216,7 @@ class _LeagueCreateMatchesPageState
 
     final league = ref.read(leagueByIdProvider(widget.leagueId)).value;
     final defaultVenue = league?.defaultVenue ?? _venueController.text.trim();
-    final defaultVenueImageUrl =
-        league?.defaultVenueImageUrl ?? _venueImageUrl;
+    final defaultVenueImageUrl = league?.defaultVenueImageUrl ?? _venueImageUrl;
 
     final result = await FixtureAutogenerateDialog.show(
       context,
@@ -277,7 +271,9 @@ class _LeagueCreateMatchesPageState
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(genResult.errorMessage ?? 'Generation failed')),
+          SnackBar(
+            content: Text(genResult.errorMessage ?? 'Generation failed'),
+          ),
         );
       }
     } catch (error) {
@@ -293,16 +289,17 @@ class _LeagueCreateMatchesPageState
   @override
   Widget build(BuildContext context) {
     final teamsAsync = ref.watch(teamsInLeagueProvider(widget.leagueId));
-    final seasonAsync =
-        ref.watch(ongoingOrUpcomingSeasonProvider(widget.leagueId));
-    ref.listen<AsyncValue<LeagueModel?>>(
-      leagueByIdProvider(widget.leagueId),
-      (_, next) {
-        next.whenData((league) {
-          if (league != null) _applyLeagueDefaults(league);
-        });
-      },
+    final seasonAsync = ref.watch(
+      ongoingOrUpcomingSeasonProvider(widget.leagueId),
     );
+    ref.listen<AsyncValue<LeagueModel?>>(leagueByIdProvider(widget.leagueId), (
+      _,
+      next,
+    ) {
+      next.whenData((league) {
+        if (league != null) _applyLeagueDefaults(league);
+      });
+    });
     final leagueAsync = ref.watch(leagueByIdProvider(widget.leagueId));
     final canCreateSeason = _isLeagueCreator(leagueAsync.value);
     final textTheme = Theme.of(context).textTheme;
@@ -449,14 +446,17 @@ class _LeagueCreateMatchesPageState
                             },
                           ),
                           const SizedBox(height: 16),
-                          Text('Default background', style: textTheme.labelLarge),
+                          Text(
+                            'Default background',
+                            style: textTheme.labelLarge,
+                          ),
                           const SizedBox(height: 8),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: AppShape.mediumRadius,
                             ),
                             child: Text(
                               (_venueImageUrl ?? '').isNotEmpty
@@ -524,8 +524,7 @@ class _LeagueCreateMatchesPageState
                 ),
               );
             },
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => Center(child: Text('Error: $err')),
           );
         },

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/teams_repository.dart';
 import '../../domain/models/team_model.dart';
+import '../../core/theme/app_shape.dart';
 
 class TeamComparisonPage extends StatefulWidget {
   const TeamComparisonPage({super.key, required this.baseTeamId});
@@ -150,19 +151,21 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
         if (id.isEmpty) continue;
         final seasonName = map['season_name']?.toString() ?? '';
         final year = DateTime.tryParse(map['end_date']?.toString() ?? '')?.year;
-        seasonsById[id] =
-            seasonName.isNotEmpty ? seasonName : (year?.toString() ?? 'Season');
+        seasonsById[id] = seasonName.isNotEmpty
+            ? seasonName
+            : (year?.toString() ?? 'Season');
       }
     }
 
-    final leagueOptions = <_Option>[
-      const _Option(id: _allLeaguesId, label: 'All leagues'),
-      ...leaguesById.entries.map((e) => _Option(id: e.key, label: e.value)),
-    ]..sort((a, b) {
-      if (a.id == _allLeaguesId) return -1;
-      if (b.id == _allLeaguesId) return 1;
-      return a.label.compareTo(b.label);
-    });
+    final leagueOptions =
+        <_Option>[
+          const _Option(id: _allLeaguesId, label: 'All leagues'),
+          ...leaguesById.entries.map((e) => _Option(id: e.key, label: e.value)),
+        ]..sort((a, b) {
+          if (a.id == _allLeaguesId) return -1;
+          if (b.id == _allLeaguesId) return 1;
+          return a.label.compareTo(b.label);
+        });
 
     final seasonOptions = <_SeasonLeagueOption>[
       const _SeasonLeagueOption(
@@ -186,11 +189,14 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
   }
 
   List<_Option> _seasonsForLeague(_TeamFilterContext context, String leagueId) {
-    final options = context.seasonOptions.where((season) {
-      if (season.id == _allSeasonsId) return true;
-      if (leagueId == _allLeaguesId) return true;
-      return season.leagueId == leagueId;
-    }).map((season) => _Option(id: season.id, label: season.label)).toList();
+    final options = context.seasonOptions
+        .where((season) {
+          if (season.id == _allSeasonsId) return true;
+          if (leagueId == _allLeaguesId) return true;
+          return season.leagueId == leagueId;
+        })
+        .map((season) => _Option(id: season.id, label: season.label))
+        .toList();
     return options;
   }
 
@@ -347,9 +353,21 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
       final scoreA = (map['teamA_score'] as num?)?.toInt() ?? 0;
       final scoreB = (map['teamB_score'] as num?)?.toInt() ?? 0;
       if (teamA == teamId) {
-        out.add(scoreA > scoreB ? 'W' : scoreA < scoreB ? 'L' : 'D');
+        out.add(
+          scoreA > scoreB
+              ? 'W'
+              : scoreA < scoreB
+              ? 'L'
+              : 'D',
+        );
       } else if (teamB == teamId) {
-        out.add(scoreB > scoreA ? 'W' : scoreB < scoreA ? 'L' : 'D');
+        out.add(
+          scoreB > scoreA
+              ? 'W'
+              : scoreB < scoreA
+              ? 'L'
+              : 'D',
+        );
       }
     }
     return out;
@@ -361,7 +379,9 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
           .from('matches')
           .select('teamA, teamB, teamA_score, teamB_score')
           .eq('status', 'fullTime')
-          .or('teamA.eq.$leftId,teamB.eq.$leftId,teamA.eq.$rightId,teamB.eq.$rightId');
+          .or(
+            'teamA.eq.$leftId,teamB.eq.$leftId,teamA.eq.$rightId,teamB.eq.$rightId',
+          );
       var leftWins = 0;
       var rightWins = 0;
       var draws = 0;
@@ -369,14 +389,17 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
         final map = Map<String, dynamic>.from(row);
         final a = map['teamA']?.toString() ?? '';
         final b = map['teamB']?.toString() ?? '';
-        final isH2h = (a == leftId && b == rightId) || (a == rightId && b == leftId);
+        final isH2h =
+            (a == leftId && b == rightId) || (a == rightId && b == leftId);
         if (!isH2h) continue;
         final scoreA = (map['teamA_score'] as num?)?.toInt() ?? 0;
         final scoreB = (map['teamB_score'] as num?)?.toInt() ?? 0;
         if (scoreA == scoreB) {
           draws++;
         } else {
-          final leftWon = (a == leftId && scoreA > scoreB) || (b == leftId && scoreB > scoreA);
+          final leftWon =
+              (a == leftId && scoreA > scoreB) ||
+              (b == leftId && scoreB > scoreA);
           if (leftWon) {
             leftWins++;
           } else {
@@ -498,7 +521,9 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
     final textTheme = Theme.of(context).textTheme;
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: Text('Team vs team', style: textTheme.headlineMedium)),
+        appBar: AppBar(
+          title: Text('Team vs team', style: textTheme.headlineMedium),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -506,7 +531,9 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
     final left = _leftPane;
     if (left == null) {
       return Scaffold(
-        appBar: AppBar(title: Text('Team vs team', style: textTheme.headlineMedium)),
+        appBar: AppBar(
+          title: Text('Team vs team', style: textTheme.headlineMedium),
+        ),
         body: const Center(child: Text('Could not load team')),
       );
     }
@@ -526,18 +553,18 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
                 Expanded(
                   child: Column(
                     children: [
-                      _TeamCard(team: left.team, form: left.recentForm, onTap: null),
+                      _TeamCard(
+                        team: left.team,
+                        form: left.recentForm,
+                        onTap: null,
+                      ),
                       const SizedBox(height: 8),
                       _FilterControls(
                         pane: left,
-                        onLeagueChanged: (value) => _onLeagueChanged(
-                          isLeft: true,
-                          leagueId: value,
-                        ),
-                        onSeasonChanged: (value) => _onSeasonChanged(
-                          isLeft: true,
-                          seasonId: value,
-                        ),
+                        onLeagueChanged: (value) =>
+                            _onLeagueChanged(isLeft: true, leagueId: value),
+                        onSeasonChanged: (value) =>
+                            _onSeasonChanged(isLeft: true, seasonId: value),
                       ),
                     ],
                   ),
@@ -555,14 +582,10 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
                       const SizedBox(height: 8),
                       _FilterControls(
                         pane: _rightPane,
-                        onLeagueChanged: (value) => _onLeagueChanged(
-                          isLeft: false,
-                          leagueId: value,
-                        ),
-                        onSeasonChanged: (value) => _onSeasonChanged(
-                          isLeft: false,
-                          seasonId: value,
-                        ),
+                        onLeagueChanged: (value) =>
+                            _onLeagueChanged(isLeft: false, leagueId: value),
+                        onSeasonChanged: (value) =>
+                            _onSeasonChanged(isLeft: false, seasonId: value),
                       ),
                     ],
                   ),
@@ -576,7 +599,7 @@ class _TeamComparisonPageState extends State<TeamComparisonPage> {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: AppShape.largeIncreasedRadius,
                 ),
                 child: Text(
                   'Pick another team to compare.',
@@ -704,14 +727,16 @@ class _TeamCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: AppShape.largeRadius,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: AppShape.largeRadius,
           border: onTap != null
-              ? Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.8))
+              ? Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+                )
               : null,
         ),
         child: isLoading
@@ -781,7 +806,7 @@ class _FilterControls extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -811,7 +836,7 @@ class _FilterControls extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -853,11 +878,9 @@ class _ComparisonLoadingCard extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: AppShape.largeIncreasedRadius,
       ),
-      child: const Center(
-        child: CircularProgressIndicator(strokeWidth: 2),
-      ),
+      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
     );
   }
 }
@@ -887,7 +910,7 @@ class _HeadToHeadCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: AppShape.largeIncreasedRadius,
       ),
       child: Column(
         children: [
@@ -921,7 +944,7 @@ class _HeadToHeadCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ClipRRect(
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: AppShape.fullRadius,
             child: SizedBox(
               height: 6,
               child: Row(
@@ -959,7 +982,10 @@ class _HeadToHeadCard extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: AppShape.mediumRadius,
+          ),
           child: Text(
             '$score',
             style: textTheme.titleMedium?.copyWith(color: textColor),
@@ -1055,7 +1081,7 @@ class _TopStatsCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: AppShape.largeIncreasedRadius,
       ),
       child: Column(
         children: [
@@ -1109,7 +1135,11 @@ class _TopStatsCard extends StatelessWidget {
     );
   }
 
-  Widget _valueChip(BuildContext context, String text, {required bool highlighted}) {
+  Widget _valueChip(
+    BuildContext context,
+    String text, {
+    required bool highlighted,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     if (!highlighted) return Text(text, style: textTheme.titleMedium);
@@ -1117,11 +1147,13 @@ class _TopStatsCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
         color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
       ),
       child: Text(
         text,
-        style: textTheme.titleSmall?.copyWith(color: colorScheme.onPrimaryContainer),
+        style: textTheme.titleSmall?.copyWith(
+          color: colorScheme.onPrimaryContainer,
+        ),
       ),
     );
   }
@@ -1151,7 +1183,7 @@ class _FormIndicator extends StatelessWidget {
             height: 8,
             decoration: BoxDecoration(
               color: _colorFor(item, Theme.of(context).colorScheme),
-              borderRadius: BorderRadius.circular(3),
+              borderRadius: AppShape.extraSmallRadius,
             ),
           ),
           if (item != normalized.last) const SizedBox(width: 4),

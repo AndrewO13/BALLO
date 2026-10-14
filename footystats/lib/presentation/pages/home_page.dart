@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,6 +32,7 @@ import '../widgets/match_date_picker_dialog.dart';
 import 'fixture.dart';
 import 'guest_home_page.dart';
 import 'guest_profile_page.dart';
+import 'welcome_page.dart';
 import 'favourites_page.dart';
 import 'matches.dart';
 import 'create_team_league_page.dart';
@@ -47,6 +49,7 @@ import 'scout_views_page.dart';
 import 'team_detail_page.dart';
 import 'league_detail_page.dart';
 import 'notifications_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -83,6 +86,7 @@ class _HomePageState extends ConsumerState<HomePage>
   UserProfile? _profile;
   String? _playerPosition;
   bool _isLoadingProfile = true;
+  bool _exitingGuest = false;
   bool _isLoadingFocus = true;
   bool _isLoadingPerformanceRatings = false;
   _FocusRingConfig _focusConfig = _FocusRingConfig.defaults();
@@ -136,6 +140,27 @@ class _HomePageState extends ConsumerState<HomePage>
 
   /// Guests (anonymous sessions) are fans: no profile, focus rings or teams.
   bool get _isGuest => GuestMode.isGuest;
+
+  Future<void> _exitGuestMode() async {
+    if (_exitingGuest) return;
+    setState(() => _exitingGuest = true);
+    try {
+      await GuestMode.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const WelcomePage()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _exitingGuest = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not exit guest mode. Check your connection.'),
+        ),
+      );
+    }
+  }
 
   bool get _isStaff => _profile?.isTechnicalStaff == true;
 
@@ -984,7 +1009,13 @@ class _HomePageState extends ConsumerState<HomePage>
       },
     );
 
-    final PreferredSizeWidget appBar = _buildAppBar(context);
+    final hideAppBar =
+        _selectedIndex == 2 ||
+        (_selectedIndex == 1 && !_useFanShell) ||
+        (_selectedIndex == 4 && !_isGuest && !_isStaff);
+    final PreferredSizeWidget? appBar = hideAppBar
+        ? null
+        : _buildAppBar(context);
 
     return Scaffold(
       appBar: appBar,
@@ -1001,9 +1032,7 @@ class _HomePageState extends ConsumerState<HomePage>
         index: _selectedIndex,
         children: [
           if (_useFanShell)
-            GuestHomeContent(
-              activationNonce: _matchesActivationNonce,
-            )
+            GuestHomeContent(activationNonce: _matchesActivationNonce)
           else if (_isLoadingProfile)
             const GuestHomePageShimmer()
           else
@@ -1014,18 +1043,16 @@ class _HomePageState extends ConsumerState<HomePage>
             MatchesPage(
               activationNonce: _matchesActivationNonce,
               mainNavTabIndex: MainNavTab.secondary,
+              materialAppBar: true,
             ),
-          LeaderboardPage(
-            isCurrentNavTab: _selectedIndex == 2,
-            isGuest: _useFanShell,
-          ),
+          LeaderboardPage(isCurrentNavTab: _selectedIndex == 2),
           ExplorePage(isActiveTab: _selectedIndex == 3),
           if (_isGuest)
             const GuestProfilePage()
           else if (_isStaff)
             const StaffProfilePage()
           else
-            ProfilePage(), // Cannot be const due to DefaultTabController
+            ProfilePage(actions: _profileHeaderActions(context)),
         ],
       ),
       bottomNavigationBar: _buildBottomNavigationBar(context),
@@ -1036,6 +1063,72 @@ class _HomePageState extends ConsumerState<HomePage>
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const CreateTeamOrLeaguePage()));
+  }
+
+  List<Widget> _profileHeaderActions(BuildContext context) {
+    return [
+      if (!_isStaff)
+        IconButton(
+          tooltip: 'Scout views',
+          icon: StreamBuilder<int>(
+            stream: _unreadScoutViewsStream(),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              return Badge(
+                isLabelVisible: count > 0,
+                label: Text(count > 99 ? '99+' : '$count'),
+                child: const FaIcon(FontAwesomeIcons.shoePrints, size: 18),
+              );
+            },
+          ),
+          onPressed: () async {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(builder: (_) => const ScoutViewsPage()),
+            );
+            if (mounted) setState(() {});
+          },
+        ),
+      if (!_isStaff)
+        IconButton(
+          icon: const Icon(Icons.group_outlined),
+          onPressed: () {
+            final playerId = Supabase.instance.client.auth.currentUser?.id;
+            if (playerId == null || playerId.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Sign in to compare players')),
+              );
+              return;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PlayerComparisonPage(basePlayerId: playerId),
+              ),
+            );
+          },
+          tooltip: 'Compare players',
+        ),
+      IconButton(
+        icon: const Icon(Icons.settings_outlined),
+        onPressed: () {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (context) => const SettingsPage()));
+        },
+        tooltip: 'Settings',
+      ),
+    ];
+  }
+
+  Widget _profileTitle(BuildContext context) {
+    return Text(
+      'PROFILE',
+      style: GoogleFonts.anton(
+        fontSize: 40,
+        height: 0.95,
+        letterSpacing: 0.6,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+    );
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
@@ -1094,16 +1187,18 @@ class _HomePageState extends ConsumerState<HomePage>
       );
     }
     if (_selectedIndex == 4 && _isGuest) {
-      // No settings or player comparison for guests; the page body carries
-      // the create-account and exit actions.
       return AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
-        title: Text(
-          'Profile',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
+        title: _profileTitle(context),
         centerTitle: false,
+        actions: [
+          IconButton(
+            tooltip: 'Exit guest mode',
+            onPressed: _exitingGuest ? null : _exitGuestMode,
+            icon: const Icon(Icons.logout),
+          ),
+        ],
       );
     }
     if (_selectedIndex == 0) {
@@ -1128,9 +1223,7 @@ class _HomePageState extends ConsumerState<HomePage>
             tooltip: 'Search',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AppSearchPage(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const AppSearchPage()),
               );
             },
           ),
@@ -1157,69 +1250,28 @@ class _HomePageState extends ConsumerState<HomePage>
           ),
         ],
       );
-    } else if (_selectedIndex == 1) {
-      if (_useFanShell) {
-        final isFavouritesEditMode = ref.watch(favouritesEditModeProvider);
-        return AppBar(
-          automaticallyImplyLeading: false,
-          title: Text(
-            'Favourites',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                ref.read(favouritesEditModeProvider.notifier).toggle();
-              },
-              child: Text(isFavouritesEditMode ? 'Done' : 'Edit'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: 'Add favourite',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AppSearchPage(),
-                  ),
-                );
-              },
-            ),
-          ],
-          elevation: 0,
-        );
-      }
+    } else if (_selectedIndex == 1 && _useFanShell) {
+      final isFavouritesEditMode = ref.watch(favouritesEditModeProvider);
       return AppBar(
         automaticallyImplyLeading: false,
         title: Text(
-          'Matches',
+          'Favourites',
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(favouritesEditModeProvider.notifier).toggle();
+            },
+            child: Text(isFavouritesEditMode ? 'Done' : 'Edit'),
+          ),
           IconButton(
-            icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: 'Go to date',
-            onPressed: () async {
-              final matchDates = <DateTime>{};
-              try {
-                final matches = await ref.read(matchesProvider.future);
-                for (final match in matches) {
-                  matchDates.add(
-                    DateTime(
-                      match.matchDate.year,
-                      match.matchDate.month,
-                      match.matchDate.day,
-                    ),
-                  );
-                }
-              } catch (_) {}
-              final picked = await showMatchAwareDatePicker(
-                context,
-                matchDates: matchDates,
+            icon: const Icon(Icons.add),
+            tooltip: 'Add favourite',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const AppSearchPage()),
               );
-              if (picked == null || !context.mounted) return;
-              ref
-                  .read(matchesJumpToDateProvider.notifier)
-                  .set(DateTime(picked.year, picked.month, picked.day));
             },
           ),
         ],
@@ -1237,74 +1289,13 @@ class _HomePageState extends ConsumerState<HomePage>
       return AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
-        title: Text(
-          'Profile',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
+        title: _profileTitle(context),
         centerTitle: false,
-        actions: [
-          if (!_isStaff)
-            IconButton(
-              tooltip: 'Scout views',
-              icon: StreamBuilder<int>(
-                stream: _unreadScoutViewsStream(),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  return Badge(
-                    isLabelVisible: count > 0,
-                    label: Text(count > 99 ? '99+' : '$count'),
-                    child: const FaIcon(FontAwesomeIcons.shoePrints, size: 18),
-                  );
-                },
-              ),
-              onPressed: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ScoutViewsPage(),
-                  ),
-                );
-                if (mounted) setState(() {});
-              },
-            ),
-          if (!_isStaff)
-            IconButton(
-              icon: const Icon(Icons.group_outlined),
-              onPressed: () {
-                final playerId = Supabase.instance.client.auth.currentUser?.id;
-                if (playerId == null || playerId.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Sign in to compare players')),
-                  );
-                  return;
-                }
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        PlayerComparisonPage(basePlayerId: playerId),
-                  ),
-                );
-              },
-              tooltip: 'Compare players',
-            ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const SettingsPage()),
-              );
-            },
-            tooltip: 'Settings',
-          ),
-        ],
+        actions: _profileHeaderActions(context),
       );
     } else {
       return AppBar(
-        title: Text(
-          AppConstants.pageTitles[_selectedIndex],
-          style: _selectedIndex == 2
-              ? Theme.of(context).textTheme.headlineMedium
-              : null,
-        ),
+        title: Text(AppConstants.pageTitles[_selectedIndex]),
         centerTitle: false,
         automaticallyImplyLeading: false,
       );
@@ -1373,9 +1364,9 @@ class _HomePageState extends ConsumerState<HomePage>
                   Expanded(
                     child: Text(
                       'Your stats',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        height: 1.2,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(height: 1.2),
                     ),
                   ),
                   IconButton(
@@ -1479,7 +1470,7 @@ class _HomePageState extends ConsumerState<HomePage>
                   height: 297 * AppResponsive.layoutScaleOf(context),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: AppShape.mediumRadius,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -1756,7 +1747,7 @@ class _HomePageState extends ConsumerState<HomePage>
               color: Theme.of(context).colorScheme.outlineVariant,
               width: 1,
             ),
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -1954,9 +1945,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           vertical: 8.0,
                         ),
                         minimumSize: const Size(99, 40),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
+                        shape: const StadiumBorder(),
                       ),
                       child: const Text('View team'),
                     ),
@@ -1977,9 +1966,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           vertical: 8.0,
                         ),
                         minimumSize: const Size(99, 40),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
+                        shape: const StadiumBorder(),
                       ),
                       child: const Text('View league stats'),
                     ),
@@ -2155,7 +2142,7 @@ class _HomePageState extends ConsumerState<HomePage>
       decoration: isHighlighted
           ? BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(30),
+              borderRadius: AppShape.extraLargeRadius,
             )
           : null,
       children: [
@@ -2295,7 +2282,7 @@ class _HomePageState extends ConsumerState<HomePage>
       const NavigationDestination(
         icon: Icon(Icons.leaderboard_outlined),
         selectedIcon: Icon(Icons.leaderboard),
-        label: 'Leaderboard',
+        label: 'Rankings',
       ),
       const NavigationDestination(
         icon: Icon(Icons.explore_outlined),
@@ -2701,7 +2688,7 @@ class _FocusCustomizationPageState extends State<_FocusCustomizationPage> {
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: AppShape.mediumRadius,
                   border: Border.all(
                     color: const Color(0xff63ead7),
                     width: 1.6,
@@ -2755,7 +2742,7 @@ class _FocusCustomizationPageState extends State<_FocusCustomizationPage> {
       decoration: InputDecoration(
         labelText: label,
         hintText: 'Enter weekly target',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        border: OutlineInputBorder(borderRadius: AppShape.mediumRadius),
       ),
     );
   }

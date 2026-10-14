@@ -9,6 +9,7 @@ import '../../core/widgets/media_placeholders.dart';
 import '../../data/repositories/profile_scout_views_repository.dart';
 import '../../domain/models/scout_profile_viewer.dart';
 import 'player_profile_page.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Lists scouts who have viewed the signed-in user's profile.
 class ScoutViewsPage extends StatefulWidget {
@@ -42,9 +43,7 @@ class _ScoutViewsPageState extends State<ScoutViewsPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scout views'),
-      ),
+      appBar: AppBar(title: const Text('Scout views')),
       body: FutureBuilder<List<ScoutProfileViewer>>(
         future: _future,
         builder: (context, snapshot) {
@@ -94,14 +93,13 @@ class _ScoutViewsPageState extends State<ScoutViewsPage> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) =>
-                            PlayerProfilePage(playerId: viewer.id),
+                        builder: (_) => PlayerProfilePage(playerId: viewer.id),
                       ),
                     );
                   },
                   tileColor: colorScheme.surfaceContainerLow,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppShape.largeRadius,
                   ),
                   leading: ClipOval(
                     child: SizedBox(

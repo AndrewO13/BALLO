@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/adaptive/adaptive.dart';
 import '../../core/utils/app_video_cache.dart';
 import '../../core/utils/explore_video_controller.dart';
@@ -35,10 +36,13 @@ import '../widgets/media_access_sheet.dart';
 import '../widgets/performance_radar_chart.dart';
 import '../widgets/video_upload_progress_overlay.dart';
 import '../widgets/video_upload_progress_snack.dart';
+import '../widgets/collapsing_page_header.dart';
 import '../widgets/match_live_status.dart';
+import '../widgets/tab_body_underlap_clip.dart';
 import '../widgets/match_odds_chips.dart';
 import '../widgets/squad/squad_pitch_view.dart';
 import 'player_profile_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class FixturePage extends ConsumerStatefulWidget {
   const FixturePage({super.key, required this.matchId});
@@ -192,7 +196,9 @@ final fixtureMatchInfoProvider = FutureProvider.autoDispose
 
       final leagueRes = await supabase
           .from('leagues')
-          .select('id, league_name, logo_id, created_by, default_venue_image_url')
+          .select(
+            'id, league_name, logo_id, created_by, default_venue_image_url',
+          )
           .eq('id', leagueId)
           .maybeSingle();
       if (leagueRes == null) {
@@ -540,6 +546,38 @@ class _FixturePageState extends ConsumerState<FixturePage> {
   bool _isUploadingMatchVideo = false;
   bool _showEditOverlay = false;
   String? _uploadSnackJobId;
+  late final ScrollController _outerScrollController;
+  final _identityReveal = ValueNotifier<double>(0);
+  double _bannerHeight = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _outerScrollController = ScrollController()
+      ..addListener(_handleOuterScroll);
+  }
+
+  void _handleOuterScroll() {
+    if (!_outerScrollController.hasClients) return;
+    final range = _bannerHeight <= 0 ? 1.0 : _bannerHeight;
+    final progress = (_outerScrollController.offset / range).clamp(0.0, 1.0);
+    final reveal = ((progress - 0.4) / 0.6).clamp(0.0, 1.0);
+    if (reveal != 0 &&
+        reveal != 1 &&
+        (_identityReveal.value - reveal).abs() < 0.02) {
+      return;
+    }
+    if (_identityReveal.value == reveal) return;
+    _identityReveal.value = reveal;
+  }
+
+  @override
+  void dispose() {
+    _outerScrollController.removeListener(_handleOuterScroll);
+    _identityReveal.dispose();
+    _outerScrollController.dispose();
+    super.dispose();
+  }
 
   VideoUploadJob? _uploadJobForMatch(List<VideoUploadJob> jobs) {
     for (final job in jobs) {
@@ -664,7 +702,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
   Future<void> _postponeFixture(BuildContext context, MatchModel match) async {
     if (match.status != MatchStatus.upcoming) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Only upcoming fixtures can be postponed')),
+        const SnackBar(
+          content: Text('Only upcoming fixtures can be postponed'),
+        ),
       );
       return;
     }
@@ -688,7 +728,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     final time =
         '${pickedTime.hour.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')}';
     try {
-      await ref.read(matchesRepositoryProvider).updateMatchSchedule(
+      await ref
+          .read(matchesRepositoryProvider)
+          .updateMatchSchedule(
             match.id,
             matchDate: pickedDate,
             matchTime: time,
@@ -696,14 +738,14 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       if (!mounted) return;
       ref.invalidate(fixtureMatchProvider(match.id));
       ref.invalidate(matchesProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fixture postponed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Fixture postponed')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not postpone fixture: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not postpone fixture: $e')));
     }
   }
 
@@ -737,14 +779,14 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       if (!mounted) return;
       ref.invalidate(matchesProvider);
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fixture deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Fixture deleted')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete fixture: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not delete fixture: $e')));
     }
   }
 
@@ -892,7 +934,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppShape.largeIncreasedRadius,
+        ),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -925,7 +969,9 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                       final videosAsync = ref.watch(
                         matchVideosProvider(match.id),
                       );
-                      final goals = events.where((e) => _isGoalEventType(e.eventType)).toList();
+                      final goals = events
+                          .where((e) => _isGoalEventType(e.eventType))
+                          .toList();
                       final teamAId = match.teamA.id;
                       final teamAGoals = goals
                           .where((g) => g.teamId == teamAId)
@@ -1032,7 +1078,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.largeRadius,
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1055,12 +1101,15 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: hasContent
                       ? colorScheme.secondaryContainer
                       : colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: AppShape.fullRadius,
                 ),
                 child: Text(
                   hasVideos
@@ -1082,7 +1131,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppShape.mediumRadius,
                 border: Border.all(color: colorScheme.outlineVariant),
               ),
               child: Row(
@@ -1156,10 +1205,8 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                 if (canUpload) ...[
                   const SizedBox(width: 10),
                   _MatchStoryAddButton(
-                    onPressed: () => _handleAddMatchVideoFromDialog(
-                      dialogContext,
-                      match,
-                    ),
+                    onPressed: () =>
+                        _handleAddMatchVideoFromDialog(dialogContext, match),
                   ),
                 ],
               ],
@@ -1226,17 +1273,19 @@ class _FixturePageState extends ConsumerState<FixturePage> {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppShape.mediumRadius,
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment:
-                alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: alignEnd
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             children: [
               if (!alignEnd) ...[
                 Icon(
@@ -1269,7 +1318,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: AppShape.fullRadius,
               ),
               child: Text(
                 'No goals',
@@ -1311,11 +1360,12 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -1434,965 +1484,1116 @@ class _FixturePageState extends ConsumerState<FixturePage> {
       hasReachedHalfTime: timerConfig.hasReachedHalfTime,
     );
 
-    return Stack(
-      children: [
-        DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        extendBodyBehindAppBar: false,
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        floatingActionButton: leaguesAsync.isLoading
-            ? null
-            : _buildFixtureFab(context, match, isLeagueOwner),
-        appBar: AppBar(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          actions: [
-            if (isLeagueOwner)
-              PopupMenuButton<_FixtureMenuAction>(
-                icon: const Icon(Icons.more_vert),
-                onSelected: (action) =>
-                    _onFixtureMenuSelected(context, match, action),
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: _FixtureMenuAction.edit,
-                    enabled: match.status != MatchStatus.upcoming,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 20,
-                          color: match.status != MatchStatus.upcoming
-                              ? null
-                              : Theme.of(context).disabledColor,
-                        ),
-                        const SizedBox(width: 12),
-                        const Text('Edit match'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _FixtureMenuAction.postpone,
-                    enabled: match.status == MatchStatus.upcoming,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.event_busy_outlined,
-                          size: 20,
-                          color: match.status == MatchStatus.upcoming
-                              ? null
-                              : Theme.of(context).disabledColor,
-                        ),
-                        const SizedBox(width: 12),
-                        const Text('Postpone'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _FixtureMenuAction.delete,
-                    enabled: match.status == MatchStatus.upcoming,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.delete_outline,
-                          size: 20,
-                          color: match.status == MatchStatus.upcoming
-                              ? Theme.of(context).colorScheme.error
-                              : Theme.of(context).disabledColor,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Delete',
-                          style: TextStyle(
-                            color: match.status == MatchStatus.upcoming
-                                ? Theme.of(context).colorScheme.error
-                                : Theme.of(context).disabledColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            else if (GuestMode.isGuest)
-              Builder(
-                builder: (context) {
-                  final favourites = ref.watch(favouritedMatchesProvider);
-                  final isFavourited = favourites.any((m) => m.id == match.id);
-                  return IconButton(
-                    icon: Icon(
-                      isFavourited
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                    ),
-                    color: isFavourited ? colorScheme.primary : null,
-                    onPressed: () {
-                      ref
-                          .read(favouritedMatchesProvider.notifier)
-                          .toggle(FavouritedMatch.fromMatchModel(match));
-                    },
-                  );
-                },
-              )
-            else
-              IconButton(
-                icon: const Icon(Icons.add_rounded),
-                tooltip: 'Add clip',
-                onPressed: () => _pickAndEnqueueMatchVideo(context, match),
-              ),
-          ],
-        ),
-        body: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            final bannerWidth = MediaQuery.sizeOf(context).width;
-            var bannerHeight = bannerWidth * 305 / AppResponsive.designWidth;
-            if (AppResponsive.isLandscapePhone(context)) {
-              bannerHeight = bannerHeight.clamp(
-                180.0,
-                MediaQuery.sizeOf(context).height * 0.5,
-              );
-            }
-            return [
-              SliverToBoxAdapter(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: bannerHeight,
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(28),
+    final topInset = MediaQuery.paddingOf(context).top;
+    final bannerWidth = MediaQuery.sizeOf(context).width;
+    var bannerHeight = bannerWidth * 305 / AppResponsive.designWidth;
+    if (AppResponsive.isLandscapePhone(context)) {
+      bannerHeight = bannerHeight.clamp(
+        180.0,
+        MediaQuery.sizeOf(context).height * 0.5,
+      );
+    }
+    _bannerHeight = bannerHeight;
+    const tabExtent = kTextTabBarHeight + 3;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final barHeadline = match.status == MatchStatus.upcoming
+        ? match.timeDisplay
+        : (match.scoreText ?? '–');
+    final dateLabel = _formatMatchDate(match.matchDate);
+    final liveLabel = switch (match.status) {
+      MatchStatus.halfTime => 'HT',
+      MatchStatus.fullTime => 'FT',
+      MatchStatus.ongoing => clockLabel,
+      MatchStatus.upcoming => '',
+    };
+    final barSubtitle = liveLabel.isEmpty
+        ? dateLabel
+        : '$dateLabel · $liveLabel';
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+      ),
+      child: Stack(
+        children: [
+          DefaultTabController(
+            length: 4,
+            child: Scaffold(
+              floatingActionButtonLocation:
+                  FloatingActionButtonLocation.endFloat,
+              floatingActionButton: leaguesAsync.isLoading
+                  ? null
+                  : _buildFixtureFab(context, match, isLeagueOwner),
+              body: NestedScrollView(
+                controller: _outerScrollController,
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    CollapsingPageHeader.sliver(
+                      context: context,
+                      title: '',
+                      showTitle: false,
+                      leading: const BackButton(),
+                      middle: _CollapsedFixtureIdentity(
+                        reveal: _identityReveal,
+                        teamALogo: match.teamA.logoPath,
+                        teamBLogo: match.teamB.logoPath,
+                        headline: barHeadline,
+                        subtitle: barSubtitle,
                       ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          (((match.venueImageUrl ?? '').startsWith('http://') ||
-                                      (match.venueImageUrl ?? '').startsWith('https://'))
-                                  ? match.venueImageUrl
-                                  : ((matchInfoAsync.asData?.value?.defaultVenueImageUrl ?? '')
-                                              .startsWith('http://') ||
-                                          (matchInfoAsync.asData?.value?.defaultVenueImageUrl ??
-                                                  '')
-                                              .startsWith('https://')
-                                      ? matchInfoAsync
-                                          .asData
-                                          ?.value
-                                          ?.defaultVenueImageUrl
-                                      : null))
-                              !=
-                              null
-                              ? Image(
-                                  image: appCachedImageProvider(
-                                    ((match.venueImageUrl ?? '').startsWith('http://') ||
-                                            (match.venueImageUrl ?? '')
-                                                .startsWith('https://'))
-                                        ? match.venueImageUrl!
-                                        : matchInfoAsync
-                                                .asData
-                                                ?.value
-                                                ?.defaultVenueImageUrl ??
-                                            '',
-                                  ),
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.center,
-                                  errorBuilder: (_, _, _) => Image.asset(
-                                    AppAssets.matchBg,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.cover,
-                                    alignment: Alignment.center,
-                                  ),
-                                )
-                              : Image.asset(
-                                  AppAssets.matchBg,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.center,
+                      actions: [
+                        if (isLeagueOwner)
+                          PopupMenuButton<_FixtureMenuAction>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (action) =>
+                                _onFixtureMenuSelected(context, match, action),
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: _FixtureMenuAction.edit,
+                                enabled: match.status != MatchStatus.upcoming,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 20,
+                                      color:
+                                          match.status != MatchStatus.upcoming
+                                          ? null
+                                          : Theme.of(context).disabledColor,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text('Edit match'),
+                                  ],
                                 ),
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: const [0.0, 0.36, 0.94],
-                                colors: [
-                                  const Color(0xFF2D372F).withValues(alpha: 0.1),
-                                  const Color(0xFF2D372F).withValues(alpha: 0.25),
-                                  colorScheme.surface.withValues(alpha: 1.0),
-                                ],
                               ),
+                              PopupMenuItem(
+                                value: _FixtureMenuAction.postpone,
+                                enabled: match.status == MatchStatus.upcoming,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.event_busy_outlined,
+                                      size: 20,
+                                      color:
+                                          match.status == MatchStatus.upcoming
+                                          ? null
+                                          : Theme.of(context).disabledColor,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text('Postpone'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: _FixtureMenuAction.delete,
+                                enabled: match.status == MatchStatus.upcoming,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 20,
+                                      color:
+                                          match.status == MatchStatus.upcoming
+                                          ? Theme.of(context).colorScheme.error
+                                          : Theme.of(context).disabledColor,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Delete',
+                                      style: TextStyle(
+                                        color:
+                                            match.status == MatchStatus.upcoming
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.error
+                                            : Theme.of(context).disabledColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (GuestMode.isGuest)
+                          Builder(
+                            builder: (context) {
+                              final favourites = ref.watch(
+                                favouritedMatchesProvider,
+                              );
+                              final isFavourited = favourites.any(
+                                (m) => m.id == match.id,
+                              );
+                              return IconButton(
+                                icon: Icon(
+                                  isFavourited
+                                      ? Icons.star_rounded
+                                      : Icons.star_outline_rounded,
+                                ),
+                                color: isFavourited
+                                    ? colorScheme.primary
+                                    : null,
+                                onPressed: () {
+                                  ref
+                                      .read(favouritedMatchesProvider.notifier)
+                                      .toggle(
+                                        FavouritedMatch.fromMatchModel(match),
+                                      );
+                                },
+                              );
+                            },
+                          )
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.add_rounded),
+                            tooltip: 'Add clip',
+                            onPressed: () =>
+                                _pickAndEnqueueMatchVideo(context, match),
+                          ),
+                      ],
+                    ),
+                    SliverToBoxAdapter(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: bannerHeight,
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(AppShape.extraLarge),
+                            ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                (((match.venueImageUrl ?? '').startsWith(
+                                                  'http://',
+                                                ) ||
+                                                (match.venueImageUrl ?? '')
+                                                    .startsWith('https://'))
+                                            ? match.venueImageUrl
+                                            : ((matchInfoAsync
+                                                                  .asData
+                                                                  ?.value
+                                                                  ?.defaultVenueImageUrl ??
+                                                              '')
+                                                          .startsWith(
+                                                            'http://',
+                                                          ) ||
+                                                      (matchInfoAsync
+                                                                  .asData
+                                                                  ?.value
+                                                                  ?.defaultVenueImageUrl ??
+                                                              '')
+                                                          .startsWith(
+                                                            'https://',
+                                                          )
+                                                  ? matchInfoAsync
+                                                        .asData
+                                                        ?.value
+                                                        ?.defaultVenueImageUrl
+                                                  : null)) !=
+                                        null
+                                    ? Image(
+                                        image: appCachedImageProvider(
+                                          ((match.venueImageUrl ?? '')
+                                                      .startsWith('http://') ||
+                                                  (match.venueImageUrl ?? '')
+                                                      .startsWith('https://'))
+                                              ? match.venueImageUrl!
+                                              : matchInfoAsync
+                                                        .asData
+                                                        ?.value
+                                                        ?.defaultVenueImageUrl ??
+                                                    '',
+                                        ),
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        fit: BoxFit.cover,
+                                        alignment: Alignment.center,
+                                        errorBuilder: (_, _, _) => Image.asset(
+                                          AppAssets.matchBg,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                          fit: BoxFit.cover,
+                                          alignment: Alignment.center,
+                                        ),
+                                      )
+                                    : Image.asset(
+                                        AppAssets.matchBg,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        fit: BoxFit.cover,
+                                        alignment: Alignment.center,
+                                      ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      stops: const [0.0, 0.36, 0.94],
+                                      colors: [
+                                        const Color(
+                                          0xFF2D372F,
+                                        ).withValues(alpha: 0.1),
+                                        const Color(
+                                          0xFF2D372F,
+                                        ).withValues(alpha: 0.25),
+                                        colorScheme.surface.withValues(
+                                          alpha: 1.0,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Center(
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 16.0,
+                                      vertical: 45.0,
+                                    ),
+                                    padding: const EdgeInsets.all(16.0),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surfaceContainerHigh
+                                          .withValues(alpha: 0.6),
+                                      borderRadius: AppShape.mediumRadius,
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (match.status ==
+                                                    MatchStatus.ongoing) ...[
+                                                  const MatchLivePulseIndicator(
+                                                    size: 8,
+                                                  ),
+                                                  if (halfPhase != null)
+                                                    const SizedBox(width: 6),
+                                                ],
+                                                if (halfPhase != null)
+                                                  MatchHalfPhaseChip(
+                                                    phase: halfPhase,
+                                                  ),
+                                              ],
+                                            ),
+                                            const Spacer(),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.open_in_full,
+                                              ),
+                                              onPressed: () =>
+                                                  _showScorersAssistersDialog(
+                                                    context,
+                                                    ref,
+                                                    match,
+                                                  ),
+                                              iconSize: 20,
+                                              color: colorScheme.onSurface,
+                                              padding: EdgeInsets.zero,
+                                              constraints:
+                                                  const BoxConstraints(),
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                children: [
+                                                  ClipOval(
+                                                    child: _FixtureTeamLogo(
+                                                      path:
+                                                          match.teamA.logoPath,
+                                                      size: 46.4,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    match.teamA.shortForm,
+                                                    style: textTheme.bodyLarge
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16.0,
+                                                  ),
+                                              child: Column(
+                                                children: [
+                                                  Text(
+                                                    match.status ==
+                                                            MatchStatus.upcoming
+                                                        ? match.timeDisplay
+                                                        : (match.scoreText ??
+                                                              '–'),
+                                                    style: textTheme
+                                                        .displayMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  match.status ==
+                                                          MatchStatus.upcoming
+                                                      ? _BuildUpcomingPill(
+                                                          match: match,
+                                                          onTap: () =>
+                                                              _showSetTimerDialog(
+                                                                context,
+                                                                match.id,
+                                                                ref,
+                                                              ),
+                                                        )
+                                                      : _BuildOngoingPill(
+                                                          match: match,
+                                                          clock: clock,
+                                                          clockLabel:
+                                                              clockLabel,
+                                                          matchId: match.id,
+                                                        ),
+                                                ],
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: Column(
+                                                children: [
+                                                  ClipOval(
+                                                    child: _FixtureTeamLogo(
+                                                      path:
+                                                          match.teamB.logoPath,
+                                                      size: 46.4,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    match.teamB.shortForm,
+                                                    style: textTheme.bodyLarge
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Divider(
+                                          height: 1,
+                                          color: colorScheme.outline,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Consumer(
+                                          builder: (context, ref, _) {
+                                            final eventsAsync = ref.watch(
+                                              matchEventsProvider(match.id),
+                                            );
+                                            return eventsAsync.when(
+                                              loading: () =>
+                                                  const SizedBox.shrink(),
+                                              error: (_, _) =>
+                                                  const SizedBox.shrink(),
+                                              data: (events) {
+                                                final goals = events
+                                                    .where(
+                                                      (e) => _isGoalEventType(
+                                                        e.eventType,
+                                                      ),
+                                                    )
+                                                    .toList();
+                                                if (goals.isEmpty) {
+                                                  return const SizedBox.shrink();
+                                                }
+                                                final teamAId = match.teamA.id;
+                                                final teamAGoals = goals
+                                                    .where(
+                                                      (g) =>
+                                                          g.teamId == teamAId,
+                                                    )
+                                                    .toList();
+                                                final teamBGoals = goals
+                                                    .where(
+                                                      (g) =>
+                                                          g.teamId != teamAId,
+                                                    )
+                                                    .toList();
+                                                // Only show first goal scorer per team in the header
+                                                final firstA =
+                                                    teamAGoals.isNotEmpty
+                                                    ? teamAGoals.first
+                                                    : null;
+                                                final firstB =
+                                                    teamBGoals.isNotEmpty
+                                                    ? teamBGoals.first
+                                                    : null;
+                                                return Row(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .center,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: firstA != null
+                                                            ? [
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.only(
+                                                                        bottom:
+                                                                            4,
+                                                                      ),
+                                                                  child: Text.rich(
+                                                                    TextSpan(
+                                                                      style: textTheme
+                                                                          .bodySmall,
+                                                                      children: [
+                                                                        TextSpan(
+                                                                          text:
+                                                                              firstA.scorerName ??
+                                                                              '?',
+                                                                          style: const TextStyle(
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                          ),
+                                                                        ),
+                                                                        TextSpan(
+                                                                          text:
+                                                                              " ${firstA.minute}'",
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                    textAlign:
+                                                                        TextAlign
+                                                                            .center,
+                                                                  ),
+                                                                ),
+                                                              ]
+                                                            : [],
+                                                      ),
+                                                    ),
+                                                    Consumer(
+                                                      builder: (context, ref, _) {
+                                                        final videosAsync = ref
+                                                            .watch(
+                                                              matchVideosProvider(
+                                                                match.id,
+                                                              ),
+                                                            );
+                                                        final data =
+                                                            videosAsync.asData;
+                                                        final hasVideos =
+                                                            data != null &&
+                                                            data
+                                                                .value
+                                                                .isNotEmpty;
+                                                        const ringGreen = Color(
+                                                          0xFF00FF5A,
+                                                        );
+                                                        final icon =
+                                                            SvgPicture.asset(
+                                                              AppAssets
+                                                                  .matchGoalIcon,
+                                                              width: 15,
+                                                              height: 15,
+                                                            );
+                                                        return Padding(
+                                                          padding:
+                                                              const EdgeInsets.only(
+                                                                top: 2,
+                                                              ),
+                                                          child: hasVideos
+                                                              ? Container(
+                                                                  width: 20,
+                                                                  height: 20,
+                                                                  decoration: BoxDecoration(
+                                                                    shape: BoxShape
+                                                                        .circle,
+                                                                    border: Border.all(
+                                                                      color:
+                                                                          ringGreen,
+                                                                      width: 2,
+                                                                    ),
+                                                                  ),
+                                                                  child: Center(
+                                                                    child: icon,
+                                                                  ),
+                                                                )
+                                                              : Center(
+                                                                  child: icon,
+                                                                ),
+                                                        );
+                                                      },
+                                                    ),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .center,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: firstB != null
+                                                            ? [
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.only(
+                                                                        bottom:
+                                                                            4,
+                                                                      ),
+                                                                  child: Text.rich(
+                                                                    TextSpan(
+                                                                      style: textTheme
+                                                                          .bodySmall,
+                                                                      children: [
+                                                                        TextSpan(
+                                                                          text:
+                                                                              "${firstB.minute}' ",
+                                                                        ),
+                                                                        TextSpan(
+                                                                          text:
+                                                                              firstB.scorerName ??
+                                                                              '?',
+                                                                          style: const TextStyle(
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                    textAlign:
+                                                                        TextAlign
+                                                                            .center,
+                                                                  ),
+                                                                ),
+                                                              ]
+                                                            : [],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Center(
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                                vertical: 45.0,
-                              ),
+                        ),
+                      ),
+                    ),
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _FixtureSliverTabBarDelegate(
+                        TabBar(
+                          labelColor: colorScheme.onSurface,
+                          unselectedLabelColor: colorScheme.onSurfaceVariant,
+                          indicatorColor: colorScheme.onSurface,
+                          indicatorWeight: 2,
+                          tabs: const [
+                            Tab(text: 'Overview'),
+                            Tab(text: 'Timeline'),
+                            Tab(text: 'Stats'),
+                            Tab(text: 'Line-ups'),
+                          ],
+                        ),
+                        Divider(height: 1, color: colorScheme.outlineVariant),
+                      ),
+                    ),
+                  ];
+                },
+                body: TabBodyUnderlapClip(
+                  controller: _outerScrollController,
+                  barMaxExtent: topInset + CollapsingPageHeader.pinnedRow,
+                  barMinExtent: topInset + CollapsingPageHeader.pinnedRow,
+                  heroMaxExtent: bannerHeight,
+                  heroMinExtent: 0,
+                  heroPins: false,
+                  trailingMaxExtent: tabExtent,
+                  trailingMinExtent: tabExtent,
+                  child: TabBarView(
+                    children: [
+                      // Overview tab content
+                      SingleChildScrollView(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Match info section
+                            Container(
                               padding: const EdgeInsets.all(16.0),
                               decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHigh
-                                    .withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(28),
+                                color: colorScheme.surfaceContainerHigh,
+                                borderRadius: AppShape.mediumRadius,
                               ),
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (match.status ==
-                                              MatchStatus.ongoing) ...[
-                                            const MatchLivePulseIndicator(
-                                              size: 8,
+                                  // Title
+                                  Text(
+                                    'Match info',
+                                    style: textTheme.titleSmall?.copyWith(
+                                      color: colorScheme.onSurface,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // League row
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: AppShape.mediumRadius,
+                                      onTap: () {
+                                        final leagueId = matchInfoAsync
+                                            .asData
+                                            ?.value
+                                            ?.leagueId;
+                                        if (leagueId == null ||
+                                            leagueId.isEmpty) {
+                                          return;
+                                        }
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => LeagueDetailPage(
+                                              leagueId: leagueId,
                                             ),
-                                            if (halfPhase != null)
-                                              const SizedBox(width: 6),
+                                          ),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 6,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            ClipOval(
+                                              child: (() {
+                                                final logoPath = matchInfoAsync
+                                                    .asData
+                                                    ?.value
+                                                    ?.leagueLogoPath;
+                                                if (logoPath == null ||
+                                                    logoPath.isEmpty) {
+                                                  return Container(
+                                                    width: 24,
+                                                    height: 24,
+                                                    color: Colors.grey,
+                                                    child: const Icon(
+                                                      Icons.sports_soccer,
+                                                      color: Colors.white,
+                                                      size: 20,
+                                                    ),
+                                                  );
+                                                }
+                                                final isNetwork =
+                                                    logoPath.startsWith(
+                                                      'http://',
+                                                    ) ||
+                                                    logoPath.startsWith(
+                                                      'https://',
+                                                    );
+                                                return isNetwork
+                                                    ? Image(
+                                                        image:
+                                                            appCachedImageProvider(
+                                                              logoPath,
+                                                            ),
+                                                        width: 24,
+                                                        height: 24,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder:
+                                                            (
+                                                              c,
+                                                              e,
+                                                              st,
+                                                            ) => Container(
+                                                              width: 24,
+                                                              height: 24,
+                                                              color:
+                                                                  Colors.grey,
+                                                              child: const Icon(
+                                                                Icons
+                                                                    .sports_soccer,
+                                                                color: Colors
+                                                                    .white,
+                                                                size: 20,
+                                                              ),
+                                                            ),
+                                                      )
+                                                    : Image.asset(
+                                                        logoPath,
+                                                        width: 24,
+                                                        height: 24,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder:
+                                                            (
+                                                              c,
+                                                              e,
+                                                              st,
+                                                            ) => Container(
+                                                              width: 24,
+                                                              height: 24,
+                                                              color:
+                                                                  Colors.grey,
+                                                              child: const Icon(
+                                                                Icons
+                                                                    .sports_soccer,
+                                                                color: Colors
+                                                                    .white,
+                                                                size: 20,
+                                                              ),
+                                                            ),
+                                                      );
+                                              })(),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                matchInfoAsync
+                                                        .asData
+                                                        ?.value
+                                                        ?.leagueName ??
+                                                    match.leagueName ??
+                                                    '—',
+                                                style: textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      color:
+                                                          colorScheme.onSurface,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.chevron_right,
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              size: 20,
+                                            ),
                                           ],
-                                          if (halfPhase != null)
-                                            MatchHalfPhaseChip(
-                                              phase: halfPhase,
-                                            ),
-                                        ],
+                                        ),
                                       ),
-                                      const Spacer(),
-                                      IconButton(
-                                        icon: const Icon(Icons.open_in_full),
-                                        onPressed: () =>
-                                            _showScorersAssistersDialog(
-                                              context,
-                                              ref,
-                                              match,
-                                            ),
-                                        iconSize: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Venue row
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.stadium,
                                         color: colorScheme.onSurface,
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
+                                        size: 24,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          matchInfoAsync.asData?.value?.venue ??
+                                              '—',
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurface,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 12),
+                                  // Referee row
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceEvenly,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
                                     children: [
-                                      Expanded(
-                                        child: Column(
-                                          children: [
-                                            ClipOval(
-                                              child: _FixtureTeamLogo(
-                                                path: match.teamA.logoPath,
-                                                size: 46.4,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              match.teamA.shortForm,
-                                              style: textTheme.bodyLarge
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        ),
+                                      Icon(
+                                        Icons.sports,
+                                        color: colorScheme.onSurface,
+                                        size: 24,
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16.0,
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Text(
-                                              match.status ==
-                                                      MatchStatus.upcoming
-                                                  ? match.timeDisplay
-                                                  : (match.scoreText ?? '–'),
-                                              style: textTheme.displayMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            match.status == MatchStatus.upcoming
-                                                ? _BuildUpcomingPill(
-                                                    match: match,
-                                                    onTap: () =>
-                                                        _showSetTimerDialog(
-                                                          context,
-                                                          match.id,
-                                                          ref,
-                                                        ),
-                                                  )
-                                                : _BuildOngoingPill(
-                                                    match: match,
-                                                    clock: clock,
-                                                    clockLabel: clockLabel,
-                                                    matchId: match.id,
-                                                  ),
-                                          ],
-                                        ),
-                                      ),
+                                      const SizedBox(width: 12),
                                       Expanded(
-                                        child: Column(
-                                          children: [
-                                            ClipOval(
-                                              child: _FixtureTeamLogo(
-                                                path: match.teamB.logoPath,
-                                                size: 46.4,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              match.teamB.shortForm,
-                                              style: textTheme.bodyLarge
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
+                                        child: Text(
+                                          matchInfoAsync
+                                                  .asData
+                                                  ?.value
+                                                  ?.creatorName ??
+                                              '—',
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurface,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 16),
-                                  Divider(
-                                    height: 1,
-                                    color: colorScheme.outline,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Consumer(
-                                    builder: (context, ref, _) {
-                                      final eventsAsync = ref.watch(
-                                        matchEventsProvider(match.id),
-                                      );
-                                      return eventsAsync.when(
-                                        loading: () => const SizedBox.shrink(),
-                                        error: (_, _) =>
-                                            const SizedBox.shrink(),
-                                        data: (events) {
-                                          final goals = events
-                                              .where(
-                                                (e) => _isGoalEventType(
-                                                  e.eventType,
-                                                ),
-                                              )
-                                              .toList();
-                                          if (goals.isEmpty) {
-                                            return const SizedBox.shrink();
-                                          }
-                                          final teamAId = match.teamA.id;
-                                          final teamAGoals = goals
-                                              .where((g) => g.teamId == teamAId)
-                                              .toList();
-                                          final teamBGoals = goals
-                                              .where((g) => g.teamId != teamAId)
-                                              .toList();
-                                          // Only show first goal scorer per team in the header
-                                          final firstA = teamAGoals.isNotEmpty
-                                              ? teamAGoals.first
-                                              : null;
-                                          final firstB = teamBGoals.isNotEmpty
-                                              ? teamBGoals.first
-                                              : null;
-                                          return Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: firstA != null
-                                                      ? [
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
-                                                                  bottom: 4,
-                                                                ),
-                                                            child: Text.rich(
-                                                              TextSpan(
-                                                                style:
-                                                                    textTheme
-                                                                        .bodySmall,
-                                                                children: [
-                                                                  TextSpan(
-                                                                    text: firstA
-                                                                            .scorerName ??
-                                                                        '?',
-                                                                    style: const TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                    ),
-                                                                  ),
-                                                                  TextSpan(
-                                                                    text:
-                                                                        " ${firstA.minute}'",
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              textAlign:
-                                                                  TextAlign
-                                                                      .center,
-                                                            ),
-                                                          ),
-                                                        ]
-                                                      : [],
-                                                ),
-                                              ),
-                                              Consumer(
-                                                builder: (context, ref, _) {
-                                                  final videosAsync = ref.watch(
-                                                    matchVideosProvider(
-                                                      match.id,
-                                                    ),
-                                                  );
-                                                  final data =
-                                                      videosAsync.asData;
-                                                  final hasVideos = data !=
-                                                          null &&
-                                                      data.value.isNotEmpty;
-                                                  const ringGreen =
-                                                      Color(0xFF00FF5A);
-                                                  final icon = SvgPicture.asset(
-                                                    AppAssets.matchGoalIcon,
-                                                    width: 15,
-                                                    height: 15,
-                                                  );
-                                                  return Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                      top: 2,
-                                                    ),
-                                                    child: hasVideos
-                                                        ? Container(
-                                                            width: 20,
-                                                            height: 20,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              shape: BoxShape
-                                                                  .circle,
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    ringGreen,
-                                                                width: 2,
-                                                              ),
-                                                            ),
-                                                            child: Center(
-                                                              child: icon,
-                                                            ),
-                                                          )
-                                                        : Center(child: icon),
-                                                  );
-                                                },
-                                              ),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: firstB != null
-                                                      ? [
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
-                                                                  bottom: 4,
-                                                                ),
-                                                            child: Text.rich(
-                                                              TextSpan(
-                                                                style:
-                                                                    textTheme
-                                                                        .bodySmall,
-                                                                children: [
-                                                                  TextSpan(
-                                                                    text:
-                                                                        "${firstB.minute}' ",
-                                                                  ),
-                                                                  TextSpan(
-                                                                    text: firstB
-                                                                            .scorerName ??
-                                                                        '?',
-                                                                    style: const TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              textAlign:
-                                                                  TextAlign
-                                                                      .center,
-                                                            ),
-                                                          ),
-                                                        ]
-                                                      : [],
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      );
-                                    },
+                                  MatchOddsChips(
+                                    match: match,
+                                    lazyLoad: false,
+                                    showHeader: true,
+                                    showDisclaimer: true,
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _FixtureSliverTabBarDelegate(
-                  TabBar(
-                    labelColor: colorScheme.onSurface,
-                    unselectedLabelColor: colorScheme.onSurfaceVariant,
-                    indicatorColor: colorScheme.onSurface,
-                    indicatorWeight: 2,
-                    tabs: const [
-                      Tab(text: 'Overview'),
-                      Tab(text: 'Timeline'),
-                      Tab(text: 'Stats'),
-                      Tab(text: 'Line-ups'),
-                    ],
-                  ),
-                  Divider(height: 1, color: colorScheme.outlineVariant),
-                ),
-              ),
-            ];
-          },
-          body: TabBarView(
-            children: [
-              // Overview tab content
-              SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Match info section
-                    Container(
-                      padding: const EdgeInsets.all(16.0),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Title
-                          Text(
-                            'Match info',
-                            style: textTheme.titleSmall?.copyWith(
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          // League row
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                final leagueId =
-                                    matchInfoAsync.asData?.value?.leagueId;
-                                if (leagueId == null || leagueId.isEmpty) {
-                                  return;
-                                }
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        LeagueDetailPage(leagueId: leagueId),
-                                  ),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  children: [
-                                    ClipOval(
-                                      child: (() {
-                                        final logoPath = matchInfoAsync
-                                            .asData
-                                            ?.value
-                                            ?.leagueLogoPath;
-                                        if (logoPath == null ||
-                                            logoPath.isEmpty) {
-                                          return Container(
-                                            width: 24,
-                                            height: 24,
-                                            color: Colors.grey,
-                                            child: const Icon(
-                                              Icons.sports_soccer,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
-                                          );
-                                        }
-                                        final isNetwork =
-                                            logoPath.startsWith('http://') ||
-                                            logoPath.startsWith('https://');
-                                        return isNetwork
-                                            ? Image(
-                                                image: appCachedImageProvider(logoPath),
-                                                width: 24,
-                                                height: 24,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (c, e, st) =>
-                                                    Container(
-                                                      width: 24,
-                                                      height: 24,
-                                                      color: Colors.grey,
-                                                      child: const Icon(
-                                                        Icons.sports_soccer,
-                                                        color: Colors.white,
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                              )
-                                            : Image.asset(
-                                                logoPath,
-                                                width: 24,
-                                                height: 24,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (c, e, st) =>
-                                                    Container(
-                                                      width: 24,
-                                                      height: 24,
-                                                      color: Colors.grey,
-                                                      child: const Icon(
-                                                        Icons.sports_soccer,
-                                                        color: Colors.white,
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                              );
-                                      })(),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        matchInfoAsync
-                                                .asData
-                                                ?.value
-                                                ?.leagueName ??
-                                            match.leagueName ??
-                                            '—',
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurface,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      color: colorScheme.onSurfaceVariant,
-                                      size: 20,
-                                    ),
-                                  ],
-                                ),
+                            const SizedBox(height: 16),
+                            // Pre-match H2H section
+                            Container(
+                              padding: const EdgeInsets.all(16.0),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHigh,
+                                borderRadius: AppShape.mediumRadius,
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // Venue row
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.stadium,
-                                color: colorScheme.onSurface,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  matchInfoAsync.asData?.value?.venue ?? '—',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurface,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Referee row
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.sports,
-                                color: colorScheme.onSurface,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  matchInfoAsync.asData?.value?.creatorName ??
-                                      '—',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurface,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          MatchOddsChips(
-                            match: match,
-                            lazyLoad: false,
-                            showHeader: true,
-                            showDisclaimer: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Pre-match H2H section
-                    Container(
-                      padding: const EdgeInsets.all(16.0),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Title
-                          Text('Pre-match H2H', style: textTheme.titleSmall),
-                          const SizedBox(height: 16),
-                          // H2H Statistics row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              // Team A wins (row: logo + count)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  ClipOval(
-                                    child: _FixtureTeamLogo(
-                                      path: match.teamA.logoPath,
-                                      size: 36,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
+                                  // Title
                                   Text(
-                                    '$teamAWins',
-                                    style: textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: colorScheme.onSurface,
-                                    ),
+                                    'Pre-match H2H',
+                                    style: textTheme.titleSmall,
                                   ),
-                                ],
-                              ),
-                              const SizedBox(width: 16),
-                              // Separator
-                              Container(
-                                width: 1,
-                                height: 24,
-                                color: colorScheme.outlineVariant,
-                              ),
-                              const SizedBox(width: 16),
-                              // Draws (center value)
-                              Text(
-                                '$draws',
-                                style: textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              // Separator
-                              Container(
-                                width: 1,
-                                height: 24,
-                                color: colorScheme.outlineVariant,
-                              ),
-                              const SizedBox(width: 16),
-                              // Team B wins (row: count + logo)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '$teamBWins',
-                                    style: textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: colorScheme.onSurface,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  ClipOval(
-                                    child: _FixtureTeamLogo(
-                                      path: match.teamB.logoPath,
-                                      size: 36,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          // Recent match results - horizontal scrollable
-                          SizedBox(
-                            height: 40,
-                            child: h2hResultsAsync.when(
-                              loading: () => const Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                              error: (_, _) => Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Could not load previous results',
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                              data: (results) {
-                                if (results.isEmpty) {
-                                  return Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      'No previous meetings',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: results.length,
-                                  itemBuilder: (context, index) {
-                                    final r = results[index];
-                                    final leftLogoPath =
-                                        r.teamAId == match.teamA.id
-                                        ? match.teamA.logoPath
-                                        : match.teamB.logoPath;
-                                    final rightLogoPath =
-                                        r.teamBId == match.teamB.id
-                                        ? match.teamB.logoPath
-                                        : match.teamA.logoPath;
-                                    return Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Row(
+                                  const SizedBox(height: 16),
+                                  // H2H Statistics row
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      // Team A wins (row: logo + count)
+                                      Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           ClipOval(
                                             child: _FixtureTeamLogo(
-                                              path: leftLogoPath,
-                                              size: 20,
+                                              path: match.teamA.logoPath,
+                                              size: 36,
                                             ),
                                           ),
-                                          const SizedBox(width: 12),
+                                          const SizedBox(width: 16),
                                           Text(
-                                            '${r.teamAScore} - ${r.teamBScore}',
-                                            style: textTheme.labelSmall
+                                            '$teamAWins',
+                                            style: textTheme.bodyLarge
                                                 ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
                                                   color: colorScheme.onSurface,
                                                 ),
                                           ),
-                                          const SizedBox(width: 12),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 16),
+                                      // Separator
+                                      Container(
+                                        width: 1,
+                                        height: 24,
+                                        color: colorScheme.outlineVariant,
+                                      ),
+                                      const SizedBox(width: 16),
+                                      // Draws (center value)
+                                      Text(
+                                        '$draws',
+                                        style: textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      // Separator
+                                      Container(
+                                        width: 1,
+                                        height: 24,
+                                        color: colorScheme.outlineVariant,
+                                      ),
+                                      const SizedBox(width: 16),
+                                      // Team B wins (row: count + logo)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '$teamBWins',
+                                            style: textTheme.bodyLarge
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: colorScheme.onSurface,
+                                                ),
+                                          ),
+                                          const SizedBox(width: 16),
                                           ClipOval(
                                             child: _FixtureTeamLogo(
-                                              path: rightLogoPath,
-                                              size: 20,
+                                              path: match.teamB.logoPath,
+                                              size: 36,
                                             ),
                                           ),
                                         ],
                                       ),
-                                    );
-                                  },
-                                );
-                              },
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // Recent match results - horizontal scrollable
+                                  SizedBox(
+                                    height: 40,
+                                    child: h2hResultsAsync.when(
+                                      loading: () => const Center(
+                                        child: SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ),
+                                      error: (_, _) => Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          'Could not load previous results',
+                                          style: textTheme.labelSmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                      data: (results) {
+                                        if (results.isEmpty) {
+                                          return Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              'No previous meetings',
+                                              style: textTheme.labelSmall
+                                                  ?.copyWith(
+                                                    color: colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                            ),
+                                          );
+                                        }
+                                        return ListView.builder(
+                                          scrollDirection: Axis.horizontal,
+                                          itemCount: results.length,
+                                          itemBuilder: (context, index) {
+                                            final r = results[index];
+                                            final leftLogoPath =
+                                                r.teamAId == match.teamA.id
+                                                ? match.teamA.logoPath
+                                                : match.teamB.logoPath;
+                                            final rightLogoPath =
+                                                r.teamBId == match.teamB.id
+                                                ? match.teamB.logoPath
+                                                : match.teamA.logoPath;
+                                            return Container(
+                                              margin: const EdgeInsets.only(
+                                                right: 8,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 10,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: colorScheme
+                                                    .surfaceContainerHighest,
+                                                borderRadius: AppShape
+                                                    .largeIncreasedRadius,
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  ClipOval(
+                                                    child: _FixtureTeamLogo(
+                                                      path: leftLogoPath,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Text(
+                                                    '${r.teamAScore} - ${r.teamBScore}',
+                                                    style: textTheme.labelSmall
+                                                        ?.copyWith(
+                                                          color: colorScheme
+                                                              .onSurface,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  ClipOval(
+                                                    child: _FixtureTeamLogo(
+                                                      path: rightLogoPath,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            // Pre-match form section
+                            _PreMatchFormSection(match: match),
+                            const SizedBox(height: 16),
+                            // Standings section
+                            _StandingsSection(match: match),
+                            const SizedBox(height: 16),
+                            // Featured players section
+                            _FeaturedPlayersSection(match: match),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Pre-match form section
-                    _PreMatchFormSection(match: match),
-                    const SizedBox(height: 16),
-                    // Standings section
-                    _StandingsSection(match: match),
-                    const SizedBox(height: 16),
-                    // Featured players section
-                    _FeaturedPlayersSection(match: match),
-                  ],
+                      // Timeline tab content
+                      _FixtureTimelineTab(
+                        match: match,
+                        canUndo:
+                            isLeagueOwner &&
+                            match.status == MatchStatus.ongoing,
+                      ),
+                      // Stats tab content
+                      SingleChildScrollView(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            _buildFixtureStatsRatingsSections(context, match),
+                            const SizedBox(height: 16),
+                            _buildMatchStatsSection(context, match),
+                            const SizedBox(height: 56),
+                          ],
+                        ),
+                      ),
+                      // Line-ups tab content
+                      _FixtureLineupsTab(match: match),
+                    ],
+                  ),
                 ),
               ),
-              // Timeline tab content
-              _FixtureTimelineTab(
-                match: match,
-                canUndo:
-                    isLeagueOwner && match.status == MatchStatus.ongoing,
-              ),
-              // Stats tab content
-              SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    _buildFixtureStatsRatingsSections(context, match),
-                    const SizedBox(height: 16),
-                    _buildMatchStatsSection(context, match),
-                    const SizedBox(height: 56),
-                  ],
-                ),
-              ),
-              // Line-ups tab content
-              _FixtureLineupsTab(match: match),
-            ],
+            ),
           ),
-        ),
+          if (_showEditOverlay)
+            _FixtureMatchEditOverlay(
+              match: match,
+              onClose: () => setState(() => _showEditOverlay = false),
+              onSaved: () => setState(() => _showEditOverlay = false),
+            ),
+        ],
       ),
-        ),
-        if (_showEditOverlay)
-          _FixtureMatchEditOverlay(
-            match: match,
-            onClose: () => setState(() => _showEditOverlay = false),
-            onSaved: () => setState(() => _showEditOverlay = false),
-          ),
-      ],
     );
   }
 
@@ -2409,7 +2610,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         child: child,
       );
@@ -2504,8 +2705,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
               ..sort((a, b) => b.rating.compareTo(a.rating));
         final teamA3 = teamARanked.take(3).toList();
         final teamB3 = teamBRanked.take(3).toList();
-        final topOverallRating =
-            players.isEmpty ? null : players.first.rating;
+        final topOverallRating = players.isEmpty ? null : players.first.rating;
 
         FixtureMatchRatedPlayer? slotForGridIndex(int gridIndex) {
           final row = gridIndex ~/ 2;
@@ -2635,7 +2835,8 @@ class _FixturePageState extends ConsumerState<FixturePage> {
                         index: index,
                         match: match,
                         player: p,
-                        showTopRatedStar: p != null &&
+                        showTopRatedStar:
+                            p != null &&
                             topOverallRating != null &&
                             p.rating == topOverallRating,
                       );
@@ -2702,7 +2903,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
             decoration: BoxDecoration(
               color: badgeColor,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: AppShape.fullRadius,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2734,7 +2935,7 @@ class _FixturePageState extends ConsumerState<FixturePage> {
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         child: child,
       );
@@ -2893,6 +3094,82 @@ class _FixturePageState extends ConsumerState<FixturePage> {
   }
 }
 
+class _CollapsedFixtureIdentity extends StatelessWidget {
+  const _CollapsedFixtureIdentity({
+    required this.reveal,
+    required this.teamALogo,
+    required this.teamBLogo,
+    required this.headline,
+    required this.subtitle,
+  });
+
+  final ValueNotifier<double> reveal;
+  final String teamALogo;
+  final String teamBLogo;
+  final String headline;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return ValueListenableBuilder<double>(
+      valueListenable: reveal,
+      builder: (context, value, _) {
+        final curved = Curves.easeOutCubic.transform(value);
+        if (curved <= 0 || headline.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return ClipRect(
+          child: Opacity(
+            opacity: curved,
+            child: Transform.translate(
+              offset: Offset(0, 6 * (1 - curved)),
+              child: Row(
+                children: [
+                  _FixtureTeamLogo(path: teamALogo, size: 28),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          headline,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            height: 1.1,
+                          ),
+                        ),
+                        if (subtitle.isNotEmpty)
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              height: 1.1,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _FixtureTeamLogo(path: teamBLogo, size: 28),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 String _formatMatchDate(DateTime d) {
   const months = [
     'Jan',
@@ -2924,10 +3201,7 @@ class _FixtureTeamLogo extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: buildTeamLogo(
-        path.isEmpty ? null : path,
-        size: size,
-      ),
+      child: buildTeamLogo(path.isEmpty ? null : path, size: size),
     );
   }
 }
@@ -2956,7 +3230,7 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: job.isFailed ? onDismiss : null,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppShape.largeRadius,
         child: SizedBox(
           width: width,
           child: Column(
@@ -2967,7 +3241,7 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
                 width: width,
                 height: previewHeight,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: AppShape.largeRadius,
                   border: Border.all(
                     color: colorScheme.primary.withValues(alpha: 0.65),
                     width: 1.4,
@@ -2975,7 +3249,7 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
                   color: colorScheme.surface,
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppShape.largeRadius,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -3023,9 +3297,9 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      height: 1.1,
-                    ),
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -3033,10 +3307,10 @@ class _MatchStoryUploadingCircle extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 10,
-                      height: 1.1,
-                    ),
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                  height: 1.1,
+                ),
               ),
             ],
           ),
@@ -3075,7 +3349,8 @@ class _MatchStoryCircle extends StatelessWidget {
         : uploaderName!.trim();
     final resolvedUploaderImage = _resolveUploaderImage(uploaderImageUrl);
     final uploaderHasImage = resolvedUploaderImage != null;
-    final uploaderIsNetwork = uploaderHasImage &&
+    final uploaderIsNetwork =
+        uploaderHasImage &&
         (resolvedUploaderImage.startsWith('http://') ||
             resolvedUploaderImage.startsWith('https://'));
     return Material(
@@ -3088,7 +3363,7 @@ class _MatchStoryCircle extends StatelessWidget {
             ),
           );
         },
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppShape.largeRadius,
         child: SizedBox(
           width: width,
           child: Column(
@@ -3099,7 +3374,7 @@ class _MatchStoryCircle extends StatelessWidget {
                 width: width,
                 height: previewHeight,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: AppShape.largeRadius,
                   border: Border.all(
                     color: colorScheme.primary.withValues(alpha: 0.65),
                     width: 1.4,
@@ -3114,7 +3389,7 @@ class _MatchStoryCircle extends StatelessWidget {
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppShape.largeRadius,
                   child: Stack(
                     children: [
                       Row(
@@ -3123,7 +3398,10 @@ class _MatchStoryCircle extends StatelessWidget {
                             child: Container(
                               color: colorScheme.surfaceContainerHigh,
                               child: Center(
-                                child: _FixtureTeamLogo(path: teamALogo, size: 30),
+                                child: _FixtureTeamLogo(
+                                  path: teamALogo,
+                                  size: 30,
+                                ),
                               ),
                             ),
                           ),
@@ -3131,7 +3409,10 @@ class _MatchStoryCircle extends StatelessWidget {
                             child: Container(
                               color: colorScheme.surfaceContainer,
                               child: Center(
-                                child: _FixtureTeamLogo(path: teamBLogo, size: 30),
+                                child: _FixtureTeamLogo(
+                                  path: teamBLogo,
+                                  size: 30,
+                                ),
                               ),
                             ),
                           ),
@@ -3172,11 +3453,12 @@ class _MatchStoryCircle extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: AppShape.fullRadius,
                           ),
                           child: Text(
                             'Highlight',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 10,
@@ -3200,25 +3482,33 @@ class _MatchStoryCircle extends StatelessWidget {
                         height: 16,
                         child: uploaderHasImage
                             ? (uploaderIsNetwork
-                                ? Image(
-                                    image: appCachedImageProvider(resolvedUploaderImage),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => _uploaderInitial(
-                                      context,
-                                      uploaderLabel,
-                                      colorScheme,
-                                    ),
-                                  )
-                                : Image.asset(
-                                    resolvedUploaderImage,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => _uploaderInitial(
-                                      context,
-                                      uploaderLabel,
-                                      colorScheme,
-                                    ),
-                                  ))
-                            : _uploaderInitial(context, uploaderLabel, colorScheme),
+                                  ? Image(
+                                      image: appCachedImageProvider(
+                                        resolvedUploaderImage,
+                                      ),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) =>
+                                          _uploaderInitial(
+                                            context,
+                                            uploaderLabel,
+                                            colorScheme,
+                                          ),
+                                    )
+                                  : Image.asset(
+                                      resolvedUploaderImage,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) =>
+                                          _uploaderInitial(
+                                            context,
+                                            uploaderLabel,
+                                            colorScheme,
+                                          ),
+                                    ))
+                            : _uploaderInitial(
+                                context,
+                                uploaderLabel,
+                                colorScheme,
+                              ),
                       ),
                     ),
                   ),
@@ -3229,9 +3519,9 @@ class _MatchStoryCircle extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            height: 1.1,
-                          ),
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                      ),
                     ),
                   ),
                 ],
@@ -3242,10 +3532,10 @@ class _MatchStoryCircle extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 10,
-                      height: 1.1,
-                    ),
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                  height: 1.1,
+                ),
               ),
             ],
           ),
@@ -3265,7 +3555,9 @@ String? _resolveUploaderImage(String? raw) {
     return value;
   }
   // Stored as a bucket path/key (e.g. onboarding/profile uploads).
-  return Supabase.instance.client.storage.from('Profile images').getPublicUrl(value);
+  return Supabase.instance.client.storage
+      .from('Profile images')
+      .getPublicUrl(value);
 }
 
 Widget _uploaderInitial(
@@ -3277,10 +3569,10 @@ Widget _uploaderInitial(
     child: Text(
       uploaderLabel.isNotEmpty ? uploaderLabel[0].toUpperCase() : '?',
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            color: colorScheme.onSurfaceVariant,
-          ),
+        fontSize: 9,
+        fontWeight: FontWeight.w700,
+        color: colorScheme.onSurfaceVariant,
+      ),
     ),
   );
 }
@@ -3461,7 +3753,7 @@ class _MatchVideoPlayerPageState extends State<_MatchVideoPlayerPage>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppShape.largeIncreasedRadius,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -3557,12 +3849,12 @@ class _MatchStoryAddButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppShape.largeRadius,
         child: Container(
           width: width,
           height: height,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: AppShape.largeRadius,
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -3592,9 +3884,9 @@ class _MatchStoryAddButton extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Add clip',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -3619,12 +3911,12 @@ class _BuildUpcomingPill extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: const Color(0xFF00FF5A).withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppShape.largeIncreasedRadius,
             border: Border.all(color: const Color(0xFF00FF5A), width: 1.5),
           ),
           child: Row(
@@ -3710,7 +4002,7 @@ class _BuildOngoingPillState extends ConsumerState<_BuildOngoingPill> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       decoration: BoxDecoration(
         color: pillColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
         border: Border.all(color: borderColor, width: 1),
       ),
       child: Text(
@@ -3914,10 +4206,7 @@ class _FixtureLineupsTabState extends State<_FixtureLineupsTab>
 }
 
 class _FixtureTeamLineupPanel extends ConsumerWidget {
-  const _FixtureTeamLineupPanel({
-    required this.match,
-    required this.isTeamA,
-  });
+  const _FixtureTeamLineupPanel({required this.match, required this.isTeamA});
 
   final MatchModel match;
   final bool isTeamA;
@@ -4150,7 +4439,7 @@ class _PreMatchFormSectionState extends ConsumerState<_PreMatchFormSection> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4219,7 +4508,7 @@ class _StandingsSection extends ConsumerWidget {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4349,7 +4638,7 @@ class _FeaturedPlayersSection extends ConsumerWidget {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4564,7 +4853,7 @@ Widget _buildFeaturedPlayer(
               ),
               decoration: BoxDecoration(
                 color: badgeColor,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: AppShape.fullRadius,
               ),
               child: Text(
                 normalized.toStringAsFixed(1),
@@ -4625,7 +4914,7 @@ Widget _buildFormMatchPill(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
     decoration: BoxDecoration(
       color: colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.largeIncreasedRadius,
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -4824,7 +5113,7 @@ Widget _buildTopRatedPlayer(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
             decoration: BoxDecoration(
               color: badgeColor,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: AppShape.fullRadius,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -4920,7 +5209,7 @@ Widget _buildTopRatedPlayer(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
           decoration: BoxDecoration(
             color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppShape.fullRadius,
           ),
           child: Text(
             '—',
@@ -5008,7 +5297,7 @@ Widget _buildStatRow(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.lightBlueAccent.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: AppShape.fullRadius,
         ),
         child: text,
       );
@@ -5078,7 +5367,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppShape.extraLarge),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -5090,7 +5381,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
             height: 4,
             decoration: BoxDecoration(
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: AppShape.extraSmallRadius,
             ),
           ),
           asyncMatch.when(
@@ -5163,7 +5454,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Material(
                   color: colorScheme.tertiaryContainer.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppShape.largeRadius,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -5306,10 +5597,10 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
           height: 96 * AppResponsive.layoutScaleOf(context),
           child: Material(
             color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(48),
+            borderRadius: AppShape.extraExtraLargeRadius,
             child: InkWell(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(48),
+              borderRadius: AppShape.extraExtraLargeRadius,
               child: Center(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -5356,7 +5647,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
         await repo.finalizeMatchViaRpc(widget.matchId);
       }
 
-      final clock = ref.read(matchTimerAdapterProvider(widget.matchId).notifier);
+      final clock = ref.read(
+        matchTimerAdapterProvider(widget.matchId).notifier,
+      );
       final timerConfig = ref.read(
         matchTimerConfigProvider(widget.matchId).notifier,
       );
@@ -5393,7 +5686,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
       ref.invalidate(matchTeamStatsProvider(widget.matchId));
       ref.invalidate(fixtureMatchRatingsProvider(widget.matchId));
       if (leagueIdForProgress != null && leagueIdForProgress.isNotEmpty) {
-        ref.invalidate(leagueSeasonFixtureProgressProvider(leagueIdForProgress));
+        ref.invalidate(
+          leagueSeasonFixtureProgressProvider(leagueIdForProgress),
+        );
       }
 
       setState(() {
@@ -5416,10 +5711,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
     try {
       final lineupData = await ref.read(
         fixtureMatchLineupProvider(
-          FixtureMatchLineupRequest(
-            matchId: widget.matchId,
-            isTeamA: isTeamA,
-          ),
+          FixtureMatchLineupRequest(matchId: widget.matchId, isTeamA: isTeamA),
         ).future,
       );
       if (lineupData.layout.players.isEmpty) return null;
@@ -5451,9 +5743,8 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
     }
     return list
         .where(
-          (p) => onPitch
-              ? pitchState.isOnPitch(p.id)
-              : pitchState.isOnBench(p.id),
+          (p) =>
+              onPitch ? pitchState.isOnPitch(p.id) : pitchState.isOnBench(p.id),
         )
         .toList();
   }
@@ -5520,7 +5811,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppShape.extraLarge),
+            ),
           ),
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
@@ -5780,8 +6073,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
         .where((p) => _fixturePickerIsGoalkeeper(p.position))
         .where(
           (p) =>
-              opposingPitchState == null ||
-              opposingPitchState.isOnPitch(p.id),
+              opposingPitchState == null || opposingPitchState.isOnPitch(p.id),
         )
         .toList();
 
@@ -5795,7 +6087,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppShape.extraLarge),
+            ),
           ),
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
@@ -5852,7 +6146,9 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                             child: p.useNetworkImage && p.imageUrl != null
                                 ? ClipOval(
                                     child: Image(
-                                      image: appCachedImageProvider(p.imageUrl!),
+                                      image: appCachedImageProvider(
+                                        p.imageUrl!,
+                                      ),
                                       width: 36,
                                       height: 36,
                                       fit: BoxFit.cover,
@@ -6024,7 +6320,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
             ) {
               return InkWell(
                 onTap: onSelect,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppShape.largeRadius,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     vertical: 10,
@@ -6157,7 +6453,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
+                    top: Radius.circular(AppShape.extraLarge),
                   ),
                 ),
                 padding: EdgeInsets.only(
@@ -6229,7 +6525,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
+                    top: Radius.circular(AppShape.extraLarge),
                   ),
                 ),
                 padding: EdgeInsets.only(
@@ -6266,7 +6562,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHigh,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
+                  top: Radius.circular(AppShape.extraLarge),
                 ),
               ),
               padding: EdgeInsets.only(
@@ -6438,7 +6734,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
             ) {
               return InkWell(
                 onTap: onSelect,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppShape.largeRadius,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     vertical: 10,
@@ -6508,7 +6804,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
+                    top: Radius.circular(AppShape.extraLarge),
                   ),
                 ),
                 padding: EdgeInsets.only(
@@ -6653,7 +6949,7 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHigh,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
+                  top: Radius.circular(AppShape.extraLarge),
                 ),
               ),
               padding: EdgeInsets.only(
@@ -6757,10 +7053,10 @@ class _MatchControlsModalState extends ConsumerState<_MatchControlsModal> {
       height: 96,
       child: Material(
         color: effectiveBackground,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
           child: Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -6983,9 +7279,9 @@ class _FixtureTimelineTabState extends ConsumerState<_FixtureTimelineTab> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not undo: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not undo: $e')));
       }
     } finally {
       if (mounted) setState(() => _undoing = false);
@@ -7008,10 +7304,7 @@ class _FixtureTimelineTabState extends ConsumerState<_FixtureTimelineTab> {
       error: (e, _) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            'Could not load events: $e',
-            style: textTheme.bodyMedium,
-          ),
+          child: Text('Could not load events: $e', style: textTheme.bodyMedium),
         ),
       ),
       data: (events) {
@@ -7029,8 +7322,7 @@ class _FixtureTimelineTabState extends ConsumerState<_FixtureTimelineTab> {
           );
         }
 
-        final lastEvent =
-            widget.canUndo ? _lastRecordedEvent(events) : null;
+        final lastEvent = widget.canUndo ? _lastRecordedEvent(events) : null;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -7334,7 +7626,7 @@ class _FixtureTimelineTile extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: milestoneBlue,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: AppShape.mediumRadius,
                       ),
                       child: Text(
                         _milestoneLabel(),
@@ -7573,8 +7865,7 @@ class _FixtureTimelineEventSide extends StatelessWidget {
           width: 24,
           height: 24,
           colorFilter: ColorFilter.mode(dim, BlendMode.srcIn),
-          errorBuilder: (_, _, _) =>
-              Icon(Icons.sports, size: 24, color: dim),
+          errorBuilder: (_, _, _) => Icon(Icons.sports, size: 24, color: dim),
         );
       case 'shot':
         return Icon(Icons.adjust, size: 22, color: dim);
@@ -7684,7 +7975,9 @@ class _FixtureMatchEditOverlayState
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      await ref.read(matchesRepositoryProvider).updateMatchScores(
+      await ref
+          .read(matchesRepositoryProvider)
+          .updateMatchScores(
             widget.match.id,
             teamAScore: _teamAScore,
             teamBScore: _teamBScore,
@@ -7693,14 +7986,14 @@ class _FixtureMatchEditOverlayState
       ref.invalidate(matchesProvider);
       if (!mounted) return;
       widget.onSaved();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Score updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Score updated')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update score: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update score: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -7790,7 +8083,7 @@ class _FixtureMatchEditOverlayState
               padding: const EdgeInsets.fromLTRB(20, 20, 16, 24),
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: AppShape.mediumRadius,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -7799,10 +8092,7 @@ class _FixtureMatchEditOverlayState
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          'Edit match',
-                          style: textTheme.titleLarge,
-                        ),
+                        child: Text('Edit match', style: textTheme.titleLarge),
                       ),
                       IconButton(
                         onPressed: _saving ? null : widget.onClose,
@@ -7831,7 +8121,11 @@ class _FixtureMatchEditOverlayState
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.only(top: 56, left: 4, right: 4),
+                        padding: const EdgeInsets.only(
+                          top: 56,
+                          left: 4,
+                          right: 4,
+                        ),
                         child: Text(
                           '–',
                           style: textTheme.headlineMedium?.copyWith(

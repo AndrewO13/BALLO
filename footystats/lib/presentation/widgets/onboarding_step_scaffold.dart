@@ -32,9 +32,7 @@ class OnboardingContinueButton extends StatelessWidget {
           padding: EdgeInsets.symmetric(
             vertical: 14 * AppResponsive.layoutScaleOf(context),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
+          shape: const StadiumBorder(),
         ),
         child: isLoading
             ? SizedBox(
@@ -98,7 +96,12 @@ class OnboardingStepScaffold extends StatelessWidget {
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(inset, 8 * scale, inset, 16 * scale),
+                    padding: EdgeInsets.fromLTRB(
+                      inset,
+                      8 * scale,
+                      inset,
+                      16 * scale,
+                    ),
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     child: Column(
@@ -137,7 +140,12 @@ class OnboardingStepScaffold extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(inset, 8 * scale, inset, 16 * scale),
+                  padding: EdgeInsets.fromLTRB(
+                    inset,
+                    8 * scale,
+                    inset,
+                    16 * scale,
+                  ),
                   child: bottomBar,
                 ),
               ],
@@ -174,14 +182,24 @@ class OnboardingPinnedBottomLayout extends StatelessWidget {
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(inset, 8 * scale, inset, 16 * scale),
+                  padding: EdgeInsets.fromLTRB(
+                    inset,
+                    8 * scale,
+                    inset,
+                    16 * scale,
+                  ),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   child: scrollContent,
                 ),
               ),
               Padding(
-                padding: EdgeInsets.fromLTRB(inset, 8 * scale, inset, 16 * scale),
+                padding: EdgeInsets.fromLTRB(
+                  inset,
+                  8 * scale,
+                  inset,
+                  16 * scale,
+                ),
                 child: bottomBar,
               ),
             ],

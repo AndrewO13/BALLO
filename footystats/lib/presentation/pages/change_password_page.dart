@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/account_repository.dart';
+import '../../core/theme/app_shape.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -33,15 +34,15 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     try {
       await _accountRepository.updatePassword(_passwordController.text);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Password updated')));
       Navigator.of(context).pop();
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -55,9 +56,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   Future<void> _sendResetEmail() async {
     final email = _accountRepository.currentEmail;
     if (email == null || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No email on this account')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No email on this account')));
       return;
     }
 
@@ -70,9 +71,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       );
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -86,10 +87,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Change password',
-          style: textTheme.headlineMedium,
-        ),
+        title: Text('Change password', style: textTheme.headlineMedium),
         centerTitle: false,
       ),
       body: ListView(
@@ -98,16 +96,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           if (!hasEmailPassword) ...[
             Material(
               color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: colorScheme.primary,
-                    ),
+                    Icon(Icons.info_outline, color: colorScheme.primary),
                     const SizedBox(height: 12),
                     Text(
                       'Password managed by your sign-in provider',

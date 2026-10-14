@@ -5,6 +5,7 @@ import '../../domain/models/account_type.dart';
 import '../../domain/models/onboarding_draft.dart';
 import '../widgets/onboarding_step_scaffold.dart';
 import 'onboarding_player_name_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class OnboardingAccountTypePage extends StatefulWidget {
   const OnboardingAccountTypePage({
@@ -26,9 +27,7 @@ class _OnboardingAccountTypePageState extends State<OnboardingAccountTypePage> {
     if (_selected == null) return;
     final draft = widget.draft.copyWith(accountType: _selected);
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => OnboardingPlayerNamePage(draft: draft),
-      ),
+      MaterialPageRoute(builder: (_) => OnboardingPlayerNamePage(draft: draft)),
     );
   }
 
@@ -48,8 +47,7 @@ class _OnboardingAccountTypePageState extends State<OnboardingAccountTypePage> {
         children: [
           _AccountTypeCard(
             title: 'Player',
-            subtitle:
-                'I play. Track my matches, stats and career on one card.',
+            subtitle: 'I play. Track my matches, stats and career on one card.',
             icon: Icons.sports_soccer,
             selected: _selected == AccountType.player,
             onTap: () => setState(() => _selected = AccountType.player),
@@ -61,8 +59,7 @@ class _OnboardingAccountTypePageState extends State<OnboardingAccountTypePage> {
                 'I coach, scout or represent players. Follow the talent and run the show.',
             icon: Icons.badge_outlined,
             selected: _selected == AccountType.technicalStaff,
-            onTap: () =>
-                setState(() => _selected = AccountType.technicalStaff),
+            onTap: () => setState(() => _selected = AccountType.technicalStaff),
           ),
         ],
       ),
@@ -102,7 +99,7 @@ class _AccountTypeCard extends StatelessWidget {
     return Material(
       color: background,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
         side: BorderSide(
           color: selected ? colorScheme.primary : Colors.transparent,
           width: 2,
@@ -110,7 +107,7 @@ class _AccountTypeCard extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
           child: Row(

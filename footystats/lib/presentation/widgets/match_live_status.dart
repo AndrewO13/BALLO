@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/models/match_model.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Which half of the match is in play (or half-time break).
 enum MatchHalfPhase { firstHalf, halfTime, secondHalf }
@@ -52,7 +53,8 @@ class MatchLivePulseIndicator extends StatefulWidget {
   final Color color;
 
   @override
-  State<MatchLivePulseIndicator> createState() => _MatchLivePulseIndicatorState();
+  State<MatchLivePulseIndicator> createState() =>
+      _MatchLivePulseIndicatorState();
 }
 
 class _MatchLivePulseIndicatorState extends State<MatchLivePulseIndicator>
@@ -147,10 +149,7 @@ class MatchHalfPhaseChip extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: AppShape.fullRadius),
       child: Text(
         matchHalfPhaseLabel(phase),
         style: textTheme.labelSmall?.copyWith(

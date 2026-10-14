@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/adaptive/adaptive.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/utils/dominant_image_color.dart';
 import '../../core/utils/guest_mode.dart';
@@ -35,6 +38,7 @@ import '../providers/matches_provider.dart';
 import '../providers/match_video_seen_provider.dart';
 import '../providers/seasons_provider.dart';
 import '../providers/video_upload_queue_provider.dart';
+import '../widgets/tab_body_underlap_clip.dart';
 import '../widgets/video_upload_progress_overlay.dart';
 import '../widgets/socials_section_card.dart';
 import '../widgets/performance_radar_chart.dart';
@@ -50,6 +54,7 @@ import 'create_team_league_page.dart';
 import 'fixture.dart';
 import 'matches.dart' show DodecagonIndicator;
 import 'team_detail_page.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Profile tabs and scroll layout. When [viewedPlayerId] is null, shows the signed-in user.
 class ProfileScrollView extends ConsumerStatefulWidget {
@@ -61,6 +66,8 @@ class ProfileScrollView extends ConsumerStatefulWidget {
     this.isFollowing = false,
     this.isUpdatingFollow = false,
     this.onFollow,
+    this.leading,
+    this.actions = const [],
   });
 
   /// If null, the current auth user is shown (main Profile tab).
@@ -70,6 +77,12 @@ class ProfileScrollView extends ConsumerStatefulWidget {
   final bool isFollowing;
   final bool isUpdatingFollow;
   final VoidCallback? onFollow;
+
+  /// Back control for a profile opened on its own page.
+  final Widget? leading;
+
+  /// Trailing controls kept pinned as the title collapses.
+  final List<Widget> actions;
 
   @override
   ConsumerState<ProfileScrollView> createState() => _ProfileScrollViewState();
@@ -81,6 +94,10 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
   late final TabController _tabController;
   late final bool _showMatchesTab;
   bool _isHeaderCollapsed = false;
+  final _identityReveal = ValueNotifier<double>(0);
+  String? _barName;
+  String? _barTeam;
+  String? _barImage;
   Color? _headerTabBackdrop;
   int _tabViewGeneration = 0;
   int _lastTabIndex = 0;
@@ -93,6 +110,42 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
       ..addListener(_handleOuterScroll);
     _tabController = TabController(length: _showMatchesTab ? 5 : 4, vsync: this)
       ..addListener(_handleTabIndexChanged);
+    final viewedId = widget.viewedPlayerId;
+    if (viewedId != null && viewedId.isNotEmpty) {
+      _loadBarIdentity(viewedId);
+    }
+  }
+
+  Future<void> _loadBarIdentity(String playerId) async {
+    try {
+      final profile = await UserProfileRepository().getProfileByPlayerId(
+        playerId,
+      );
+      final stints = await TeamsRepository().getMembershipHistoryForPlayer(
+        playerId,
+      );
+      if (!mounted || widget.viewedPlayerId != playerId) return;
+      TeamMembershipStint? current;
+      for (final stint in stints) {
+        if (stint.isCurrent) {
+          current = stint;
+          break;
+        }
+      }
+      final name = profile?.playerName?.trim();
+      final username = profile?.username?.trim();
+      final teamName = current?.teamName?.trim();
+      final shortForm = current?.shortForm?.trim();
+      setState(() {
+        _barName = (name != null && name.isNotEmpty)
+            ? name
+            : (username != null && username.isNotEmpty ? username : 'Player');
+        _barTeam = (teamName != null && teamName.isNotEmpty)
+            ? teamName
+            : (shortForm != null && shortForm.isNotEmpty ? shortForm : null);
+        _barImage = profile?.imageUrl;
+      });
+    } catch (_) {}
   }
 
   void _handleTabIndexChanged() {
@@ -115,10 +168,27 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
     final collapsed =
         _outerScrollController.hasClients &&
         _outerScrollController.offset > 0.5;
-    if (collapsed == _isHeaderCollapsed) return;
-    setState(() {
-      _isHeaderCollapsed = collapsed;
-    });
+    if (collapsed != _isHeaderCollapsed) {
+      setState(() {
+        _isHeaderCollapsed = collapsed;
+      });
+    }
+    if (widget.viewedPlayerId == null || !_outerScrollController.hasClients) {
+      return;
+    }
+    const collapseRange = 240.0 - (kTextTabBarHeight + 2);
+    final progress = (_outerScrollController.offset / collapseRange).clamp(
+      0.0,
+      1.0,
+    );
+    final reveal = ((progress - 0.4) / 0.6).clamp(0.0, 1.0);
+    if (reveal != 0 &&
+        reveal != 1 &&
+        (_identityReveal.value - reveal).abs() < 0.02) {
+      return;
+    }
+    if (_identityReveal.value == reveal) return;
+    _identityReveal.value = reveal;
   }
 
   void _onHeaderTabBackdrop(Color backdrop) {
@@ -130,6 +200,7 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
 
   @override
   void dispose() {
+    _identityReveal.dispose();
     _outerScrollController.removeListener(_handleOuterScroll);
     _outerScrollController.dispose();
     _tabController.removeListener(_handleTabIndexChanged);
@@ -173,45 +244,83 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
     final expandedTabColor = onDominantCardColor(tabBackdrop);
     final expandedTabMuted = onDominantCardMutedColor(tabBackdrop);
 
-    return DefaultTabController(
-      length: _showMatchesTab ? 5 : 4,
-      child: NestedScrollView(
-        controller: _outerScrollController,
-        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              pinned: true,
-              primary: false,
-              toolbarHeight: 0,
-              expandedHeight: 240,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              shadowColor: Colors.transparent,
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              flexibleSpace: FlexibleSpaceBar(
-                collapseMode: CollapseMode.parallax,
-                background: Builder(
-                  builder: (context) {
-                    final settings = context
-                        .dependOnInheritedWidgetOfExactType<
-                          FlexibleSpaceBarSettings
-                        >();
-                    final minExtent = settings?.minExtent ?? kToolbarHeight;
-                    final maxExtent = settings?.maxExtent ?? 240;
-                    final currentExtent = settings?.currentExtent ?? maxExtent;
-                    final collapseRange = (maxExtent - minExtent).clamp(
-                      1.0,
-                      double.infinity,
-                    );
-                    final t = ((currentExtent - minExtent) / collapseRange)
-                        .clamp(0.0, 1.0);
-                    // Keep a little opacity near collapsed state for smoother transition.
-                    final fadeOpacity = (0.15 + (0.85 * t)).clamp(0.0, 1.0);
-                    return Opacity(
-                      opacity: fadeOpacity,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 16.0),
+    final top = MediaQuery.paddingOf(context).top;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final titleHeight = 40 * 0.95 * textScale;
+    final hasChrome = widget.leading != null || widget.actions.isNotEmpty;
+    final pinnedControls = hasChrome ? 48.0 : 0.0;
+    final showTitle = widget.viewedPlayerId == null;
+    final titleBlock = 16 + titleHeight + 20;
+    final titleExtent = showTitle
+        ? (titleBlock < pinnedControls ? pinnedControls : titleBlock)
+        : pinnedControls;
+    final inset = AppResponsive.horizontalInset(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+      ),
+      child: DefaultTabController(
+        length: _showMatchesTab ? 5 : 4,
+        child: NestedScrollView(
+          controller: _outerScrollController,
+          headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+            return [
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _ProfileHeaderDelegate(
+                  top: top,
+                  inset: inset,
+                  titleExtent: titleExtent < pinnedControls
+                      ? pinnedControls
+                      : titleExtent,
+                  titleHeight: titleHeight,
+                  pinnedControls: pinnedControls,
+                  leading: widget.leading,
+                  actions: widget.actions,
+                  identityReveal: widget.viewedPlayerId == null
+                      ? null
+                      : _identityReveal,
+                  identityName: _barName,
+                  identityTeam: _barTeam,
+                  identityImage: _barImage,
+                ),
+              ),
+              SliverAppBar(
+                pinned: true,
+                primary: false,
+                toolbarHeight: 0,
+                expandedHeight: 240,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                shadowColor: Colors.transparent,
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.parallax,
+                  background: Builder(
+                    builder: (context) {
+                      final settings = context
+                          .dependOnInheritedWidgetOfExactType<
+                            FlexibleSpaceBarSettings
+                          >();
+                      final minExtent = settings?.minExtent ?? kToolbarHeight;
+                      final maxExtent = settings?.maxExtent ?? 240;
+                      final currentExtent =
+                          settings?.currentExtent ?? maxExtent;
+                      final collapseRange = (maxExtent - minExtent).clamp(
+                        1.0,
+                        double.infinity,
+                      );
+                      final t = ((currentExtent - minExtent) / collapseRange)
+                          .clamp(0.0, 1.0);
+                      // Keep a little opacity near collapsed state for smoother transition.
+                      final fadeOpacity = (0.15 + (0.85 * t)).clamp(0.0, 1.0);
+                      return Opacity(
+                        opacity: fadeOpacity,
                         child: _ProfileCard(
                           playerId: effectiveId,
                           showEditButton: isOwnProfile,
@@ -222,146 +331,153 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
                           refreshTick: widget.refreshTick,
                           onTabBackdrop: _onHeaderTabBackdrop,
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(kTextTabBarHeight + 2),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOut,
-                  decoration: BoxDecoration(
-                    color: _isHeaderCollapsed
-                        ? colorScheme.surface
-                        : Colors.transparent,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: colorScheme.outlineVariant,
-                        width: 1,
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(kTextTabBarHeight + 2),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    decoration: BoxDecoration(
+                      color: _isHeaderCollapsed
+                          ? colorScheme.surface
+                          : Colors.transparent,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: colorScheme.outlineVariant,
+                          width: 1,
+                        ),
                       ),
                     ),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    isScrollable: false,
-                    tabAlignment: TabAlignment.fill,
-                    labelPadding: EdgeInsets.zero,
-                    indicatorPadding: EdgeInsets.zero,
-                    dividerHeight: 0,
-                    labelColor: _isHeaderCollapsed
-                        ? colorScheme.onSurface
-                        : expandedTabColor,
-                    unselectedLabelColor: _isHeaderCollapsed
-                        ? colorScheme.onSurfaceVariant
-                        : expandedTabMuted,
-                    indicatorColor: _isHeaderCollapsed
-                        ? colorScheme.primary
-                        : expandedTabColor,
-                    indicatorWeight: 3,
-                    dividerColor: Colors.transparent,
-                    tabs: _showMatchesTab
-                        ? const [
-                            Tab(text: 'Overview'),
-                            Tab(text: 'Matches'),
-                            Tab(text: 'Stats'),
-                            Tab(text: 'Career'),
-                            Tab(text: 'Video'),
-                          ]
-                        : const [
-                            Tab(text: 'Overview'),
-                            Tab(text: 'Stats'),
-                            Tab(text: 'Career'),
-                            Tab(text: 'Video'),
-                          ],
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: false,
+                      tabAlignment: TabAlignment.fill,
+                      labelPadding: EdgeInsets.zero,
+                      indicatorPadding: EdgeInsets.zero,
+                      dividerHeight: 0,
+                      labelColor: _isHeaderCollapsed
+                          ? colorScheme.onSurface
+                          : expandedTabColor,
+                      unselectedLabelColor: _isHeaderCollapsed
+                          ? colorScheme.onSurfaceVariant
+                          : expandedTabMuted,
+                      indicatorColor: _isHeaderCollapsed
+                          ? colorScheme.primary
+                          : expandedTabColor,
+                      indicatorWeight: 3,
+                      dividerColor: Colors.transparent,
+                      tabs: _showMatchesTab
+                          ? const [
+                              Tab(text: 'Overview'),
+                              Tab(text: 'Matches'),
+                              Tab(text: 'Stats'),
+                              Tab(text: 'Career'),
+                              Tab(text: 'Video'),
+                            ]
+                          : const [
+                              Tab(text: 'Overview'),
+                              Tab(text: 'Stats'),
+                              Tab(text: 'Career'),
+                              Tab(text: 'Video'),
+                            ],
+                    ),
                   ),
                 ),
               ),
+            ];
+          },
+          body: TabBodyUnderlapClip(
+            controller: _outerScrollController,
+            barMaxExtent: top + titleExtent,
+            barMinExtent: top + pinnedControls,
+            heroMaxExtent: 240,
+            heroMinExtent: kTextTabBarHeight + 2,
+            child: TabBarView(
+              controller: _tabController,
+              children: _showMatchesTab
+                  ? [
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-0-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Overview',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                          onGoToMatchesTab: () => _tabController.animateTo(1),
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-1-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Matches',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-2-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Stats',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-3-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Career',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-4-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Video',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                    ]
+                  : [
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-0-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Overview',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                          onGoToMatchesTab: () => _tabController.animateTo(1),
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-1-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Stats',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-2-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Career',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: ValueKey('profile-tab-3-$_tabViewGeneration'),
+                        child: _ProfileTabContent(
+                          title: 'Video',
+                          profilePlayerId: effectiveId,
+                          isOwnProfile: isOwnProfile,
+                        ),
+                      ),
+                    ],
             ),
-          ];
-        },
-        body: TabBarView(
-          controller: _tabController,
-          children: _showMatchesTab
-              ? [
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-0-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Overview',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                      onGoToMatchesTab: () => _tabController.animateTo(1),
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-1-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Matches',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-2-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Stats',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-3-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Career',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-4-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Video',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                ]
-              : [
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-0-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Overview',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                      onGoToMatchesTab: () => _tabController.animateTo(1),
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-1-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Stats',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-2-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Career',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                  KeyedSubtree(
-                    key: ValueKey('profile-tab-3-$_tabViewGeneration'),
-                    child: _ProfileTabContent(
-                      title: 'Video',
-                      profilePlayerId: effectiveId,
-                      isOwnProfile: isOwnProfile,
-                    ),
-                  ),
-                ],
+          ),
         ),
       ),
     );
@@ -369,10 +485,268 @@ class _ProfileScrollViewState extends ConsumerState<ProfileScrollView>
 }
 
 class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({super.key, this.actions = const []});
+
+  final List<Widget> actions;
 
   @override
-  Widget build(BuildContext context) => const ProfileScrollView();
+  Widget build(BuildContext context) => ProfileScrollView(actions: actions);
+}
+
+class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _ProfileHeaderDelegate({
+    required this.top,
+    required this.inset,
+    required this.titleExtent,
+    required this.titleHeight,
+    required this.pinnedControls,
+    required this.leading,
+    required this.actions,
+    this.identityReveal,
+    this.identityName,
+    this.identityTeam,
+    this.identityImage,
+  });
+
+  final double top;
+  final double inset;
+  final double titleExtent;
+  final double titleHeight;
+  final double pinnedControls;
+  final Widget? leading;
+  final List<Widget> actions;
+  final ValueNotifier<double>? identityReveal;
+  final String? identityName;
+  final String? identityTeam;
+  final String? identityImage;
+
+  @override
+  double get maxExtent => top + titleExtent;
+
+  @override
+  double get minExtent => top + pinnedControls;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final shrinkRange = titleExtent - pinnedControls;
+    final t = shrinkRange <= 0
+        ? 1.0
+        : (shrinkOffset / shrinkRange).clamp(0.0, 1.0);
+    final titleSpace = (titleExtent - shrinkOffset).clamp(
+      pinnedControls,
+      titleExtent,
+    );
+    final expandedIconTop = (16 + (titleHeight - pinnedControls) / 2).clamp(
+      0.0,
+      titleExtent,
+    );
+    final iconTop = expandedIconTop * (1 - t);
+    final titleLeft = leading == null ? inset : 48.0;
+    final titleRight = inset + actions.length * 48;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: overlapsContent
+            ? Border(
+                bottom: BorderSide(
+                  color: scheme.outlineVariant.withValues(alpha: 0.65),
+                ),
+              )
+            : null,
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: top + titleExtent,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    scheme.primary.withValues(alpha: 0.18 * (1 - t)),
+                    scheme.surface.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Column(
+            children: [
+              SizedBox(height: top),
+              SizedBox(
+                height: titleSpace,
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topCenter,
+                        minHeight: titleExtent,
+                        maxHeight: titleExtent,
+                        child: Opacity(
+                          opacity: (1 - t).clamp(0.0, 1.0),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              titleLeft,
+                              16,
+                              titleRight,
+                              20,
+                            ),
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: ExcludeSemantics(
+                                excluding: t > 0.5,
+                                child: Semantics(
+                                  header: true,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'PROFILE',
+                                      style: GoogleFonts.anton(
+                                        fontSize: 40,
+                                        height: 0.95,
+                                        letterSpacing: 0.6,
+                                        color: scheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (leading != null || actions.isNotEmpty)
+                      Positioned(
+                        top: iconTop,
+                        left: 0,
+                        right: 0,
+                        height: pinnedControls,
+                        child: Row(
+                          children: [
+                            if (leading != null)
+                              leading!
+                            else
+                              SizedBox(width: inset),
+                            if (identityReveal != null)
+                              Expanded(
+                                child: _CollapsedPlayerIdentity(
+                                  reveal: identityReveal!,
+                                  name: identityName,
+                                  team: identityTeam,
+                                  imageUrl: identityImage,
+                                ),
+                              )
+                            else
+                              const Spacer(),
+                            ...actions,
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _ProfileHeaderDelegate oldDelegate) => true;
+}
+
+class _CollapsedPlayerIdentity extends StatelessWidget {
+  const _CollapsedPlayerIdentity({
+    required this.reveal,
+    required this.name,
+    required this.team,
+    required this.imageUrl,
+  });
+
+  final ValueNotifier<double> reveal;
+  final String? name;
+  final String? team;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return ValueListenableBuilder<double>(
+      valueListenable: reveal,
+      builder: (context, value, _) {
+        final curved = Curves.easeOutCubic.transform(value);
+        final label = name;
+        if (curved <= 0 || label == null || label.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final teamLabel = team;
+        return ClipRect(
+          child: Opacity(
+            opacity: curved,
+            child: Transform.translate(
+              offset: Offset(8 * (1 - curved), 6 * (1 - curved)),
+              child: Row(
+                children: [
+                  buildPlayerAvatar(
+                    imagePath: imageUrl,
+                    size: 32,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    iconColor: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            height: 1.1,
+                          ),
+                        ),
+                        if (teamLabel != null && teamLabel.isNotEmpty)
+                          Text(
+                            teamLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              height: 1.1,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _ProfileTabContent extends StatelessWidget {
@@ -1176,7 +1550,7 @@ class _ProfileMatchesTabState extends ConsumerState<_ProfileMatchesTab> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1228,7 +1602,7 @@ class _ProfileMatchesTabState extends ConsumerState<_ProfileMatchesTab> {
             MaterialPageRoute(builder: (_) => FixturePage(matchId: match.id)),
           );
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.mediumRadius,
         child: Container(
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1437,7 +1811,7 @@ class _SeasonOverallSection extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1521,7 +1895,7 @@ class _SeasonOverallSection extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppShape.largeRadius,
                           ),
                           child: Text(
                             ratingText,
@@ -1670,7 +2044,7 @@ class _PlayerYearTeamStatsSectionState
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppShape.largeRadius,
             ),
             child: Text(
               value,
@@ -1746,7 +2120,7 @@ class _PlayerYearTeamStatsSectionState
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1821,7 +2195,7 @@ class _PlayerYearTeamStatsSectionState
                         },
                         borderRadius: BorderRadius.vertical(
                           bottom: isLast && !isExpanded
-                              ? const Radius.circular(28)
+                              ? const Radius.circular(AppShape.medium)
                               : Radius.zero,
                         ),
                         child: Padding(
@@ -1929,7 +2303,7 @@ class _AllTimeStatsSection extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppShape.largeRadius,
               ),
               child: Text(
                 value,
@@ -1973,7 +2347,7 @@ class _AllTimeStatsSection extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2120,7 +2494,7 @@ class _CareerTeamStatsSectionState extends State<_CareerTeamStatsSection> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppShape.largeRadius,
             ),
             child: Text(
               value,
@@ -2185,7 +2559,7 @@ class _CareerTeamStatsSectionState extends State<_CareerTeamStatsSection> {
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2249,7 +2623,7 @@ class _CareerTeamStatsSectionState extends State<_CareerTeamStatsSection> {
                         },
                         borderRadius: BorderRadius.vertical(
                           bottom: isLast && !isExpanded
-                              ? const Radius.circular(28)
+                              ? const Radius.circular(AppShape.medium)
                               : Radius.zero,
                         ),
                         child: Padding(
@@ -2453,7 +2827,7 @@ class _AttributesSectionState extends State<_AttributesSection> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2531,8 +2905,7 @@ class _AttributesSectionState extends State<_AttributesSection> {
               // Text field
               Expanded(
                 child: Focus(
-                  canRequestFocus:
-                      ModalRoute.of(context)?.isCurrent ?? true,
+                  canRequestFocus: ModalRoute.of(context)?.isCurrent ?? true,
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
@@ -2545,7 +2918,9 @@ class _AttributesSectionState extends State<_AttributesSection> {
                               child: SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             )
                           : (_searchController.text.isNotEmpty
@@ -2571,7 +2946,7 @@ class _AttributesSectionState extends State<_AttributesSection> {
             Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppShape.mediumRadius,
                 border: Border.all(
                   color: Theme.of(
                     context,
@@ -2653,7 +3028,7 @@ class _ProfileOverviewSectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3053,7 +3428,7 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                         await _loadMatchesForTeam(t.id);
                       },
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: AppShape.largeIncreasedRadius,
                       ),
                     ),
                   );
@@ -3122,15 +3497,14 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                         Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppShape.largeRadius,
                             onTap: opponent.id.isEmpty
                                 ? null
                                 : () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (_) => TeamDetailPage(
-                                          teamId: opponent.id,
-                                        ),
+                                        builder: (_) =>
+                                            TeamDetailPage(teamId: opponent.id),
                                       ),
                                     );
                                   },
@@ -3162,7 +3536,7 @@ class _TeamFormSectionState extends State<_TeamFormSection> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: scoreColor,
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: AppShape.largeRadius,
                                   ),
                                   child: Text(
                                     scoreText,
@@ -3450,7 +3824,7 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
                     ),
                     side: BorderSide(color: colorScheme.outline),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: AppShape.largeIncreasedRadius,
                     ),
                   ),
                   child: busy
@@ -3475,7 +3849,7 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
                     ),
                     side: BorderSide(color: colorScheme.outline),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: AppShape.largeIncreasedRadius,
                     ),
                   ),
                   child: busy
@@ -3500,7 +3874,7 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
                     ),
                     side: BorderSide(color: colorScheme.outlineVariant),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: AppShape.largeIncreasedRadius,
                     ),
                   ),
                   child: Text(
@@ -3518,7 +3892,7 @@ class _ClubHistorySectionState extends State<_ClubHistorySection> {
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppShape.largeRadius,
                     onTap: stint.teamId.isEmpty
                         ? null
                         : () {
@@ -3769,7 +4143,7 @@ class _TrophiesSectionState extends State<_TrophiesSection> {
                         await _loadTrophiesForTeam(t.id);
                       },
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: AppShape.largeIncreasedRadius,
                       ),
                     ),
                   );
@@ -3871,7 +4245,7 @@ class _ProfileTrophyLeagueThumb extends StatelessWidget {
     }
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppShape.smallRadius,
         child: Image(
           image: appCachedImageProvider(path),
           width: 36,
@@ -4089,8 +4463,8 @@ class _ProfileCardState extends State<_ProfileCard> {
 
         return ClipRRect(
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
+            topLeft: Radius.circular(AppShape.medium),
+            topRight: Radius.circular(AppShape.medium),
           ),
           child: Container(
             width: double.infinity,
@@ -4165,20 +4539,22 @@ class _ProfileCardState extends State<_ProfileCard> {
                                                 : EditManagedPlayerPage(
                                                     player:
                                                         ManagedPlayer.fromProfile(
-                                                      id: profile.id,
-                                                      playerName:
-                                                          profile.playerName ??
-                                                          'Player',
-                                                      username:
-                                                          profile.username ??
-                                                          '',
-                                                      position:
-                                                          profile.position,
-                                                      imageUrl:
-                                                          profile.imageUrl,
-                                                      loginEnabledAt: profile
-                                                          .loginEnabledAt,
-                                                    ),
+                                                          id: profile.id,
+                                                          playerName:
+                                                              profile
+                                                                  .playerName ??
+                                                              'Player',
+                                                          username:
+                                                              profile
+                                                                  .username ??
+                                                              '',
+                                                          position:
+                                                              profile.position,
+                                                          imageUrl:
+                                                              profile.imageUrl,
+                                                          loginEnabledAt: profile
+                                                              .loginEnabledAt,
+                                                        ),
                                                   ),
                                           ),
                                         );
@@ -4191,7 +4567,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                             style: FilledButton.styleFrom(
                               shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.all(
-                                  Radius.circular(999),
+                                  Radius.circular(AppShape.full),
                                 ),
                               ),
                               padding: const EdgeInsets.only(
@@ -4219,7 +4595,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                                   : colorScheme.onPrimaryContainer,
                               shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.all(
-                                  Radius.circular(999),
+                                  Radius.circular(AppShape.full),
                                 ),
                               ),
                               padding: const EdgeInsets.only(
@@ -4962,10 +5338,10 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
           child: Container(
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -4980,7 +5356,7 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black54,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: AppShape.smallRadius,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -5022,10 +5398,10 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
       child: Container(
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -5062,7 +5438,7 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5103,7 +5479,7 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
                         ),
                         decoration: BoxDecoration(
                           color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppShape.smallRadius,
                         ),
                         child: Text(
                           v.matchStatus,
@@ -5181,7 +5557,7 @@ class _ProfileVideosTabState extends ConsumerState<ProfileVideosTab> {
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5319,7 +5695,7 @@ class _ActionChip extends StatelessWidget {
       backgroundColor: colorScheme.surfaceContainerHighest,
       side: BorderSide.none,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(999), // Fully rounded
+        borderRadius: AppShape.fullRadius, // Fully rounded
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );

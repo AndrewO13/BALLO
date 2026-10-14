@@ -10,9 +10,10 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/theme.dart';
 import '../../core/utils/guest_mode.dart';
-import 'home_page.dart';
+import 'guest_add_favourites_page.dart';
 import 'login_page.dart';
 import 'onboarding_account_type_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -58,7 +59,7 @@ class _WelcomePageState extends State<WelcomePage> {
       await GuestMode.signIn();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => const GuestAddFavouritesPage()),
         (route) => false,
       );
     } on AuthException catch (e) {
@@ -135,163 +136,152 @@ class _WelcomePageState extends State<WelcomePage> {
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-            final metrics = _WelcomeLayoutMetrics.of(constraints);
-            final buttonInset =
-                AppConstants.onboardingEdgeInset(constraints.maxWidth);
-            final contentInset = AppConstants.onboardingEdgeInset(
-              constraints.maxWidth.clamp(0.0, 420.0),
-            );
-            final image = _WelcomeSlideImage(asset: slide.imageAsset);
+                final metrics = _WelcomeLayoutMetrics.of(constraints);
+                final buttonInset = AppConstants.onboardingEdgeInset(
+                  constraints.maxWidth,
+                );
+                final contentInset = AppConstants.onboardingEdgeInset(
+                  constraints.maxWidth.clamp(0.0, 420.0),
+                );
+                final image = _WelcomeSlideImage(asset: slide.imageAsset);
 
-            final slides = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: SvgPicture.asset(
-                    AppAssets.balloLogo,
-                    height: metrics.logoHeight,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                SizedBox(height: metrics.gapAfterLogo),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 350),
-                  child: FittedBox(
-                    key: ValueKey<String>(slide.heading),
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      slide.heading,
-                      textAlign: TextAlign.center,
+                final slides = Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: SvgPicture.asset(
+                        AppAssets.balloLogo,
+                        height: metrics.logoHeight,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    SizedBox(height: metrics.gapAfterLogo),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      child: FittedBox(
+                        key: ValueKey<String>(slide.heading),
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          slide.heading,
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.anton(
                             fontSize: 32,
-                        height: 1.1,
+                            height: 1.1,
                             color: onImage,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: metrics.gapAfterHeading),
-                if (metrics.useFlexImage)
-                  Expanded(child: image)
-                else
-                  SizedBox(
-                    height: metrics.fixedImageHeight,
-                    child: image,
-                  ),
-                SizedBox(height: metrics.gapAfterImage),
-                _SlideIndicators(
-                  count: _slides.length,
-                  currentIndex: _currentIndex,
-                  activeColor: primary,
-                  inactiveColor: onImage.withValues(alpha: 0.28),
-                  onDotTap: _goToSlide,
-                ),
-                SizedBox(height: metrics.gapAfterIndicators),
-              ],
-            );
-
-            final framedSlides = Align(
-              alignment: Alignment.topCenter,
-              heightFactor: metrics.useFlexImage ? null : 1,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: contentInset),
-                  child: slides,
-                ),
-              ),
-            );
-
-            final buttons = Padding(
-              padding: EdgeInsets.fromLTRB(
-                buttonInset,
-                0,
-                buttonInset,
-                metrics.bottomPadding,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const OnboardingAccountTypePage(),
-                        ),
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: primary,
-                      foregroundColor: onPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                    ),
-                    child: const Text('Get started'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LoginPage(),
-                        ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: secondary, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      foregroundColor: secondary,
-                    ),
-                    child: const Text('I already have an account'),
-                  ),
-                  const SizedBox(height: 4),
-                  TextButton(
-                    onPressed: _isGuestSigningIn ? null : _continueAsGuest,
-                    style: TextButton.styleFrom(
-                      foregroundColor: secondary,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: _isGuestSigningIn
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: secondary,
-                            ),
-                          )
-                        : const Text(
-                            'Just here to watch? Continue as a guest',
-                            textAlign: TextAlign.center,
                           ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: metrics.gapAfterHeading),
+                    if (metrics.useFlexImage)
+                      Expanded(child: image)
+                    else
+                      SizedBox(height: metrics.fixedImageHeight, child: image),
+                    SizedBox(height: metrics.gapAfterImage),
+                    _SlideIndicators(
+                      count: _slides.length,
+                      currentIndex: _currentIndex,
+                      activeColor: primary,
+                      inactiveColor: onImage.withValues(alpha: 0.28),
+                      onDotTap: _goToSlide,
+                    ),
+                    SizedBox(height: metrics.gapAfterIndicators),
+                  ],
+                );
+
+                final framedSlides = Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: metrics.useFlexImage ? null : 1,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: contentInset),
+                      child: slides,
+                    ),
                   ),
-                ],
-              ),
-            );
+                );
 
-            if (metrics.useFlexImage) {
-              return Column(
-                children: [
-                  Expanded(child: framedSlides),
-                  buttons,
-                ],
-              );
-            }
+                final buttons = Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    buttonInset,
+                    0,
+                    buttonInset,
+                    metrics.bottomPadding,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const OnboardingAccountTypePage(),
+                            ),
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: primary,
+                          foregroundColor: onPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: const StadiumBorder(),
+                        ),
+                        child: const Text('Get started'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginPage(),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: secondary, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: const StadiumBorder(),
+                          foregroundColor: secondary,
+                        ),
+                        child: const Text('I already have an account'),
+                      ),
+                      const SizedBox(height: 4),
+                      TextButton(
+                        onPressed: _isGuestSigningIn ? null : _continueAsGuest,
+                        style: TextButton.styleFrom(
+                          foregroundColor: secondary,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: _isGuestSigningIn
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: secondary,
+                                ),
+                              )
+                            : const Text(
+                                'Just here to watch? Continue as a guest',
+                                textAlign: TextAlign.center,
+                              ),
+                      ),
+                    ],
+                  ),
+                );
 
-            return SingleChildScrollView(
-              child: Column(
-                children: [
-                  framedSlides,
-                  buttons,
-                ],
-              ),
-            );
+                if (metrics.useFlexImage) {
+                  return Column(
+                    children: [
+                      Expanded(child: framedSlides),
+                      buttons,
+                    ],
+                  );
+                }
+
+                return SingleChildScrollView(
+                  child: Column(children: [framedSlides, buttons]),
+                );
               },
             ),
           ),
@@ -324,10 +314,26 @@ class _WelcomeLayoutMetrics {
 
     return _WelcomeLayoutMetrics(
       logoHeight: tight ? 22.0 : 28.0,
-      gapAfterLogo: tight ? 8.0 : compact ? 12.0 : 20.0,
-      gapAfterHeading: tight ? 8.0 : compact ? 12.0 : 20.0,
-      gapAfterImage: tight ? 8.0 : compact ? 12.0 : 16.0,
-      gapAfterIndicators: tight ? 12.0 : compact ? 16.0 : 24.0,
+      gapAfterLogo: tight
+          ? 8.0
+          : compact
+          ? 12.0
+          : 20.0,
+      gapAfterHeading: tight
+          ? 8.0
+          : compact
+          ? 12.0
+          : 20.0,
+      gapAfterImage: tight
+          ? 8.0
+          : compact
+          ? 12.0
+          : 16.0,
+      gapAfterIndicators: tight
+          ? 12.0
+          : compact
+          ? 16.0
+          : 24.0,
       bottomPadding: tight ? 4.0 : 8.0,
       useFlexImage: height >= 620,
       fixedImageHeight: (innerWidth * 1.15).clamp(180.0, 320.0),
@@ -355,7 +361,7 @@ class _WelcomeSlideImage extends StatelessWidget {
       duration: const Duration(milliseconds: 350),
       child: ClipRRect(
         key: ValueKey<String>(asset),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppShape.largeIncreasedRadius,
         child: Image.asset(
           asset,
           width: double.infinity,

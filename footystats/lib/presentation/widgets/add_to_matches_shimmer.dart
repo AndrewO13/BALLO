@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/widgets/app_shimmer.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Skeleton for Add to matches: create cards, then leagues and teams lists.
 class AddToMatchesPageShimmer extends StatelessWidget {
-  const AddToMatchesPageShimmer({
-    super.key,
-    this.includeStaffSections = false,
-  });
+  const AddToMatchesPageShimmer({super.key, this.includeStaffSections = false});
 
   final bool includeStaffSections;
 
@@ -19,7 +17,13 @@ class AddToMatchesPageShimmer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AppShimmer(child: ShimmerBox(width: 220, height: 20, borderRadius: 6)),
+          const AppShimmer(
+            child: ShimmerBox(
+              width: 220,
+              height: 20,
+              borderRadius: AppShape.small,
+            ),
+          ),
           const SizedBox(height: 16),
           const _ChoiceCardShimmer(),
           const SizedBox(height: 12),
@@ -31,13 +35,25 @@ class AddToMatchesPageShimmer extends StatelessWidget {
             const _ChoiceCardShimmer(),
           ],
           const SizedBox(height: 32),
-          const AppShimmer(child: ShimmerBox(width: 88, height: 20, borderRadius: 6)),
+          const AppShimmer(
+            child: ShimmerBox(
+              width: 88,
+              height: 20,
+              borderRadius: AppShape.small,
+            ),
+          ),
           const SizedBox(height: 16),
           const _ItemCardShimmer(),
           const SizedBox(height: 12),
           const _ItemCardShimmer(),
           const SizedBox(height: 32),
-          const AppShimmer(child: ShimmerBox(width: 72, height: 20, borderRadius: 6)),
+          const AppShimmer(
+            child: ShimmerBox(
+              width: 72,
+              height: 20,
+              borderRadius: AppShape.small,
+            ),
+          ),
           const SizedBox(height: 16),
           const _ItemCardShimmer(),
           const SizedBox(height: 12),
@@ -45,7 +61,11 @@ class AddToMatchesPageShimmer extends StatelessWidget {
           if (includeStaffSections) ...[
             const SizedBox(height: 32),
             const AppShimmer(
-              child: ShimmerBox(width: 160, height: 20, borderRadius: 6),
+              child: ShimmerBox(
+                width: 160,
+                height: 20,
+                borderRadius: AppShape.small,
+              ),
             ),
             const SizedBox(height: 16),
             const _PlayerCardShimmer(),
@@ -67,28 +87,44 @@ class _ChoiceCardShimmer extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       padding: const EdgeInsets.all(16),
       child: const AppShimmer(
         child: Row(
           children: [
-            ShimmerBox(width: 40, height: 40, borderRadius: 999),
+            ShimmerBox(width: 40, height: 40, borderRadius: AppShape.full),
             SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ShimmerBox(width: 120, height: 16, borderRadius: 4),
+                  ShimmerBox(
+                    width: 120,
+                    height: 16,
+                    borderRadius: AppShape.extraSmall,
+                  ),
                   SizedBox(height: 8),
-                  ShimmerBox(width: double.infinity, height: 12, borderRadius: 4),
+                  ShimmerBox(
+                    width: double.infinity,
+                    height: 12,
+                    borderRadius: AppShape.extraSmall,
+                  ),
                   SizedBox(height: 4),
-                  ShimmerBox(width: 180, height: 12, borderRadius: 4),
+                  ShimmerBox(
+                    width: 180,
+                    height: 12,
+                    borderRadius: AppShape.extraSmall,
+                  ),
                 ],
               ),
             ),
             SizedBox(width: 12),
-            ShimmerBox(width: 20, height: 20, borderRadius: 4),
+            ShimmerBox(
+              width: 20,
+              height: 20,
+              borderRadius: AppShape.extraSmall,
+            ),
           ],
         ),
       ),
@@ -105,17 +141,23 @@ class _ItemCardShimmer extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       padding: const EdgeInsets.all(16),
       child: const AppShimmer(
         child: Row(
           children: [
-            ShimmerBox(width: 48, height: 48, borderRadius: 999),
+            ShimmerBox(width: 48, height: 48, borderRadius: AppShape.full),
             SizedBox(width: 16),
-            Expanded(child: ShimmerBox(height: 16, borderRadius: 4)),
+            Expanded(
+              child: ShimmerBox(height: 16, borderRadius: AppShape.extraSmall),
+            ),
             SizedBox(width: 12),
-            ShimmerBox(width: 20, height: 20, borderRadius: 4),
+            ShimmerBox(
+              width: 20,
+              height: 20,
+              borderRadius: AppShape.extraSmall,
+            ),
           ],
         ),
       ),
@@ -132,23 +174,35 @@ class _PlayerCardShimmer extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       padding: const EdgeInsets.all(16),
       child: const AppShimmer(
         child: Row(
           children: [
-            ShimmerBox(width: 48, height: 48, borderRadius: 999),
+            ShimmerBox(width: 48, height: 48, borderRadius: AppShape.full),
             SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ShimmerBox(width: 140, height: 16, borderRadius: 4),
+                  ShimmerBox(
+                    width: 140,
+                    height: 16,
+                    borderRadius: AppShape.extraSmall,
+                  ),
                   SizedBox(height: 6),
-                  ShimmerBox(width: 110, height: 12, borderRadius: 4),
+                  ShimmerBox(
+                    width: 110,
+                    height: 12,
+                    borderRadius: AppShape.extraSmall,
+                  ),
                   SizedBox(height: 10),
-                  ShimmerBox(width: 88, height: 12, borderRadius: 4),
+                  ShimmerBox(
+                    width: 88,
+                    height: 12,
+                    borderRadius: AppShape.extraSmall,
+                  ),
                 ],
               ),
             ),
@@ -156,9 +210,17 @@ class _PlayerCardShimmer extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                ShimmerBox(width: 48, height: 16, borderRadius: 4),
+                ShimmerBox(
+                  width: 48,
+                  height: 16,
+                  borderRadius: AppShape.extraSmall,
+                ),
                 SizedBox(height: 12),
-                ShimmerBox(width: 72, height: 16, borderRadius: 4),
+                ShimmerBox(
+                  width: 72,
+                  height: 16,
+                  borderRadius: AppShape.extraSmall,
+                ),
               ],
             ),
           ],

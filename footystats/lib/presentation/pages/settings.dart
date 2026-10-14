@@ -11,6 +11,7 @@ import 'account_email_page.dart';
 import 'change_password_page.dart';
 import 'edit_profile_page.dart';
 import 'welcome_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -289,10 +290,10 @@ class _SettingsItem extends StatelessWidget {
 
     return Material(
       color: colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: AppShape.mediumRadius,
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: const RoundedRectangleBorder(borderRadius: AppShape.card),
         leading: Icon(icon, color: titleColor ?? colorScheme.onSurface),
         title: Text(
           title,

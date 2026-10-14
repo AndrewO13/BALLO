@@ -43,8 +43,9 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
       if (!mounted) return;
       // Guests are already signed in anonymously. The auth stream replays
       // that `signedIn` event to new listeners, which would bounce this
@@ -106,17 +107,15 @@ class _LoginPageState extends State<LoginPage> {
       if (!pageContext.mounted) return;
       Navigator.of(pageContext).push(
         MaterialPageRoute(
-          builder: (_) => VerifyCodePage(
-            email: email,
-            draft: const OnboardingDraft(),
-          ),
+          builder: (_) =>
+              VerifyCodePage(email: email, draft: const OnboardingDraft()),
         ),
       );
     } on AuthException catch (error) {
       if (!pageContext.mounted) return;
-      ScaffoldMessenger.of(pageContext).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        pageContext,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!pageContext.mounted) return;
       ScaffoldMessenger.of(pageContext).showSnackBar(
@@ -149,15 +148,13 @@ class _LoginPageState extends State<LoginPage> {
         await _openEmailVerification(_emailController.text.trim());
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong while logging in.'),
-        ),
+        const SnackBar(content: Text('Something went wrong while logging in.')),
       );
     } finally {
       if (mounted) {
@@ -184,9 +181,9 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -225,9 +222,9 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       if (isAppleSignInCanceled(error)) return;
       if (!mounted) return;
@@ -254,10 +251,7 @@ class _LoginPageState extends State<LoginPage> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -270,8 +264,7 @@ class _LoginPageState extends State<LoginPage> {
                 AppResponsive.horizontalInset(context, design: 24),
                 32 * AppResponsive.layoutScaleOf(context),
               ),
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -388,8 +381,9 @@ class _LoginPageState extends State<LoginPage> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed:
-                                _isResetting || _isBusy ? null : _onForgotPassword,
+                            onPressed: _isResetting || _isBusy
+                                ? null
+                                : _onForgotPassword,
                             child: _isResetting
                                 ? SizedBox(
                                     width: 18,
@@ -407,9 +401,7 @@ class _LoginPageState extends State<LoginPage> {
                           onPressed: _isBusy ? null : _onSubmit,
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28),
-                            ),
+                            shape: const StadiumBorder(),
                           ),
                           child: _isSubmitting
                               ? SizedBox(
@@ -433,7 +425,8 @@ class _LoginPageState extends State<LoginPage> {
                           : () {
                               Navigator.of(context).pushReplacement(
                                 MaterialPageRoute(
-                                  builder: (_) => const OnboardingAccountTypePage(),
+                                  builder: (_) =>
+                                      const OnboardingAccountTypePage(),
                                 ),
                               );
                             },

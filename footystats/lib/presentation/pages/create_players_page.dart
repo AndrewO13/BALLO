@@ -13,6 +13,7 @@ import '../../data/repositories/username_repository.dart';
 import '../../domain/models/managed_player.dart';
 import '../widgets/media_access_sheet.dart';
 import '../widgets/username_availability_field.dart';
+import '../../core/theme/app_shape.dart';
 
 const _positions = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'];
 
@@ -80,12 +81,16 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
       final username = UsernameRules.normalize(draft.usernameController.text);
       final nameBlock = UsernameRules.offensiveContentError(name);
       if (nameBlock != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(nameBlock)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(nameBlock)));
         return;
       }
       if (draft.availability.status != UsernameAvailability.available) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wait until every username is available')),
+          const SnackBar(
+            content: Text('Wait until every username is available'),
+          ),
         );
         return;
       }
@@ -98,9 +103,7 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
       }
       if (draft.position == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Select a position for player ${i + 1}'),
-          ),
+          SnackBar(content: Text('Select a position for player ${i + 1}')),
         );
         return;
       }
@@ -130,7 +133,10 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
     try {
       for (final input in inputs) {
         await requireAllowedText(input.playerName, contentRef: 'player_name');
-        await requireAllowedText(input.username, contentRef: 'username:${input.username}');
+        await requireAllowedText(
+          input.username,
+          contentRef: 'username:${input.username}',
+        );
       }
       final created = await _repository.createPlayers(inputs);
       if (!mounted) return;
@@ -158,9 +164,7 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst('Bad state: ', ''),
-          ),
+          content: Text(error.toString().replaceFirst('Bad state: ', '')),
         ),
       );
     }
@@ -207,7 +211,9 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: _drafts.length >= 20 || _isSubmitting ? null : _addDraft,
+                onPressed: _drafts.length >= 20 || _isSubmitting
+                    ? null
+                    : _addDraft,
                 icon: const Icon(Icons.add),
                 label: const Text('Add another player'),
               ),
@@ -219,9 +225,7 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
                 onPressed: _isSubmitting ? null : _onCreate,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 child: _isSubmitting
                     ? const SizedBox(
@@ -245,9 +249,9 @@ class _CreatePlayersPageState extends State<CreatePlayersPage> {
 
 class _PlayerDraft {
   _PlayerDraft()
-      : key = UniqueKey(),
-        nameController = TextEditingController(),
-        usernameController = TextEditingController();
+    : key = UniqueKey(),
+      nameController = TextEditingController(),
+      usernameController = TextEditingController();
 
   final Key key;
   final TextEditingController nameController;
@@ -320,8 +324,12 @@ class _PlayerDraftCardState extends State<_PlayerDraftCard> {
       final filePath = 'avatars/$fileName';
       final fileBytes = await image.readAsBytes();
       await requireAllowedImage(fileBytes, contentRef: 'avatar:${user.id}');
-      await supabase.storage.from('Profile images').uploadBinary(filePath, fileBytes);
-      final url = supabase.storage.from('Profile images').getPublicUrl(filePath);
+      await supabase.storage
+          .from('Profile images')
+          .uploadBinary(filePath, fileBytes);
+      final url = supabase.storage
+          .from('Profile images')
+          .getPublicUrl(filePath);
 
       if (!mounted) return;
       setState(() {
@@ -339,9 +347,9 @@ class _PlayerDraftCardState extends State<_PlayerDraftCard> {
       )) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error uploading: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error uploading: $error')));
     }
   }
 
@@ -400,7 +408,7 @@ class _PlayerDraftCardState extends State<_PlayerDraftCard> {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -512,7 +520,9 @@ class _PlayerDraftCardState extends State<_PlayerDraftCard> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isSelected ? colorScheme.primary : Colors.transparent,
+                      color: isSelected
+                          ? colorScheme.primary
+                          : Colors.transparent,
                       width: 2,
                     ),
                   ),
@@ -568,4 +578,3 @@ class _PlayerDraftCardState extends State<_PlayerDraftCard> {
     );
   }
 }
-

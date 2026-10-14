@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/adaptive/adaptive.dart';
 import '../../../core/widgets/app_shimmer.dart';
+import '../../../core/theme/app_shape.dart';
 
 /// Skeleton layout mirroring the home tab while data loads.
 class HomePageShimmer extends StatelessWidget {
@@ -23,7 +24,11 @@ class HomePageShimmer extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ShimmerBox(width: 132, height: 28, borderRadius: 8),
+            const ShimmerBox(
+              width: 132,
+              height: 28,
+              borderRadius: AppShape.small,
+            ),
             SizedBox(height: 8 * AppResponsive.layoutScaleOf(context)),
             const _GameweekFiltersShimmer(),
             const SizedBox(height: 12),
@@ -36,19 +41,31 @@ class HomePageShimmer extends StatelessWidget {
                   .clamp(0, double.infinity),
             ),
             const SizedBox(height: 26),
-            const ShimmerBox(width: 100, height: 24, borderRadius: 8),
+            const ShimmerBox(
+              width: 100,
+              height: 24,
+              borderRadius: AppShape.small,
+            ),
             const SizedBox(height: 16),
             ShimmerBox(
               width: double.infinity,
               height: matchCardHeight,
-              borderRadius: 28,
+              borderRadius: AppShape.medium,
             ),
             const SizedBox(height: 26),
-            const ShimmerBox(width: 56, height: 18, borderRadius: 6),
+            const ShimmerBox(
+              width: 56,
+              height: 18,
+              borderRadius: AppShape.small,
+            ),
             const SizedBox(height: 16),
             const _TeamCardShimmer(),
             const SizedBox(height: 16),
-            const ShimmerBox(width: 120, height: 24, borderRadius: 8),
+            const ShimmerBox(
+              width: 120,
+              height: 24,
+              borderRadius: AppShape.small,
+            ),
             const SizedBox(height: 16),
             const _HighlightsRowShimmer(),
           ],
@@ -68,15 +85,19 @@ class _GameweekFiltersShimmer extends StatelessWidget {
       children: [
         Row(
           children: [
-            ShimmerBox(width: 88, height: 36, borderRadius: 18),
+            ShimmerBox(width: 88, height: 36, borderRadius: AppShape.large),
             SizedBox(width: 8),
-            ShimmerBox(width: 96, height: 36, borderRadius: 18),
+            ShimmerBox(width: 96, height: 36, borderRadius: AppShape.large),
             SizedBox(width: 8),
-            ShimmerBox(width: 80, height: 36, borderRadius: 18),
+            ShimmerBox(width: 80, height: 36, borderRadius: AppShape.large),
           ],
         ),
         SizedBox(height: 8),
-        ShimmerBox(width: double.infinity, height: 48, borderRadius: 12),
+        ShimmerBox(
+          width: double.infinity,
+          height: 48,
+          borderRadius: AppShape.medium,
+        ),
       ],
     );
   }
@@ -90,7 +111,7 @@ class _GameweekHeaderShimmer extends StatelessWidget {
     return const SizedBox(
       height: 48,
       child: Center(
-        child: ShimmerBox(width: 160, height: 22, borderRadius: 8),
+        child: ShimmerBox(width: 160, height: 22, borderRadius: AppShape.small),
       ),
     );
   }
@@ -104,14 +125,18 @@ class _ProgressRingsShimmer extends StatelessWidget {
     return const Column(
       children: [
         Center(
-          child: ShimmerBox(width: 163, height: 163, borderRadius: 999),
+          child: ShimmerBox(
+            width: 163,
+            height: 163,
+            borderRadius: AppShape.full,
+          ),
         ),
         SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            ShimmerBox(width: 80, height: 80, borderRadius: 999),
-            ShimmerBox(width: 80, height: 80, borderRadius: 999),
+            ShimmerBox(width: 80, height: 80, borderRadius: AppShape.full),
+            ShimmerBox(width: 80, height: 80, borderRadius: AppShape.full),
           ],
         ),
       ],
@@ -130,7 +155,7 @@ class _PerformanceChartShimmer extends StatelessWidget {
       child: ShimmerBox(
         width: width,
         height: 297,
-        borderRadius: 28,
+        borderRadius: AppShape.medium,
       ),
     );
   }
@@ -144,7 +169,7 @@ class _TeamCardShimmer extends StatelessWidget {
     return const ShimmerBox(
       width: double.infinity,
       height: 320,
-      borderRadius: 28,
+      borderRadius: AppShape.medium,
     );
   }
 }
@@ -158,11 +183,11 @@ class _HighlightsRowShimmer extends StatelessWidget {
       height: 204,
       child: Row(
         children: [
-          ShimmerBox(width: 116, height: 204, borderRadius: 12),
+          ShimmerBox(width: 116, height: 204, borderRadius: AppShape.medium),
           SizedBox(width: 8),
-          ShimmerBox(width: 116, height: 204, borderRadius: 12),
+          ShimmerBox(width: 116, height: 204, borderRadius: AppShape.medium),
           SizedBox(width: 8),
-          ShimmerBox(width: 116, height: 204, borderRadius: 12),
+          ShimmerBox(width: 116, height: 204, borderRadius: AppShape.medium),
         ],
       ),
     );
@@ -179,7 +204,7 @@ class HomePerformanceChartShimmer extends StatelessWidget {
       child: ShimmerBox(
         width: double.infinity,
         height: 240,
-        borderRadius: 16,
+        borderRadius: AppShape.large,
       ),
     );
   }
@@ -197,7 +222,7 @@ class HomeMatchCarouselShimmer extends StatelessWidget {
       child: ShimmerBox(
         width: double.infinity,
         height: height,
-        borderRadius: 28,
+        borderRadius: AppShape.medium,
       ),
     );
   }
@@ -289,11 +314,11 @@ class _DateFilterChipsShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Row(
       children: [
-        Expanded(child: ShimmerBox(height: 40, borderRadius: 12)),
+        Expanded(child: ShimmerBox(height: 40, borderRadius: AppShape.medium)),
         SizedBox(width: 8),
-        Expanded(child: ShimmerBox(height: 40, borderRadius: 12)),
+        Expanded(child: ShimmerBox(height: 40, borderRadius: AppShape.medium)),
         SizedBox(width: 8),
-        Expanded(child: ShimmerBox(height: 40, borderRadius: 12)),
+        Expanded(child: ShimmerBox(height: 40, borderRadius: AppShape.medium)),
       ],
     );
   }
@@ -308,11 +333,11 @@ class _DateHeaderShimmer extends StatelessWidget {
       height: 48,
       child: Row(
         children: [
-          ShimmerBox(width: 36, height: 36, borderRadius: 999),
+          ShimmerBox(width: 36, height: 36, borderRadius: AppShape.full),
           Spacer(),
-          ShimmerBox(width: 88, height: 22, borderRadius: 8),
+          ShimmerBox(width: 88, height: 22, borderRadius: AppShape.small),
           Spacer(),
-          ShimmerBox(width: 36, height: 36, borderRadius: 999),
+          ShimmerBox(width: 36, height: 36, borderRadius: AppShape.full),
         ],
       ),
     );
@@ -333,27 +358,35 @@ class _MatchGroupCardShimmer extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: AppShimmer(
         child: Column(
           children: [
             const Row(
               children: [
-                ShimmerBox(width: 36, height: 36, borderRadius: 8),
+                ShimmerBox(width: 36, height: 36, borderRadius: AppShape.small),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ShimmerBox(width: 140, height: 14, borderRadius: 4),
+                      ShimmerBox(
+                        width: 140,
+                        height: 14,
+                        borderRadius: AppShape.extraSmall,
+                      ),
                       SizedBox(height: 6),
-                      ShimmerBox(width: 88, height: 12, borderRadius: 4),
+                      ShimmerBox(
+                        width: 88,
+                        height: 12,
+                        borderRadius: AppShape.extraSmall,
+                      ),
                     ],
                   ),
                 ),
                 SizedBox(width: 8),
-                ShimmerBox(width: 26, height: 26, borderRadius: 6),
+                ShimmerBox(width: 26, height: 26, borderRadius: AppShape.small),
               ],
             ),
             const SizedBox(height: 8),
@@ -374,15 +407,15 @@ class _MatchRowShimmer extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Expanded(child: ShimmerBox(height: 14, borderRadius: 6)),
+          Expanded(child: ShimmerBox(height: 14, borderRadius: AppShape.small)),
           SizedBox(width: 8),
-          ShimmerBox(width: 28, height: 28, borderRadius: 999),
+          ShimmerBox(width: 28, height: 28, borderRadius: AppShape.full),
           SizedBox(width: 16),
-          ShimmerBox(width: 56, height: 28, borderRadius: 8),
+          ShimmerBox(width: 56, height: 28, borderRadius: AppShape.small),
           SizedBox(width: 16),
-          ShimmerBox(width: 28, height: 28, borderRadius: 999),
+          ShimmerBox(width: 28, height: 28, borderRadius: AppShape.full),
           SizedBox(width: 8),
-          Expanded(child: ShimmerBox(height: 14, borderRadius: 6)),
+          Expanded(child: ShimmerBox(height: 14, borderRadius: AppShape.small)),
         ],
       ),
     );
@@ -398,13 +431,29 @@ class HomeStandingsTableShimmer extends StatelessWidget {
     return const AppShimmer(
       child: Column(
         children: [
-          ShimmerBox(width: double.infinity, height: 28, borderRadius: 6),
+          ShimmerBox(
+            width: double.infinity,
+            height: 28,
+            borderRadius: AppShape.small,
+          ),
           SizedBox(height: 8),
-          ShimmerBox(width: double.infinity, height: 28, borderRadius: 6),
+          ShimmerBox(
+            width: double.infinity,
+            height: 28,
+            borderRadius: AppShape.small,
+          ),
           SizedBox(height: 8),
-          ShimmerBox(width: double.infinity, height: 28, borderRadius: 6),
+          ShimmerBox(
+            width: double.infinity,
+            height: 28,
+            borderRadius: AppShape.small,
+          ),
           SizedBox(height: 8),
-          ShimmerBox(width: double.infinity, height: 28, borderRadius: 6),
+          ShimmerBox(
+            width: double.infinity,
+            height: 28,
+            borderRadius: AppShape.small,
+          ),
         ],
       ),
     );

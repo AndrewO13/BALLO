@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/widgets/app_empty_state.dart';
 import 'explore.dart';
+import '../../core/theme/app_shape.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -47,8 +48,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           final item = Map<String, dynamic>.from(row);
           final id = item['id']?.toString() ?? '';
           if (id.isEmpty) continue;
-          final teamName = (item['team_name']?.toString().trim().isNotEmpty ??
-                  false)
+          final teamName =
+              (item['team_name']?.toString().trim().isNotEmpty ?? false)
               ? item['team_name'].toString().trim()
               : (item['short_form']?.toString().trim().isNotEmpty ?? false)
               ? item['short_form'].toString().trim()
@@ -68,8 +69,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           final item = Map<String, dynamic>.from(row);
           final id = item['id']?.toString() ?? '';
           if (id.isEmpty) continue;
-          final inviterName = (item['player_name']?.toString().trim().isNotEmpty ??
-                  false)
+          final inviterName =
+              (item['player_name']?.toString().trim().isNotEmpty ?? false)
               ? item['player_name'].toString().trim()
               : (item['username']?.toString().trim().isNotEmpty ?? false)
               ? '@${item['username'].toString().trim()}'
@@ -96,9 +97,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       ).showSnackBar(const SnackBar(content: Text('Invite accepted')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not accept invite: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not accept invite: $error')),
+      );
     } finally {
       if (mounted) {
         setState(() => _processingIds.remove(inviteId));
@@ -120,9 +121,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       ).showSnackBar(const SnackBar(content: Text('Invite rejected')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not reject invite: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not reject invite: $error')),
+      );
     } finally {
       if (mounted) {
         setState(() => _processingIds.remove(inviteId));
@@ -157,7 +158,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final currentUser = _client.auth.currentUser;
     if (currentUser == null) {
       return Scaffold(
-        appBar: AppBar(title: Text('Notifications', style: textTheme.headlineMedium)),
+        appBar: AppBar(
+          title: Text('Notifications', style: textTheme.headlineMedium),
+        ),
         body: Center(
           child: Text(
             'Sign in to view notifications',
@@ -173,22 +176,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
         .from('team_player_invites')
         .stream(primaryKey: ['id'])
         .map(
-          (rows) => rows.where((row) {
-            final playerId = row['player_id']?.toString() ?? '';
-            return playerId == currentUser.id;
-          }).toList()
-            ..sort((a, b) {
-              final aDate = DateTime.tryParse(
-                a['created_at']?.toString() ?? '',
-              );
-              final bDate = DateTime.tryParse(
-                b['created_at']?.toString() ?? '',
-              );
-              if (aDate == null && bDate == null) return 0;
-              if (aDate == null) return 1;
-              if (bDate == null) return -1;
-              return bDate.compareTo(aDate);
-            }),
+          (rows) =>
+              rows.where((row) {
+                final playerId = row['player_id']?.toString() ?? '';
+                return playerId == currentUser.id;
+              }).toList()..sort((a, b) {
+                final aDate = DateTime.tryParse(
+                  a['created_at']?.toString() ?? '',
+                );
+                final bDate = DateTime.tryParse(
+                  b['created_at']?.toString() ?? '',
+                );
+                if (aDate == null && bDate == null) return 0;
+                if (aDate == null) return 1;
+                if (bDate == null) return -1;
+                return bDate.compareTo(aDate);
+              }),
         );
 
     return DefaultTabController(
@@ -209,7 +212,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
           final allInvites = snapshot.data ?? const <Map<String, dynamic>>[];
           unawaited(_hydrateMetadata(allInvites));
           final pending = allInvites
-              .where((invite) => (invite['status']?.toString() ?? '') == 'pending')
+              .where(
+                (invite) => (invite['status']?.toString() ?? '') == 'pending',
+              )
               .toList();
           final unreadPending = pending
               .where((invite) => invite['read_at'] == null)
@@ -297,7 +302,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: AppShape.largeIncreasedRadius,
             border: isUnread
                 ? Border.all(color: colorScheme.primary.withValues(alpha: 0.45))
                 : null,
@@ -322,7 +327,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$teamName invited you to join', style: textTheme.titleMedium),
+                    Text(
+                      '$teamName invited you to join',
+                      style: textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Invited by $inviterName',
@@ -344,7 +352,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           onPressed: (inviteId.isEmpty || isProcessing)
                               ? null
                               : () => _acceptInvite(inviteId),
-                          child: Text(isProcessing ? 'Please wait...' : 'Accept'),
+                          child: Text(
+                            isProcessing ? 'Please wait...' : 'Accept',
+                          ),
                         ),
                       ],
                     ),
@@ -384,14 +394,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
         final teamName = _teamNameById[teamId] ?? 'Team';
         final status = invite['status']?.toString() ?? '';
         final isAccepted = status == 'accepted';
-        final respondedAt =
-            DateTime.tryParse(invite['responded_at']?.toString() ?? '');
+        final respondedAt = DateTime.tryParse(
+          invite['responded_at']?.toString() ?? '',
+        );
 
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: AppShape.largeIncreasedRadius,
           ),
           child: Row(
             children: [

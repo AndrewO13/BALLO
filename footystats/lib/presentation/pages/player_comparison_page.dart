@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/widgets/media_placeholders.dart';
+import '../../core/theme/app_shape.dart';
 
 class PlayerComparisonPage extends StatefulWidget {
   const PlayerComparisonPage({super.key, required this.basePlayerId});
@@ -128,10 +129,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         'league',
       ]).isNotEmpty;
       if (hasLeagueName) continue;
-      final leagueId = _readString(row, const [
-        'league_id',
-        'competition_id',
-      ]);
+      final leagueId = _readString(row, const ['league_id', 'competition_id']);
       if (leagueId.isNotEmpty) missingLeagueIds.add(leagueId);
     }
     if (missingLeagueIds.isEmpty) return rows;
@@ -171,7 +169,9 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     return rows;
   }
 
-  List<_CompetitionOption> _extractCompetitionOptions(List<Map<String, dynamic>> rows) {
+  List<_CompetitionOption> _extractCompetitionOptions(
+    List<Map<String, dynamic>> rows,
+  ) {
     final byId = <String, _CompetitionOption>{};
     for (final row in rows) {
       final label = _competitionLabel(row);
@@ -179,14 +179,15 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       byId.putIfAbsent(id, () => _CompetitionOption(id: id, label: label));
     }
 
-    final options = <_CompetitionOption>[
-      const _CompetitionOption(id: _allLeaguesId, label: 'All leagues'),
-      ...byId.values,
-    ]..sort((a, b) {
-        if (a.id == _allLeaguesId) return -1;
-        if (b.id == _allLeaguesId) return 1;
-        return a.label.compareTo(b.label);
-      });
+    final options =
+        <_CompetitionOption>[
+          const _CompetitionOption(id: _allLeaguesId, label: 'All leagues'),
+          ...byId.values,
+        ]..sort((a, b) {
+          if (a.id == _allLeaguesId) return -1;
+          if (b.id == _allLeaguesId) return 1;
+          return a.label.compareTo(b.label);
+        });
     return options;
   }
 
@@ -225,8 +226,10 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
   }
 
   _PlayerTotals _totalsForSelection(
-    List<Map<String, dynamic>> rows,
-    {String? selectedCompetitionId, String? selectedSeasonId}) {
+    List<Map<String, dynamic>> rows, {
+    String? selectedCompetitionId,
+    String? selectedSeasonId,
+  }) {
     if (rows.isEmpty) return const _PlayerTotals.empty();
 
     final source = rows.where((row) {
@@ -274,7 +277,9 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     }
 
     return _PlayerTotals(
-      rating: weightedRatingMatches > 0 ? weightedRating / weightedRatingMatches : 0,
+      rating: weightedRatingMatches > 0
+          ? weightedRating / weightedRatingMatches
+          : 0,
       minutesPlayed: minutes,
       matchesPlayed: matches,
       goals: goals,
@@ -361,9 +366,8 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => _PlayerPickerSheet(
-        excludedPlayerId: _leftPane?.player.id,
-      ),
+      builder: (context) =>
+          _PlayerPickerSheet(excludedPlayerId: _leftPane?.player.id),
     );
     if (selected == null || !mounted) return;
     final right = await _loadPaneForPlayer(selected.id);
@@ -375,7 +379,10 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     final pane = isLeft ? _leftPane : _rightPane;
     if (pane == null) return;
     final selectedCompetitionId = competitionId ?? _allLeaguesId;
-    final seasons = _extractSeasonOptionsForCompetition(pane.rows, selectedCompetitionId);
+    final seasons = _extractSeasonOptionsForCompetition(
+      pane.rows,
+      selectedCompetitionId,
+    );
     final selectedSeasonId = _allSeasonsId;
     final updated = pane.copyWith(
       selectedCompetitionId: selectedCompetitionId,
@@ -457,15 +464,14 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: AppShape.largeIncreasedRadius,
                     ),
                     child: Column(
                       children: [
                         Text(
                           'Top stats',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 14),
                         ..._buildComparisonRows(context),
@@ -571,12 +577,12 @@ class _PlayerHeroCard extends StatelessWidget {
       children: [
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: AppShape.largeRadius,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: AppShape.largeRadius,
             ),
             child: Column(
               children: [
@@ -607,7 +613,7 @@ class _PlayerHeroCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -637,7 +643,7 @@ class _PlayerHeroCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppShape.mediumRadius,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -697,9 +703,9 @@ class _ComparisonStatRow extends StatelessWidget {
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurface,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
             ),
           ),
           _StatValuePill(
@@ -737,13 +743,14 @@ class _StatValuePill extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppShape.fullRadius,
           ),
           child: Text(
             value,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -760,7 +767,10 @@ class _PlayerAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      return CircleAvatar(radius: 30, backgroundImage: appCachedImageProvider(imageUrl));
+      return CircleAvatar(
+        radius: 30,
+        backgroundImage: appCachedImageProvider(imageUrl),
+      );
     }
     if (imageUrl.isNotEmpty) {
       return CircleAvatar(
@@ -771,7 +781,8 @@ class _PlayerAvatar extends StatelessWidget {
             width: 60,
             height: 60,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Icon(Icons.person, color: colorScheme.onSurface),
+            errorBuilder: (_, _, _) =>
+                Icon(Icons.person, color: colorScheme.onSurface),
           ),
         ),
       );
@@ -952,7 +963,8 @@ class _PlayerPaneData {
       player: player,
       rows: rows,
       competitions: competitions,
-      selectedCompetitionId: selectedCompetitionId ?? this.selectedCompetitionId,
+      selectedCompetitionId:
+          selectedCompetitionId ?? this.selectedCompetitionId,
       seasons: seasons ?? this.seasons,
       selectedSeasonId: selectedSeasonId ?? this.selectedSeasonId,
       totals: totals ?? this.totals,
@@ -974,15 +986,15 @@ class _PlayerTotals {
   });
 
   const _PlayerTotals.empty()
-      : rating = 0,
-        minutesPlayed = 0,
-        matchesPlayed = 0,
-        goals = 0,
-        assists = 0,
-        tackles = 0,
-        saves = 0,
-        yellowCards = 0,
-        redCards = 0;
+    : rating = 0,
+      minutesPlayed = 0,
+      matchesPlayed = 0,
+      goals = 0,
+      assists = 0,
+      tackles = 0,
+      saves = 0,
+      yellowCards = 0,
+      redCards = 0;
 
   final double rating;
   final int minutesPlayed;

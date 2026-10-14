@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/media_placeholders.dart';
+import '../../../core/theme/app_shape.dart';
 
 class TeamChip extends StatelessWidget {
   const TeamChip({
@@ -24,7 +25,9 @@ class TeamChip extends StatelessWidget {
       label: Text(teamName),
       selected: isSelected,
       onSelected: onSelected,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: AppShape.largeIncreasedRadius,
+      ),
     );
   }
 

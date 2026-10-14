@@ -4,6 +4,7 @@ import '../../../core/widgets/media_placeholders.dart';
 
 import '../../../domain/models/match_model.dart';
 import '../match_odds_chips.dart';
+import '../../../core/theme/app_shape.dart';
 
 /// Carousel card for a match. Displays team logos, short forms, scores,
 /// time/status, predictions, league name, gameweek. Tapping navigates to fixture.
@@ -64,7 +65,7 @@ class MatchCard extends StatelessWidget {
         );
 
         return ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
           child: OverflowBox(
             alignment: Alignment.center,
             minWidth: cardWidth,
@@ -73,10 +74,10 @@ class MatchCard extends StatelessWidget {
             maxHeight: itemHeight,
             child: Material(
               color: colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.mediumRadius,
               child: InkWell(
                 onTap: onTap,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: AppShape.mediumRadius,
                 child: Center(
                   child: SizedBox(
                     width: itemWidth,

@@ -7,12 +7,10 @@ import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
 import '../providers/league_applications_provider.dart';
 import '../providers/league_teams_provider.dart';
+import '../../core/theme/app_shape.dart';
 
 class LeagueRejectedApplicationsPage extends ConsumerStatefulWidget {
-  const LeagueRejectedApplicationsPage({
-    super.key,
-    required this.leagueId,
-  });
+  const LeagueRejectedApplicationsPage({super.key, required this.leagueId});
 
   final String leagueId;
 
@@ -55,14 +53,14 @@ class _LeagueRejectedApplicationsPageState
         leagueRejectedApplicationsWithTeamsProvider(widget.leagueId),
       );
       ref.invalidate(teamsInLeagueProvider(widget.leagueId));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Application accepted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Application accepted')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error approving: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error approving: $error')));
     } finally {
       if (mounted) setState(() => _processingIds.remove(applicationId));
     }
@@ -102,9 +100,7 @@ class _LeagueRejectedApplicationsPageState
               decoration: InputDecoration(
                 hintText: 'Search by team name',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                border: OutlineInputBorder(borderRadius: AppShape.fullRadius),
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -133,7 +129,8 @@ class _LeagueRejectedApplicationsPageState
                     final applicationId = app['id']?.toString() ?? '';
                     final teamId = app['team_id']?.toString() ?? '';
                     final team = app['team'] as Map<String, dynamic>?;
-                    final teamName = team?['team_name'] as String? ??
+                    final teamName =
+                        team?['team_name'] as String? ??
                         team?['short_form'] as String? ??
                         'Unknown';
                     final shortForm = team?['short_form'] as String? ?? '';
@@ -144,7 +141,7 @@ class _LeagueRejectedApplicationsPageState
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: AppShape.mediumRadius,
                       ),
                       child: Row(
                         children: [
@@ -184,9 +181,9 @@ class _LeagueRejectedApplicationsPageState
                             onPressed: applicationId.isEmpty || isProcessing
                                 ? null
                                 : () => _approve(
-                                      applicationId: applicationId,
-                                      teamId: teamId,
-                                    ),
+                                    applicationId: applicationId,
+                                    teamId: teamId,
+                                  ),
                           ),
                         ],
                       ),
@@ -194,8 +191,7 @@ class _LeagueRejectedApplicationsPageState
                   },
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(child: Text('Error: $err')),
             ),
           ),

@@ -2,12 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/theme/app_shape.dart';
 
 class PerformanceChart extends StatefulWidget {
-  const PerformanceChart({
-    super.key,
-    required this.gameweekRatings,
-  });
+  const PerformanceChart({super.key, required this.gameweekRatings});
 
   final List<PerformanceGameweekRating> gameweekRatings;
 
@@ -57,7 +55,7 @@ class _PerformanceChartState extends State<PerformanceChart> {
             enabled: true,
             handleBuiltInTouches: false,
             touchTooltipData: BarTouchTooltipData(
-              tooltipBorderRadius: BorderRadius.circular(10),
+              tooltipBorderRadius: AppShape.mediumRadius,
               tooltipPadding: const EdgeInsets.symmetric(
                 horizontal: 10,
                 vertical: 8,
@@ -166,7 +164,7 @@ class _PerformanceChartState extends State<PerformanceChart> {
                             ? colorScheme.primary
                             : const Color(0xfff2fff1)),
                   width: 44,
-                  borderRadius: BorderRadius.circular(30),
+                  borderRadius: AppShape.extraLargeRadius,
                   borderSide: BorderSide.none,
                 ),
               ],

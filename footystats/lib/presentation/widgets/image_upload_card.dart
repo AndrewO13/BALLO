@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/widgets/media_placeholders.dart';
+import '../../core/theme/app_shape.dart';
 
 class ImageUploadCard extends StatelessWidget {
   const ImageUploadCard({
@@ -63,7 +64,7 @@ class ImageUploadCard extends StatelessWidget {
     if (isCircular) {
       return Center(
         child: InkWell(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: AppShape.fullRadius,
           onTap: isUploading ? null : onTap,
           child: SizedBox(
             width: 132,
@@ -129,13 +130,13 @@ class ImageUploadCard extends StatelessWidget {
     }
 
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppShape.largeRadius,
       onTap: isUploading ? null : onTap,
       child: Container(
         height: 150,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppShape.largeRadius,
           border: Border.all(
             color: hasImage
                 ? colorScheme.primary.withValues(alpha: 0.5)
@@ -150,7 +151,7 @@ class ImageUploadCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppShape.largeRadius,
                     child: buildImage(circular: false),
                   ),
                   if (overlayLabel != null && overlayLabel!.isNotEmpty)

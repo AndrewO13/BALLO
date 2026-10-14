@@ -23,6 +23,7 @@ import 'edit_managed_player_page.dart';
 import 'player_profile_page.dart';
 import 'team_detail_page.dart';
 import 'league_detail_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class CreateTeamOrLeaguePage extends StatefulWidget {
   const CreateTeamOrLeaguePage({super.key});
@@ -315,7 +316,8 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
                                     ),
                                   );
                                 },
-                                onSetLogin: () => _setCreatedPlayerLogin(player),
+                                onSetLogin: () =>
+                                    _setCreatedPlayerLogin(player),
                                 onEdit: player.canCreatorEdit
                                     ? () => _editCreatedPlayer(player)
                                     : null,
@@ -333,9 +335,7 @@ class _CreateTeamOrLeaguePageState extends State<CreateTeamOrLeaguePage> {
 
   Future<void> _editCreatedPlayer(ManagedPlayer player) async {
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => EditManagedPlayerPage(player: player),
-      ),
+      MaterialPageRoute(builder: (_) => EditManagedPlayerPage(player: player)),
     );
     if (saved == true && mounted) {
       await _loadUserContent();
@@ -378,12 +378,12 @@ class _ChoiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: AppShape.mediumRadius,
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -434,7 +434,7 @@ class _ItemCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.hardEdge,
       color: colorScheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: const RoundedRectangleBorder(borderRadius: AppShape.card),
       child: InkWell(
         splashColor: colorScheme.primary.withAlpha(30),
         onTap: onTap,
@@ -645,13 +645,13 @@ class _LogoUploadWidgetState extends State<_LogoUploadWidget> {
                   height: 120,
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppShape.largeRadius,
                   ),
                   child: _isUploading
                       ? const Center(child: CircularProgressIndicator())
                       : _logoUrl != null
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppShape.largeRadius,
                           child: Image(
                             image: appCachedImageProvider(_logoUrl!),
                             fit: BoxFit.fill,
@@ -880,7 +880,7 @@ class _BannerUploadWidgetState extends State<_BannerUploadWidget> {
         GestureDetector(
           onTap: _isUploading ? null : _showImageSourceDialog,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: AppShape.largeRadius,
             child: Container(
               width: double.infinity,
               height: 150,
@@ -963,7 +963,7 @@ class CreateMatchPage extends StatelessWidget {
           width: double.infinity,
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
           ),
           padding: const EdgeInsets.all(16.0),
           child: Text(
@@ -1197,9 +1197,7 @@ class _CreateTeamPageState extends State<CreateTeamPage> {
                     onPressed: _isSubmitting ? null : _onSubmit,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
+                      shape: const StadiumBorder(),
                     ),
                     child: _isSubmitting
                         ? const SizedBox(
@@ -1449,9 +1447,7 @@ class _CreateLeaguePageState extends State<CreateLeaguePage> {
                     onPressed: _isSubmitting ? null : _onSubmit,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
+                      shape: const StadiumBorder(),
                     ),
                     child: _isSubmitting
                         ? const SizedBox(

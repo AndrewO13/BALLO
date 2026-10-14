@@ -14,7 +14,8 @@ class CreateSeasonBottomSheet extends StatefulWidget {
   final String helperText;
 
   @override
-  State<CreateSeasonBottomSheet> createState() => _CreateSeasonBottomSheetState();
+  State<CreateSeasonBottomSheet> createState() =>
+      _CreateSeasonBottomSheetState();
 }
 
 class _CreateSeasonBottomSheetState extends State<CreateSeasonBottomSheet> {
@@ -35,9 +36,9 @@ class _CreateSeasonBottomSheetState extends State<CreateSeasonBottomSheet> {
   void _submit() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a season name')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a season name')));
       return;
     }
     Navigator.of(context).pop({'name': name});
@@ -85,9 +86,7 @@ class _CreateSeasonBottomSheetState extends State<CreateSeasonBottomSheet> {
             onPressed: _submit,
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
+              shape: const StadiumBorder(),
             ),
             child: const Text('Create'),
           ),

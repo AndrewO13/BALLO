@@ -7,6 +7,7 @@ import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
 import '../providers/league_applications_provider.dart';
 import '../providers/league_teams_provider.dart';
+import '../../core/theme/app_shape.dart';
 
 class LeagueApplicationsPage extends ConsumerStatefulWidget {
   const LeagueApplicationsPage({super.key, required this.leagueId});
@@ -18,7 +19,8 @@ class LeagueApplicationsPage extends ConsumerStatefulWidget {
       _LeagueApplicationsPageState();
 }
 
-class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage> {
+class _LeagueApplicationsPageState
+    extends ConsumerState<LeagueApplicationsPage> {
   String _searchQuery = '';
   final Set<String> _processingIds = {};
 
@@ -47,16 +49,18 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
         addedBy: userId,
       );
       if (!mounted) return;
-      ref.invalidate(leaguePendingApplicationsWithTeamsProvider(widget.leagueId));
-      ref.invalidate(teamsInLeagueProvider(widget.leagueId));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Application accepted')),
+      ref.invalidate(
+        leaguePendingApplicationsWithTeamsProvider(widget.leagueId),
       );
+      ref.invalidate(teamsInLeagueProvider(widget.leagueId));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Application accepted')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error approving: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error approving: $error')));
     } finally {
       if (mounted) setState(() => _processingIds.remove(applicationId));
     }
@@ -78,26 +82,26 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
         reviewedBy: userId,
       );
       if (!mounted) return;
-      ref.invalidate(leaguePendingApplicationsWithTeamsProvider(widget.leagueId));
+      ref.invalidate(
+        leaguePendingApplicationsWithTeamsProvider(widget.leagueId),
+      );
       ref.invalidate(
         leagueRejectedApplicationsWithTeamsProvider(widget.leagueId),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Application rejected')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Application rejected')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error rejecting: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error rejecting: $error')));
     } finally {
       if (mounted) setState(() => _processingIds.remove(applicationId));
     }
   }
 
-  List<Map<String, dynamic>> _filter(
-    List<Map<String, dynamic>> apps,
-  ) {
+  List<Map<String, dynamic>> _filter(List<Map<String, dynamic>> apps) {
     if (_searchQuery.trim().isEmpty) return apps;
     final q = _searchQuery.trim().toLowerCase();
     return apps.where((a) {
@@ -113,8 +117,9 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    final asyncApps =
-        ref.watch(leaguePendingApplicationsWithTeamsProvider(widget.leagueId));
+    final asyncApps = ref.watch(
+      leaguePendingApplicationsWithTeamsProvider(widget.leagueId),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -130,9 +135,7 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
               decoration: InputDecoration(
                 hintText: 'Search by team name',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                border: OutlineInputBorder(borderRadius: AppShape.fullRadius),
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -161,7 +164,8 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
                     final applicationId = app['id']?.toString() ?? '';
                     final teamId = app['team_id']?.toString() ?? '';
                     final team = app['team'] as Map<String, dynamic>?;
-                    final teamName = team?['team_name'] as String? ??
+                    final teamName =
+                        team?['team_name'] as String? ??
                         team?['short_form'] as String? ??
                         'Unknown';
                     final shortForm = team?['short_form'] as String? ?? '';
@@ -172,7 +176,7 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: AppShape.mediumRadius,
                       ),
                       child: Row(
                         children: [
@@ -212,15 +216,12 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
                             onPressed: applicationId.isEmpty || isProcessing
                                 ? null
                                 : () => _approve(
-                                      applicationId: applicationId,
-                                      teamId: teamId,
-                                    ),
+                                    applicationId: applicationId,
+                                    teamId: teamId,
+                                  ),
                           ),
                           IconButton(
-                            icon: Icon(
-                              Icons.cancel,
-                              color: colorScheme.error,
-                            ),
+                            icon: Icon(Icons.cancel, color: colorScheme.error),
                             tooltip: 'Reject',
                             onPressed: applicationId.isEmpty || isProcessing
                                 ? null
@@ -232,8 +233,7 @@ class _LeagueApplicationsPageState extends ConsumerState<LeagueApplicationsPage>
                   },
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(child: Text('Error: $err')),
             ),
           ),

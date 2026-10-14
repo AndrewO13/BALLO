@@ -31,6 +31,7 @@ import '../widgets/app_search_page.dart';
 import '../widgets/page_content_shimmers.dart';
 import '../widgets/content_safety_sheets.dart';
 import '../widgets/guest_account_sheet.dart';
+import '../../core/theme/app_shape.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key, this.isActiveTab = true});
@@ -323,20 +324,24 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
   @override
   void initState() {
     super.initState();
-    _seededControllerFromPreload =
-        _ExploreVideoPreloadCache.instance.take(widget.item.videoId);
+    _seededControllerFromPreload = _ExploreVideoPreloadCache.instance.take(
+      widget.item.videoId,
+    );
   }
 
   @override
   void didUpdateWidget(covariant _ExploreFeedItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.videoId != widget.item.videoId) {
-      _seededControllerFromPreload =
-          _ExploreVideoPreloadCache.instance.take(widget.item.videoId);
+      _seededControllerFromPreload = _ExploreVideoPreloadCache.instance.take(
+        widget.item.videoId,
+      );
     }
   }
 
-  Future<void> _openContinuousFeed(VideoPlayerController? seededController) async {
+  Future<void> _openContinuousFeed(
+    VideoPlayerController? seededController,
+  ) async {
     final videos = <LeagueVideoItem>[];
     for (final item in widget.feedItems) {
       if (item.videoUrl.isEmpty) continue;
@@ -364,7 +369,9 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
       );
     }
     if (videos.isEmpty) return;
-    var initialIndex = videos.indexWhere((v) => v.videoId == widget.item.videoId);
+    var initialIndex = videos.indexWhere(
+      (v) => v.videoId == widget.item.videoId,
+    );
     if (initialIndex < 0) initialIndex = 0;
     final handoff = await Navigator.of(context).push<VideoControllerHandoff>(
       MaterialPageRoute(
@@ -387,9 +394,9 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
   void _openMatchDetails() {
     final matchId = widget.item.matchId;
     if (matchId == null || matchId.isEmpty) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => FixturePage(matchId: matchId)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => FixturePage(matchId: matchId)));
   }
 
   void _openPosterProfile() {
@@ -476,7 +483,8 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
             );
           },
           onSurfaceTap: _openContinuousFeed,
-          seededController: _seededControllerFromFeed ?? _seededControllerFromPreload,
+          seededController:
+              _seededControllerFromFeed ?? _seededControllerFromPreload,
         ),
         _PosterInfoSection(
           videoId: widget.item.videoId,
@@ -485,8 +493,7 @@ class _ExploreFeedItemState extends State<_ExploreFeedItem> {
           posterUserId: widget.item.uploaderUserId,
           posterDeleted: widget.item.isUploaderDeleted,
           thumbnailUrl: widget.item.thumbnailUrl,
-          shareLabel:
-              '${widget.item.teamAShort} vs ${widget.item.teamBShort}',
+          shareLabel: '${widget.item.teamAShort} vs ${widget.item.teamBShort}',
           isLiked: widget.item.isLiked,
           likeCount: widget.item.likeCount,
           isFollowing: widget.effectiveIsFollowing,
@@ -555,8 +562,8 @@ class _MatchInfoCard extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(28),
-        topRight: Radius.circular(28),
+        topLeft: Radius.circular(AppShape.medium),
+        topRight: Radius.circular(AppShape.medium),
       ),
       child: Container(
         margin: const EdgeInsets.only(top: 16),
@@ -564,92 +571,95 @@ class _MatchInfoCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
+            topLeft: Radius.circular(AppShape.medium),
+            topRight: Radius.circular(AppShape.medium),
           ),
         ),
         child: Column(
           children: [
-          Text(
-            league,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            Text(
+              league,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Team 1
-              Row(
-                children: [
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _TeamLogoAvatar(logoPath: team1['logo'] as String?),
-                      const SizedBox(height: 8),
-                      Text(
-                        team1['name'] as String,
-                        style: Theme.of(context).textTheme.titleSmall,
-                        textAlign: TextAlign.center,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                // Team 1
+                Row(
+                  children: [
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _TeamLogoAvatar(logoPath: team1['logo'] as String?),
+                        const SizedBox(height: 8),
+                        Text(
+                          team1['name'] as String,
+                          style: Theme.of(context).textTheme.titleSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 32),
+                    Text(
+                      (team1['score'] as int).toString(),
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                // Status
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 1,
                   ),
-                  const SizedBox(width: 32),
-                  Text(
-                    (team1['score'] as int).toString(),
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: AppShape.largeIncreasedRadius,
+                  ),
+                  child: Text(
+                    status,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
                     ),
                   ),
-                ],
-              ),
-              // Status
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  status,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  ),
-                ),
-              ),
-              // Team 2
-              Row(
-                children: [
-                  Text(
-                    (team2['score'] as int).toString(),
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 32),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _TeamLogoAvatar(logoPath: team2['logo'] as String?),
-                      const SizedBox(height: 8),
-                      Text(
-                        team2['name'] as String,
-                        style: Theme.of(context).textTheme.titleSmall,
-                        textAlign: TextAlign.center,
+                // Team 2
+                Row(
+                  children: [
+                    Text(
+                      (team2['score'] as int).toString(),
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            result,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
-          ),
+                    ),
+                    const SizedBox(width: 32),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _TeamLogoAvatar(logoPath: team2['logo'] as String?),
+                        const SizedBox(height: 8),
+                        Text(
+                          team2['name'] as String,
+                          style: Theme.of(context).textTheme.titleSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              result,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+            ),
           ],
         ),
       ),
@@ -814,7 +824,7 @@ class _AnimatedLikeButtonState extends State<_AnimatedLikeButton>
       color: Colors.transparent,
       child: InkWell(
         onTap: widget.onTap != null ? _handleTap : null,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppShape.largeIncreasedRadius,
         splashColor: Colors.red.withValues(alpha: 0.2),
         highlightColor: Colors.red.withValues(alpha: 0.1),
         child: Padding(
@@ -1007,11 +1017,12 @@ class _PosterInfoSectionState extends ConsumerState<_PosterInfoSection> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isPosterFavourited = GuestMode.isGuest &&
+    final isPosterFavourited =
+        GuestMode.isGuest &&
         widget.posterUserId != null &&
-        ref.watch(favouritedPlayersProvider).any(
-          (player) => player.id == widget.posterUserId,
-        );
+        ref
+            .watch(favouritedPlayersProvider)
+            .any((player) => player.id == widget.posterUserId);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
@@ -1022,15 +1033,15 @@ class _PosterInfoSectionState extends ConsumerState<_PosterInfoSection> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(28),
+          bottomLeft: Radius.circular(AppShape.medium),
+          bottomRight: Radius.circular(AppShape.medium),
         ),
       ),
       child: Row(
         children: [
           InkWell(
             onTap: widget.onPosterTap,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppShape.fullRadius,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
               child: Row(
@@ -1070,13 +1081,15 @@ class _PosterInfoSectionState extends ConsumerState<_PosterInfoSection> {
                 final posterId = widget.posterUserId;
                 if (posterId == null || posterId.isEmpty) return;
                 final name = widget.posterName.trim();
-                ref.read(favouritedPlayersProvider.notifier).toggle(
-                  FavouritedPlayer(
-                    id: posterId,
-                    name: name.isNotEmpty ? name : 'Player',
-                    imageUrl: widget.posterAvatar,
-                  ),
-                );
+                ref
+                    .read(favouritedPlayersProvider.notifier)
+                    .toggle(
+                      FavouritedPlayer(
+                        id: posterId,
+                        name: name.isNotEmpty ? name : 'Player',
+                        imageUrl: widget.posterAvatar,
+                      ),
+                    );
               },
               tooltip: isPosterFavourited
                   ? 'Remove from favourites'
@@ -1095,7 +1108,7 @@ class _PosterInfoSectionState extends ConsumerState<_PosterInfoSection> {
                 ),
                 side: BorderSide(color: Theme.of(context).colorScheme.outline),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppShape.largeIncreasedRadius,
                 ),
               ),
               child: Text(
@@ -1379,10 +1392,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
 
   /// Detach [VideoPlayer] before dispose so listeners are not called on a
   /// disposed controller (common when scrolling Explore cards off-screen).
-  void _detachController({
-    bool disposeNow = false,
-    bool handoff = false,
-  }) {
+  void _detachController({bool disposeNow = false, bool handoff = false}) {
     final controller = _controller;
     _controller = null;
     _isInitialized = false;
@@ -1532,64 +1542,64 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget>
           child: Stack(
             fit: StackFit.expand,
             children: [
-            // Always show the thumbnail/placeholder; video overlays when ready.
-            _buildPlaceholder(),
+              // Always show the thumbnail/placeholder; video overlays when ready.
+              _buildPlaceholder(),
 
-            if (showPlayer)
-              SizedBox.expand(
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: controller!.value.size.width,
-                    height: controller.value.size.height,
-                    child: VideoPlayer(controller),
+              if (showPlayer)
+                SizedBox.expand(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: controller!.value.size.width,
+                      height: controller.value.size.height,
+                      child: VideoPlayer(controller),
+                    ),
                   ),
                 ),
-              ),
-            if (!showPlayer)
-              Center(
-                child: GestureDetector(
-                  onTap: _isInitializing
-                      ? null
-                      : () async {
-                          await _initializeVideo();
-                          if (mounted && _visibleFraction > 0.01) {
-                            _playVideo();
-                          }
-                        },
-                  child: _PulsingPlayButton(pulsing: _isInitializing),
+              if (!showPlayer)
+                Center(
+                  child: GestureDetector(
+                    onTap: _isInitializing
+                        ? null
+                        : () async {
+                            await _initializeVideo();
+                            if (mounted && _visibleFraction > 0.01) {
+                              _playVideo();
+                            }
+                          },
+                    child: _PulsingPlayButton(pulsing: _isInitializing),
+                  ),
                 ),
-              ),
-            if (showPlayer)
-              Center(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _toggleCenterPlayback,
-                  child: SizedBox(
-                    width: 120,
-                    height: 120,
-                    child: Center(
-                      child: AnimatedOpacity(
-                        opacity: _controlsVisible ? 1 : 0,
-                        duration: const Duration(milliseconds: 220),
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _isPlaying ? Icons.pause : Icons.play_arrow,
-                            color: Colors.white,
-                            size: 32,
+              if (showPlayer)
+                Center(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _toggleCenterPlayback,
+                    child: SizedBox(
+                      width: 120,
+                      height: 120,
+                      child: Center(
+                        child: AnimatedOpacity(
+                          opacity: _controlsVisible ? 1 : 0,
+                          duration: const Duration(milliseconds: 220),
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 32,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1676,11 +1686,7 @@ class _PulsingPlayButtonState extends State<_PulsingPlayButton>
           color: Colors.black.withValues(alpha: 0.45),
           shape: BoxShape.circle,
         ),
-        child: const Icon(
-          Icons.play_arrow,
-          color: Colors.white,
-          size: 32,
-        ),
+        child: const Icon(Icons.play_arrow, color: Colors.white, size: 32),
       ),
     );
   }
@@ -1780,12 +1786,12 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(
           .eq('blocker_user_id', currentUserId);
       final blockedIds = {
         for (final row in List<Map<String, dynamic>>.from(blocked as List))
-          if (row['blocked_user_id'] != null)
-            row['blocked_user_id'].toString(),
+          if (row['blocked_user_id'] != null) row['blocked_user_id'].toString(),
       };
       if (blockedIds.isNotEmpty) {
         videos = videos.where((v) {
-          final uid = v['uploader_user_id']?.toString() ??
+          final uid =
+              v['uploader_user_id']?.toString() ??
               v['uploaderUserId']?.toString();
           // RPC shape uses uploader_user_id; mapped shape uses same later.
           final mapped = v['uploader_user_id']?.toString();
@@ -1874,10 +1880,7 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(
     try {
       final likesRes = await client.rpc(
         'get_video_like_stats',
-        params: {
-          'p_video_ids': videoIds,
-          'p_user_id': ?currentUserId,
-        },
+        params: {'p_video_ids': videoIds, 'p_user_id': ?currentUserId},
       );
       for (final l in List<Map<String, dynamic>>.from(likesRes as List)) {
         final vid = l['video_id']?.toString();
@@ -1961,7 +1964,8 @@ Future<List<_ExploreVideoItem>> _fetchExploreVideos(
       thumbnailUrl: v['thumbnail_url']?.toString(),
       isLiked: likedVideoIds.contains(vid),
       likeCount: likeCountMap[vid] ?? 0,
-      isFollowing: !isUploaderDeleted &&
+      isFollowing:
+          !isUploaderDeleted &&
           uploaderUserId != null &&
           followsSet.contains(uploaderUserId),
       isUploaderDeleted: isUploaderDeleted,
@@ -2002,9 +2006,9 @@ class _ExploreSearchBarState extends State<ExploreSearchBar> {
         ),
         onTap: () {
           dismissKeyboard();
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AppSearchPage()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const AppSearchPage()));
         },
         leading: const Icon(Icons.search),
         hintText: 'Search...',
@@ -2020,7 +2024,8 @@ String? _resolveLogoPath(String? logoId) => resolveTeamLogoPath(logoId);
 
 class _ExploreVideoPreloadCache {
   _ExploreVideoPreloadCache._();
-  static final _ExploreVideoPreloadCache instance = _ExploreVideoPreloadCache._();
+  static final _ExploreVideoPreloadCache instance =
+      _ExploreVideoPreloadCache._();
 
   final Map<String, VideoPlayerController> _controllers = {};
   bool _isPreloading = false;

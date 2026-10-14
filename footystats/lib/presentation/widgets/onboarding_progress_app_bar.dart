@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/onboarding_steps.dart';
 import '../../domain/models/account_type.dart';
+import '../../core/theme/app_shape.dart';
 
 /// App bar with back navigation and a linear onboarding progress indicator.
 class OnboardingProgressAppBar extends StatelessWidget
@@ -32,7 +33,7 @@ class OnboardingProgressAppBar extends StatelessWidget
       title: Padding(
         padding: const EdgeInsets.only(right: 8),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: AppShape.extraSmallRadius,
           child: LinearProgressIndicator(
             value: step.progressFor(accountType),
             minHeight: 4,

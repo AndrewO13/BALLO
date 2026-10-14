@@ -39,8 +39,9 @@ class _PlayerProfilePageState extends ConsumerState<PlayerProfilePage> {
 
   Future<void> _loadAccountKind() async {
     try {
-      final profile =
-          await UserProfileRepository().getProfileByPlayerId(widget.playerId);
+      final profile = await UserProfileRepository().getProfileByPlayerId(
+        widget.playerId,
+      );
       if (!mounted) return;
       setState(() {
         _viewedProfile = profile;
@@ -115,9 +116,9 @@ class _PlayerProfilePageState extends ConsumerState<PlayerProfilePage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isFollowing = !newFollowing);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update follow: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update follow: $e')));
     } finally {
       if (!mounted) return;
       setState(() => _isUpdatingFollow = false);
@@ -135,87 +136,90 @@ class _PlayerProfilePageState extends ConsumerState<PlayerProfilePage> {
         currentUserId.isNotEmpty &&
         currentUserId != widget.playerId;
     final showFavouriteButton =
-        GuestMode.isGuest &&
-        !_isDeleted &&
-        currentUserId != widget.playerId;
-    final isFavourited = showFavouriteButton &&
-        ref.watch(favouritedPlayersProvider).any(
-          (player) => player.id == widget.playerId,
-        );
+        GuestMode.isGuest && !_isDeleted && currentUserId != widget.playerId;
+    final isFavourited =
+        showFavouriteButton &&
+        ref
+            .watch(favouritedPlayersProvider)
+            .any((player) => player.id == widget.playerId);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const SizedBox.shrink(),
-        titleSpacing: 0,
-        actions: [
-          if (!_isStaff)
-            IconButton(
-              tooltip: 'Compare players',
-              icon: const Icon(Icons.group_outlined),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        PlayerComparisonPage(basePlayerId: widget.playerId),
-                  ),
-                );
-              },
-            ),
-          if (showFavouriteButton)
-            IconButton(
-              style: IconButton.styleFrom(
-                fixedSize: const Size(48, 48),
-                padding: EdgeInsets.zero,
+    final headerActions = <Widget>[
+      if (!_isStaff)
+        IconButton(
+          tooltip: 'Compare players',
+          icon: const Icon(Icons.group_outlined),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    PlayerComparisonPage(basePlayerId: widget.playerId),
               ),
-              icon: Icon(
-                isFavourited
-                    ? Icons.star_rounded
-                    : Icons.star_outline_rounded,
-                color: isFavourited
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-                size: 26,
-              ),
-              onPressed: () {
-                final profile = _viewedProfile;
-                final name = profile?.playerName?.trim();
-                ref.read(favouritedPlayersProvider.notifier).toggle(
+            );
+          },
+        ),
+      if (showFavouriteButton)
+        IconButton(
+          style: IconButton.styleFrom(
+            fixedSize: const Size(48, 48),
+            padding: EdgeInsets.zero,
+          ),
+          icon: Icon(
+            isFavourited ? Icons.star_rounded : Icons.star_outline_rounded,
+            color: isFavourited
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
+            size: 26,
+          ),
+          onPressed: () {
+            final profile = _viewedProfile;
+            final name = profile?.playerName?.trim();
+            ref
+                .read(favouritedPlayersProvider.notifier)
+                .toggle(
                   FavouritedPlayer(
                     id: widget.playerId,
                     name: (name != null && name.isNotEmpty)
                         ? name
                         : (profile?.username?.trim().isNotEmpty == true
-                            ? profile!.username!.trim()
-                            : 'Player'),
+                              ? profile!.username!.trim()
+                              : 'Player'),
                     username: profile?.username,
                     imageUrl: profile?.imageUrl,
                     position: profile?.position,
                   ),
                 );
-              },
-              tooltip: isFavourited
-                  ? 'Remove from favourites'
-                  : 'Add to favourites',
-            ),
-        ],
+          },
+          tooltip: isFavourited
+              ? 'Remove from favourites'
+              : 'Add to favourites',
+        ),
+    ];
+
+    if (_isStaff || _viewedProfile?.isTechnicalStaff == true) {
+      return Scaffold(
+        appBar: AppBar(actions: headerActions),
+        body: StaffProfilePage(
+          viewedUserId: widget.playerId,
+          refreshTick: _profileRefreshTick,
+          showFollowButton: showFollowButton,
+          isFollowing: _isFollowing,
+          isUpdatingFollow: _isUpdatingFollow,
+          onFollow: _toggleFollow,
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: ProfileScrollView(
+        viewedPlayerId: widget.playerId,
+        refreshTick: _profileRefreshTick,
+        showFollowButton: showFollowButton,
+        isFollowing: _isFollowing,
+        isUpdatingFollow: _isUpdatingFollow,
+        onFollow: _toggleFollow,
+        leading: const BackButton(),
+        actions: headerActions,
       ),
-      body: _isStaff || _viewedProfile?.isTechnicalStaff == true
-          ? StaffProfilePage(
-              viewedUserId: widget.playerId,
-              refreshTick: _profileRefreshTick,
-              showFollowButton: showFollowButton,
-              isFollowing: _isFollowing,
-              isUpdatingFollow: _isUpdatingFollow,
-              onFollow: _toggleFollow,
-            )
-          : ProfileScrollView(
-              viewedPlayerId: widget.playerId,
-              refreshTick: _profileRefreshTick,
-              showFollowButton: showFollowButton,
-              isFollowing: _isFollowing,
-              isUpdatingFollow: _isUpdatingFollow,
-              onFollow: _toggleFollow,
-            ),
     );
   }
 }

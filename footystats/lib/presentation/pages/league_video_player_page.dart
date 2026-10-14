@@ -15,6 +15,7 @@ import '../../core/widgets/media_placeholders.dart';
 import '../providers/favourited_players_provider.dart';
 import '../widgets/content_safety_sheets.dart';
 import '../widgets/guest_account_sheet.dart';
+import '../../core/theme/app_shape.dart';
 
 class LeagueVideoItem {
   const LeagueVideoItem({
@@ -360,16 +361,17 @@ class _LeagueVideoPlayerPageState extends State<LeagueVideoPlayerPage>
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height;
-    final dismissProgress =
-        height <= 0 ? 0.0 : (_dismissOffset / height).clamp(0.0, 1.0);
+    final dismissProgress = height <= 0
+        ? 0.0
+        : (_dismissOffset / height).clamp(0.0, 1.0);
     final pageView = PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
       physics: !_storyStyleSwipe
           ? null
           : (_trackingDismiss || _isDismissing || _dismissOffset > 0)
-              ? const NeverScrollableScrollPhysics()
-              : const ClampingScrollPhysics(),
+          ? const NeverScrollableScrollPhysics()
+          : const ClampingScrollPhysics(),
       itemCount: widget.videos.length,
       onPageChanged: _onPageChanged,
       itemBuilder: (context, index) {
@@ -559,9 +561,7 @@ class _VideoPageState extends State<_VideoPage> {
     );
     if (!mounted || outcome == VideoShareOutcome.dismissed) return;
     if (outcome == VideoShareOutcome.copied) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Link copied')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Link copied')));
     }
   }
 
@@ -624,11 +624,12 @@ class _VideoPageState extends State<_VideoPage> {
                     uploaderId != null &&
                     uploaderId.isNotEmpty;
                 final isGuest = GuestMode.isGuest;
-                final isFavourited = isGuest &&
+                final isFavourited =
+                    isGuest &&
                     canActOnUploader &&
-                    ref.watch(favouritedPlayersProvider).any(
-                      (player) => player.id == uploaderId,
-                    );
+                    ref
+                        .watch(favouritedPlayersProvider)
+                        .any((player) => player.id == uploaderId);
                 return _ActionColumn(
                   isLiked: _isLiked,
                   likeCount: _likeCount,
@@ -642,15 +643,17 @@ class _VideoPageState extends State<_VideoPage> {
                   onFavourite: () {
                     if (uploaderId == null || uploaderId.isEmpty) return;
                     final name = widget.item.uploaderName?.trim();
-                    ref.read(favouritedPlayersProvider.notifier).toggle(
-                      FavouritedPlayer(
-                        id: uploaderId,
-                        name: (name != null && name.isNotEmpty)
-                            ? name
-                            : 'Player',
-                        imageUrl: widget.item.uploaderAvatar,
-                      ),
-                    );
+                    ref
+                        .read(favouritedPlayersProvider.notifier)
+                        .toggle(
+                          FavouritedPlayer(
+                            id: uploaderId,
+                            name: (name != null && name.isNotEmpty)
+                                ? name
+                                : 'Player',
+                            imageUrl: widget.item.uploaderAvatar,
+                          ),
+                        );
                   },
                   onShare: _share,
                   onReport: () async {
@@ -718,7 +721,7 @@ class _MatchOverlay extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.black54,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.largeRadius,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -758,7 +761,7 @@ class _MatchOverlay extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: Colors.white24,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppShape.smallRadius,
             ),
             child: Text(
               item.matchStatus,
@@ -910,7 +913,9 @@ class _UploaderOverlay extends StatelessWidget {
         CircleAvatar(
           backgroundColor: Colors.white24,
           backgroundImage: hasAvatar
-              ? (isNetwork ? appCachedImageProvider(avatar) : AssetImage(avatar))
+              ? (isNetwork
+                    ? appCachedImageProvider(avatar)
+                    : AssetImage(avatar))
               : null,
           child: !hasAvatar
               ? Text(

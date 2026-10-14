@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/account_repository.dart';
+import '../../core/theme/app_shape.dart';
 
 class AccountEmailPage extends StatefulWidget {
   const AccountEmailPage({super.key});
@@ -53,14 +54,14 @@ class _AccountEmailPageState extends State<AccountEmailPage> {
       Navigator.of(context).pop();
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update email: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update email: $error')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -73,10 +74,7 @@ class _AccountEmailPageState extends State<AccountEmailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Email',
-          style: textTheme.headlineMedium,
-        ),
+        title: Text('Email', style: textTheme.headlineMedium),
         centerTitle: false,
       ),
       body: ListView(
@@ -84,7 +82,7 @@ class _AccountEmailPageState extends State<AccountEmailPage> {
         children: [
           Material(
             color: colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -106,10 +104,7 @@ class _AccountEmailPageState extends State<AccountEmailPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-            'New email',
-            style: textTheme.titleMedium,
-          ),
+          Text('New email', style: textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
             'We will send a confirmation link to your new address. '

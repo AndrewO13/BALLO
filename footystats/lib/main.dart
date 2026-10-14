@@ -178,7 +178,8 @@ class _AuthGate extends StatelessWidget {
 
         // Email signup can create a session before the address is confirmed.
         // Keep the onboarding shell so verification is not replaced by join-team.
-        final emailConfirmed = session.user.emailConfirmedAt?.isNotEmpty == true;
+        final emailConfirmed =
+            session.user.emailConfirmedAt?.isNotEmpty == true;
         if (!emailConfirmed) {
           return const OnboardingIntroPage();
         }

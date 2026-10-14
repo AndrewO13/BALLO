@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../pages/login_page.dart';
 import '../pages/onboarding_account_type_page.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Bottom sheet shown when a guest taps a player-only action
 /// (following, liking, creating teams, ...).
@@ -21,7 +22,9 @@ Future<void> showGuestAccountSheet(
     context: context,
     showDragHandle: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(AppShape.extraLarge),
+      ),
     ),
     builder: (sheetContext) {
       return SafeArea(
@@ -31,11 +34,7 @@ Future<void> showGuestAccountSheet(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(
-                Icons.sports_soccer,
-                size: 40,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.sports_soccer, size: 40, color: colorScheme.primary),
               const SizedBox(height: 12),
               Text(
                 title,
@@ -65,9 +64,7 @@ Future<void> showGuestAccountSheet(
                 },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 child: const Text('Create free account'),
               ),
@@ -76,9 +73,7 @@ Future<void> showGuestAccountSheet(
                 onPressed: () {
                   Navigator.of(sheetContext).pop();
                   Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const LoginPage(),
-                    ),
+                    MaterialPageRoute<void>(builder: (_) => const LoginPage()),
                   );
                 },
                 child: const Text('I already have an account'),

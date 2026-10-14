@@ -21,6 +21,7 @@ import '../widgets/social_sign_in_button.dart';
 import 'login_page.dart';
 import 'onboarding_profile_image_page.dart';
 import 'verify_code_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key, required this.draft});
@@ -54,8 +55,9 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   void initState() {
     super.initState();
-    _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
       if (!mounted) return;
       // Email sign-up verifies on a later screen; only OAuth should jump home.
       if (_awaitingOAuthSignIn &&
@@ -78,8 +80,8 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> _onOAuthComplete() async {
     try {
-      final alreadyRegistered =
-          await _onboardingRepository.currentUserAlreadyRegistered();
+      final alreadyRegistered = await _onboardingRepository
+          .currentUserAlreadyRegistered();
       if (!mounted) return;
       if (alreadyRegistered) {
         await _rejectExistingOAuthAccount();
@@ -129,17 +131,14 @@ class _SignUpPageState extends State<SignUpPage> {
       _authSubscription = null;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => VerifyCodePage(
-            email: email,
-            draft: widget.draft,
-          ),
+          builder: (_) => VerifyCodePage(email: email, draft: widget.draft),
         ),
       );
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -193,9 +192,9 @@ class _SignUpPageState extends State<SignUpPage> {
         await _resendVerificationAndContinue();
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -240,9 +239,9 @@ class _SignUpPageState extends State<SignUpPage> {
     } on AuthException catch (error) {
       _awaitingOAuthSignIn = false;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       _awaitingOAuthSignIn = false;
       if (isAppleSignInCanceled(error)) return;
@@ -286,8 +285,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 AppResponsive.horizontalInset(context, design: 24),
                 32 * AppResponsive.layoutScaleOf(context),
               ),
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -452,7 +450,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           const SizedBox(height: 12),
                           Material(
                             color: colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppShape.largeRadius,
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
@@ -471,9 +469,12 @@ class _SignUpPageState extends State<SignUpPage> {
                                   ),
                                   const SizedBox(height: 12),
                                   OutlinedButton(
-                                    onPressed:
-                                        _isBusy ? null : _resendVerificationAndContinue,
-                                    child: const Text('Resend verification code'),
+                                    onPressed: _isBusy
+                                        ? null
+                                        : _resendVerificationAndContinue,
+                                    child: const Text(
+                                      'Resend verification code',
+                                    ),
                                   ),
                                 ],
                               ),
@@ -485,9 +486,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           onPressed: _isBusy ? null : _onSubmit,
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28),
-                            ),
+                            shape: const StadiumBorder(),
                           ),
                           child: _isSubmitting
                               ? SizedBox(

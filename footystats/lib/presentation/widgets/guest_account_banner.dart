@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../pages/login_page.dart';
 import '../pages/onboarding_account_type_page.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Create-account banner shown on the guest profile tab.
 class GuestAccountBanner extends StatelessWidget {
@@ -16,11 +17,9 @@ class GuestAccountBanner extends StatelessWidget {
   }
 
   void _openSignIn(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const LoginPage(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const LoginPage()));
   }
 
   @override
@@ -33,7 +32,7 @@ class GuestAccountBanner extends StatelessWidget {
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,7 +63,7 @@ class GuestAccountBanner extends StatelessWidget {
           ),
           const _BenefitRow(
             icon: Icons.leaderboard_outlined,
-            text: 'Climb the weekly leaderboard',
+            text: 'Show up on the rankings',
           ),
           const _BenefitRow(
             icon: Icons.videocam_outlined,
@@ -77,9 +76,7 @@ class GuestAccountBanner extends StatelessWidget {
             style: FilledButton.styleFrom(
               minimumSize: const Size(0, 48),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
+              shape: const StadiumBorder(),
             ),
             child: const Text('Create account'),
           ),

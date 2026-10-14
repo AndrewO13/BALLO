@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Card with a title and circular Instagram / TikTok / X buttons (matches Overview styling).
 ///
@@ -34,20 +35,19 @@ class SocialsSectionCard extends StatelessWidget {
     final url = normalizeUrl(raw);
     if (url == null) return;
     final uri = Uri.tryParse(url);
-    if (uri == null ||
-        !(uri.isScheme('http') || uri.isScheme('https'))) {
+    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid link')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Invalid link')));
       }
       return;
     }
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
     }
   }
 
@@ -61,10 +61,7 @@ class SocialsSectionCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    Widget circleButton({
-      required FaIconData icon,
-      required String? url,
-    }) {
+    Widget circleButton({required FaIconData icon, required String? url}) {
       final enabled = url != null;
       return Material(
         color: Colors.transparent,
@@ -97,7 +94,7 @@ class SocialsSectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppShape.largeIncreasedRadius,
       ),
       padding: const EdgeInsets.all(20),
       child: Column(

@@ -23,9 +23,9 @@ class OnboardingIntroPage extends StatelessWidget {
   Future<void> _openLegalUrl(BuildContext context, Uri uri) async {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open $uri')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
     }
   }
 
@@ -47,114 +47,107 @@ class OnboardingIntroPage extends StatelessWidget {
         context: context,
         removeLeft: true,
         child: Stack(
-        fit: StackFit.expand,
-        clipBehavior: Clip.none,
-        children: [
-          Image.asset(
-            _onboardingBg,
-            fit: BoxFit.cover,
-          ),
-          Positioned(
-            left: 0,
-            top: 0,
-            child: _BallGoalTagGroup(scale: sx),
-          ),
-          Positioned(
-            right: 20 * sx,
-            top: 27 * sy,
-            child: _FoxTrackGroup(scale: sx),
-          ),
-          if (showSideArt)
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: [
+            Image.asset(_onboardingBg, fit: BoxFit.cover),
+            Positioned(left: 0, top: 0, child: _BallGoalTagGroup(scale: sx)),
             Positioned(
-              left: 8 * sx,
-              top: 284 * sy,
-              child: _MidLeftDecoration(scale: sx),
+              right: 20 * sx,
+              top: 27 * sy,
+              child: _FoxTrackGroup(scale: sx),
             ),
-          if (showSideArt)
-            Positioned(
-              right: 16 * sx,
-              top: 516 * sy,
-              child: _MidRightDecoration(scale: sx),
-            ),
-          Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32 * sx),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  'Your\nfootball life\nin numbers',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.anton(
-                    fontSize: 65,
-                    height: 1.25,
-                    color: Colors.black,
-                    letterSpacing: -2.39,
+            if (showSideArt)
+              Positioned(
+                left: 8 * sx,
+                top: 284 * sy,
+                child: _MidLeftDecoration(scale: sx),
+              ),
+            if (showSideArt)
+              Positioned(
+                right: 16 * sx,
+                top: 516 * sy,
+                child: _MidRightDecoration(scale: sx),
+              ),
+            Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 32 * sx),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Your\nfootball life\nin numbers',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.anton(
+                      fontSize: 65,
+                      height: 1.25,
+                      color: Colors.black,
+                      letterSpacing: -2.39,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final inset =
-                    AppConstants.onboardingEdgeInset(constraints.maxWidth);
-                return Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(inset, 0, inset, 16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () {
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) => const WelcomePage(),
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final inset = AppConstants.onboardingEdgeInset(
+                    constraints.maxWidth,
+                  );
+                  return Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(inset, 0, inset, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: () {
+                                Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(
+                                    builder: (_) => const WelcomePage(),
+                                  ),
+                                );
+                              },
+                              style: FilledButton.styleFrom(
+                                backgroundColor: colorScheme.secondaryContainer,
+                                foregroundColor:
+                                    colorScheme.onSecondaryContainer,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
                                 ),
-                              );
-                            },
-                            style: FilledButton.styleFrom(
-                              backgroundColor: colorScheme.secondaryContainer,
-                              foregroundColor:
-                                  colorScheme.onSecondaryContainer,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28),
+                                shape: const StadiumBorder(),
                               ),
-                            ),
-                            child: const Text(
-                              'Continue',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                              child: const Text(
+                                'Continue',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        _LegalNotice(
-                          linkColor: secondary,
-                          onTermsTap: () => _openLegalUrl(
-                            context,
-                            AppConstants.termsOfServiceUri,
+                          const SizedBox(height: 12),
+                          _LegalNotice(
+                            linkColor: secondary,
+                            onTermsTap: () => _openLegalUrl(
+                              context,
+                              AppConstants.termsOfServiceUri,
+                            ),
+                            onPrivacyTap: () => _openLegalUrl(
+                              context,
+                              AppConstants.privacyPolicyUri,
+                            ),
                           ),
-                          onPrivacyTap: () => _openLegalUrl(
-                            context,
-                            AppConstants.privacyPolicyUri,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -182,31 +175,31 @@ class _BallGoalTagGroup extends StatelessWidget {
         shadowDiameter: 120 * scale,
         alignment: Alignment.centerLeft,
         child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          ClipRect(
-            child: SizedBox(
-              width: ballSize,
-              height: ballSize,
-              child: Image.asset(
-                OnboardingIntroPage._ball,
+          clipBehavior: Clip.none,
+          children: [
+            ClipRect(
+              child: SizedBox(
                 width: ballSize,
                 height: ballSize,
-                fit: BoxFit.contain,
-                alignment: Alignment.centerLeft,
+                child: Image.asset(
+                  OnboardingIntroPage._ball,
+                  width: ballSize,
+                  height: ballSize,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                ),
               ),
             ),
-          ),
-          Positioned(
-            left: ballSize / 3,
-            top: (ballSize - goalTagHeight) / 2,
-            child: SvgPicture.asset(
-              OnboardingIntroPage._goalTag,
-              width: goalTagWidth,
-              height: goalTagHeight,
+            Positioned(
+              left: ballSize / 3,
+              top: (ballSize - goalTagHeight) / 2,
+              child: SvgPicture.asset(
+                OnboardingIntroPage._goalTag,
+                width: goalTagWidth,
+                height: goalTagHeight,
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -345,11 +338,7 @@ class _OnboardingGlow extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: 40,
-                spreadRadius: 18,
-              ),
+              BoxShadow(color: shadowColor, blurRadius: 40, spreadRadius: 18),
             ],
           ),
         ),
@@ -373,9 +362,9 @@ class _LegalNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.black.withValues(alpha: 0.55),
-          height: 1.4,
-        );
+      color: Colors.black.withValues(alpha: 0.55),
+      height: 1.4,
+    );
     final linkStyle = baseStyle?.copyWith(
       color: linkColor,
       fontWeight: FontWeight.w700,

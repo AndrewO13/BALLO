@@ -10,6 +10,7 @@ import '../../core/widgets/media_placeholders.dart';
 import '../../domain/models/team_model.dart';
 import '../providers/league_teams_provider.dart';
 import '../providers/teams_provider.dart';
+import '../../core/theme/app_shape.dart';
 
 class LeagueAddTeamsPage extends ConsumerStatefulWidget {
   const LeagueAddTeamsPage({super.key, required this.leagueId});
@@ -17,8 +18,7 @@ class LeagueAddTeamsPage extends ConsumerStatefulWidget {
   final String leagueId;
 
   @override
-  ConsumerState<LeagueAddTeamsPage> createState() =>
-      _LeagueAddTeamsPageState();
+  ConsumerState<LeagueAddTeamsPage> createState() => _LeagueAddTeamsPageState();
 }
 
 class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
@@ -62,7 +62,9 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
           .read(leagueTeamsRepositoryProvider)
           .getTeamIdsInLeague(widget.leagueId);
       final excludeSet = leagueTeamIds.toSet();
-      final filtered = results.where((t) => !excludeSet.contains(t.id)).toList();
+      final filtered = results
+          .where((t) => !excludeSet.contains(t.id))
+          .toList();
       if (!mounted) return;
       setState(() {
         _searchResults = filtered;
@@ -113,9 +115,9 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _processingIds.remove(team.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding team: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error adding team: $error')));
     }
   }
 
@@ -138,9 +140,7 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
               decoration: InputDecoration(
                 hintText: 'Search by team name',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                border: OutlineInputBorder(borderRadius: AppShape.fullRadius),
               ),
               autofocus: true,
             ),
@@ -149,33 +149,33 @@ class _LeagueAddTeamsPageState extends ConsumerState<LeagueAddTeamsPage> {
             child: _isSearching
                 ? const Center(child: CircularProgressIndicator())
                 : !_hasSearched
-                    ? const ScrollableAppEmptyState(
-                        imageAsset: AppAssets.addTeamsEmpty,
-                        title: 'Add teams to your league',
-                        subtitle:
-                            'Search by team name to find teams and add them to this league.',
-                      )
-                    : _searchResults.isEmpty
-                        ? const ScrollableAppEmptyState(
-                            imageAsset: AppAssets.addTeamsEmpty,
-                            title: 'No teams found',
-                            subtitle:
-                                'Try a different team name, or check the spelling.',
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: _searchResults.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final team = _searchResults[index];
-                              final isProcessing = _processingIds.contains(team.id);
-                              return _TeamSearchListItem(
-                                team: team,
-                                onAdd: () => _addTeam(team),
-                                isProcessing: isProcessing,
-                              );
-                            },
-                          ),
+                ? const ScrollableAppEmptyState(
+                    imageAsset: AppAssets.addTeamsEmpty,
+                    title: 'Add teams to your league',
+                    subtitle:
+                        'Search by team name to find teams and add them to this league.',
+                  )
+                : _searchResults.isEmpty
+                ? const ScrollableAppEmptyState(
+                    imageAsset: AppAssets.addTeamsEmpty,
+                    title: 'No teams found',
+                    subtitle:
+                        'Try a different team name, or check the spelling.',
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _searchResults.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final team = _searchResults[index];
+                      final isProcessing = _processingIds.contains(team.id);
+                      return _TeamSearchListItem(
+                        team: team,
+                        onAdd: () => _addTeam(team),
+                        isProcessing: isProcessing,
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -203,7 +203,7 @@ class _TeamSearchListItem extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Row(
         children: [

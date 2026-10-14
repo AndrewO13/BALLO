@@ -38,10 +38,7 @@ const List<String> _avatarAssets = [
 ];
 
 class OnboardingProfileImagePage extends StatefulWidget {
-  const OnboardingProfileImagePage({
-    super.key,
-    required this.draft,
-  });
+  const OnboardingProfileImagePage({super.key, required this.draft});
 
   final OnboardingDraft draft;
 
@@ -50,7 +47,8 @@ class OnboardingProfileImagePage extends StatefulWidget {
       _OnboardingProfileImagePageState();
 }
 
-class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage> {
+class _OnboardingProfileImagePageState
+    extends State<OnboardingProfileImagePage> {
   String? _imageUrl;
   bool _isUploading = false;
   bool _isFinishing = false;
@@ -92,8 +90,12 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
       final fileBytes = await image.readAsBytes();
       await requireAllowedImage(fileBytes, contentRef: 'avatar:${user.id}');
 
-      await supabase.storage.from('Profile images').uploadBinary(filePath, fileBytes);
-      final url = supabase.storage.from('Profile images').getPublicUrl(filePath);
+      await supabase.storage
+          .from('Profile images')
+          .uploadBinary(filePath, fileBytes);
+      final url = supabase.storage
+          .from('Profile images')
+          .getPublicUrl(filePath);
 
       setState(() {
         _imageUrl = url;
@@ -109,9 +111,9 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
       )) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error uploading: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error uploading: $error')));
     }
   }
 
@@ -298,8 +300,9 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
                               shape: const CircleBorder(),
                               elevation: 4,
                               child: InkWell(
-                                onTap:
-                                    _isUploading ? null : _showImageSourceDialog,
+                                onTap: _isUploading
+                                    ? null
+                                    : _showImageSourceDialog,
                                 customBorder: const CircleBorder(),
                                 child: Container(
                                   width: 44,
@@ -357,8 +360,9 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
                               boxShadow: isSelected
                                   ? [
                                       BoxShadow(
-                                        color: colorScheme.primary
-                                            .withValues(alpha: 0.3),
+                                        color: colorScheme.primary.withValues(
+                                          alpha: 0.3,
+                                        ),
                                         blurRadius: 8,
                                         spreadRadius: 1,
                                       ),
@@ -366,10 +370,7 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
                                   : null,
                             ),
                             child: ClipOval(
-                              child: Image.asset(
-                                assetPath,
-                                fit: BoxFit.cover,
-                              ),
+                              child: Image.asset(assetPath, fit: BoxFit.cover),
                             ),
                           ),
                         );
@@ -384,9 +385,7 @@ class _OnboardingProfileImagePageState extends State<OnboardingProfileImagePage>
                             : null,
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
+                          shape: const StadiumBorder(),
                         ),
                         child: _isFinishing
                             ? SizedBox(

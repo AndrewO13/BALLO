@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/video_upload_queue_provider.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Live upload status for a fixture clip, meant to sit inside a SnackBar.
 class VideoUploadProgressSnackContent extends ConsumerWidget {
@@ -17,8 +18,7 @@ class VideoUploadProgressSnackContent extends ConsumerWidget {
         .firstOrNull;
     final colorScheme = Theme.of(context).colorScheme;
     final percent = ((job?.progress ?? 0) * 100).round().clamp(0, 100);
-    final determinate =
-        job != null && job.progress > 0.05 && !job.isFailed;
+    final determinate = job != null && job.progress > 0.05 && !job.isFailed;
     final label = switch (job?.phase) {
       VideoUploadPhase.preparing => 'Preparing clip…',
       VideoUploadPhase.moderating => 'Checking clip…',
@@ -35,7 +35,7 @@ class VideoUploadProgressSnackContent extends ConsumerWidget {
         Text(label),
         const SizedBox(height: 8),
         ClipRRect(
-          borderRadius: BorderRadius.circular(99),
+          borderRadius: AppShape.fullRadius,
           child: LinearProgressIndicator(
             minHeight: 4,
             value: determinate ? job.progress.clamp(0.0, 1.0) : null,

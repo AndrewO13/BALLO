@@ -21,6 +21,7 @@ import 'league_detail_page.dart';
 import 'profile.dart';
 import '../widgets/profile_display_name.dart';
 import 'team_detail_page.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Simpler profile for coaches, scouts, agents and other technical staff.
 class StaffProfilePage extends ConsumerStatefulWidget {
@@ -464,8 +465,8 @@ class _StaffProfileHeader extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(28),
-        topRight: Radius.circular(28),
+        topLeft: Radius.circular(AppShape.medium),
+        topRight: Radius.circular(AppShape.medium),
       ),
       child: Container(
         width: double.infinity,
@@ -521,7 +522,7 @@ class _StaffProfileHeader extends StatelessWidget {
                         style: FilledButton.styleFrom(
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(
-                              Radius.circular(999),
+                              Radius.circular(AppShape.full),
                             ),
                           ),
                           padding: const EdgeInsets.only(
@@ -547,7 +548,7 @@ class _StaffProfileHeader extends StatelessWidget {
                               : colorScheme.onPrimaryContainer,
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(
-                              Radius.circular(999),
+                              Radius.circular(AppShape.full),
                             ),
                           ),
                           padding: const EdgeInsets.only(
@@ -659,7 +660,7 @@ class _StaffActionChip extends StatelessWidget {
       onPressed: () {},
       backgroundColor: colorScheme.surfaceContainerHighest,
       side: BorderSide.none,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      shape: RoundedRectangleBorder(borderRadius: AppShape.fullRadius),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );
   }
@@ -939,7 +940,7 @@ class _StaffOverviewSectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -980,7 +981,7 @@ class _StaffEntityRow extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppShape.largeRadius,
       child: Row(
         children: [
           CircleAvatar(

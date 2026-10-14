@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
+import '../../core/theme/app_shape.dart';
 
 class TeamRejectedApplicationsPage extends StatefulWidget {
   const TeamRejectedApplicationsPage({super.key, required this.teamId});
@@ -137,9 +138,9 @@ class _TeamRejectedApplicationsPageState
 
     final inviterId = Supabase.instance.client.auth.currentUser?.id;
     if (inviterId == null || inviterId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You need to be signed in')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('You need to be signed in')));
       return;
     }
 
@@ -199,9 +200,7 @@ class _TeamRejectedApplicationsPageState
               decoration: InputDecoration(
                 hintText: 'Search by name or username',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                border: OutlineInputBorder(borderRadius: AppShape.fullRadius),
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -210,106 +209,105 @@ class _TeamRejectedApplicationsPageState
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredApplications.isEmpty
-                    ? ScrollableAppEmptyState(
-                        imageAsset: AppAssets.rejectedApplicationsEmpty,
-                        title: _applications.isEmpty
-                            ? 'No rejected applications'
-                            : 'No matching applications',
-                        subtitle: _applications.isEmpty
-                            ? 'Players you decline will appear here so you can invite them again later.'
-                            : 'Try a different name or username in your search.',
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _filteredApplications.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final app = _filteredApplications[index];
-                          final players =
-                              app['players'] as Map<String, dynamic>?;
-                          final playerId = app['player_id']?.toString() ?? '';
-                          final playerName = players?['player_name'] as String? ??
-                              'Unknown';
-                          final username =
-                              players?['username'] as String? ?? '';
-                          final imageUrl = players?['image_url'] as String?;
-                          final isPending = _pendingInvitePlayerIds.contains(
-                            playerId,
-                          );
-                          final isProcessing = _processingInvitePlayerIds
-                              .contains(playerId);
+                ? ScrollableAppEmptyState(
+                    imageAsset: AppAssets.rejectedApplicationsEmpty,
+                    title: _applications.isEmpty
+                        ? 'No rejected applications'
+                        : 'No matching applications',
+                    subtitle: _applications.isEmpty
+                        ? 'Players you decline will appear here so you can invite them again later.'
+                        : 'Try a different name or username in your search.',
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _filteredApplications.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final app = _filteredApplications[index];
+                      final players = app['players'] as Map<String, dynamic>?;
+                      final playerId = app['player_id']?.toString() ?? '';
+                      final playerName =
+                          players?['player_name'] as String? ?? 'Unknown';
+                      final username = players?['username'] as String? ?? '';
+                      final imageUrl = players?['image_url'] as String?;
+                      final isPending = _pendingInvitePlayerIds.contains(
+                        playerId,
+                      );
+                      final isProcessing = _processingInvitePlayerIds.contains(
+                        playerId,
+                      );
 
-                          return Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            child: Row(
-                              children: [
-                                _PlayerAvatar(imageUrl: imageUrl),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        playerName,
-                                        style: textTheme.titleMedium,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHigh,
+                          borderRadius: AppShape.mediumRadius,
+                        ),
+                        child: Row(
+                          children: [
+                            _PlayerAvatar(imageUrl: imageUrl),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    playerName,
+                                    style: textTheme.titleMedium,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (username.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '@$username',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
-                                      if (username.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '@$username',
-                                          style: textTheme.bodySmall?.copyWith(
-                                            color:
-                                                colorScheme.onSurfaceVariant,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                FilledButton.tonalIcon(
-                                  onPressed:
-                                      (playerId.isEmpty || isPending || isProcessing)
-                                      ? null
-                                      : () => _inviteRejectedPlayer(
-                                          playerId: playerId,
-                                          playerName: playerName,
-                                        ),
-                                  icon: isProcessing
-                                      ? const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Icon(
-                                          isPending
-                                              ? Icons.hourglass_top
-                                              : Icons.person_add_alt_1,
-                                          size: 18,
-                                        ),
-                                  label: Text(
-                                    isProcessing
-                                        ? 'Sending'
-                                        : isPending
-                                        ? 'Pending'
-                                        : 'Invite',
-                                  ),
-                                ),
-                              ],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
-                          );
-                        },
-                      ),
+                            FilledButton.tonalIcon(
+                              onPressed:
+                                  (playerId.isEmpty ||
+                                      isPending ||
+                                      isProcessing)
+                                  ? null
+                                  : () => _inviteRejectedPlayer(
+                                      playerId: playerId,
+                                      playerName: playerName,
+                                    ),
+                              icon: isProcessing
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      isPending
+                                          ? Icons.hourglass_top
+                                          : Icons.person_add_alt_1,
+                                      size: 18,
+                                    ),
+                              label: Text(
+                                isProcessing
+                                    ? 'Sending'
+                                    : isPending
+                                    ? 'Pending'
+                                    : 'Invite',
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

@@ -78,9 +78,7 @@ class AppEmptyState extends StatelessWidget {
               style: FilledButton.styleFrom(
                 minimumSize: Size(200, compact ? 44 : 48),
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                shape: const StadiumBorder(),
               ),
               child: Text(actionLabel!),
             ),

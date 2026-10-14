@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/utils/match_stats_aggregation.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Radar chart for Attack / Shooting / Defence / Keeping / Discipline (0–10).
 ///
@@ -60,11 +61,7 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
       fullLabel: 'Shooting',
       meaning: 'Shots and shots on target',
     ),
-    _RadarAxis(
-      shortLabel: 'Defend',
-      fullLabel: 'Defence',
-      meaning: 'Tackles',
-    ),
+    _RadarAxis(shortLabel: 'Defend', fullLabel: 'Defence', meaning: 'Tackles'),
     _RadarAxis(
       shortLabel: 'Keep',
       fullLabel: 'Keeping',
@@ -150,7 +147,8 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
     final red = _field(row, ['red_cards']);
     final rating = _field(row, ['rating']);
 
-    final activity = goals + assists + shots + sot + tackles + saves + yellow + red;
+    final activity =
+        goals + assists + shots + sot + tackles + saves + yellow + red;
 
     // Bench / unused squad: no minutes → flat chart (matches DB p_share = 0).
     if (minutes <= 0) {
@@ -180,11 +178,11 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
     final tk90 = 90.0 * tackles / m;
     final sv90 = 90.0 * saves / m;
 
-    final cPressure = 0.14 * math.min(5.0, sot90) +
+    final cPressure =
+        0.14 * math.min(5.0, sot90) +
         0.05 * math.min(6.0, math.max(0.0, shots90 - sot90));
 
-    final cAttack = impact *
-        (1.10 * goals + 0.90 * assists + 0.8 * cPressure);
+    final cAttack = impact * (1.10 * goals + 0.90 * assists + 0.8 * cPressure);
     final cTackles = impact * 0.14 * math.min(10.0, tk90);
     final cSaves = impact * 0.22 * math.min(10.0, sv90);
     final pDisc = 0.6 * yellow + 2.0 * red;
@@ -221,7 +219,9 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
         sums[i] += axes[i];
       }
     }
-    return [for (var i = 0; i < _axes.length; i++) sums[i] / perMatchAxes.length];
+    return [
+      for (var i = 0; i < _axes.length; i++) sums[i] / perMatchAxes.length,
+    ];
   }
 
   Future<List<Map<String, dynamic>>> _fetchMatchStatRows({
@@ -276,9 +276,7 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
     final isSingleMatch = matchId != null && matchId.isNotEmpty;
     final source = isSingleMatch
         ? rows
-        : rows
-              .where(MatchStatsAggregation.rowCountsAsAppearance)
-              .toList();
+        : rows.where(MatchStatsAggregation.rowCountsAsAppearance).toList();
 
     if (source.isEmpty) {
       return List<double>.filled(_axes.length, 0);
@@ -288,9 +286,8 @@ class _PerformanceRadarChartState extends State<PerformanceRadarChart> {
     return _averageAxes(perMatch);
   }
 
-  List<RadarEntry> _axisEntries(List<double> normalizedValues) => normalizedValues
-      .map((v) => RadarEntry(value: _toAxisValue(v)))
-      .toList();
+  List<RadarEntry> _axisEntries(List<double> normalizedValues) =>
+      normalizedValues.map((v) => RadarEntry(value: _toAxisValue(v))).toList();
 
   RadarDataSet _constantDataSet(double value, {Color? borderColor}) =>
       RadarDataSet(
@@ -489,7 +486,7 @@ class _AttributeReadout extends StatelessWidget {
                   color: i == strongestIndex && !loading
                       ? primaryColor.withValues(alpha: 0.12)
                       : colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppShape.mediumRadius,
                 ),
                 child: Column(
                   children: [

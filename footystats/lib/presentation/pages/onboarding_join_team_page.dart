@@ -12,6 +12,7 @@ import '../../domain/models/onboarding_draft.dart';
 import '../widgets/onboarding_step_scaffold.dart';
 import 'create_team_league_page.dart';
 import 'home_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class OnboardingJoinTeamPage extends StatefulWidget {
   const OnboardingJoinTeamPage({super.key, required this.draft});
@@ -71,9 +72,7 @@ class _OnboardingJoinTeamPageState extends State<OnboardingJoinTeamPage> {
     setState(() => _isLoading = true);
     try {
       final listings = query == null || query.trim().isEmpty
-          ? await _teamsRepository.getSuggestedTeams(
-              excludePlayerId: _playerId,
-            )
+          ? await _teamsRepository.getSuggestedTeams(excludePlayerId: _playerId)
           : await _teamsRepository.searchTeamsForOnboarding(
               query,
               excludePlayerId: _playerId,
@@ -126,9 +125,9 @@ class _OnboardingJoinTeamPageState extends State<OnboardingJoinTeamPage> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not join team: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not join team: $error')));
     } finally {
       if (mounted) setState(() => _joiningTeamId = null);
     }
@@ -192,20 +191,21 @@ class _OnboardingJoinTeamPageState extends State<OnboardingJoinTeamPage> {
               hintText: 'Search teams on Ballo',
               prefixIcon: const Icon(Icons.search),
               filled: true,
-              fillColor: colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.55),
+              fillColor: colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.55,
+              ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppShape.largeRadius,
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppShape.largeRadius,
                 borderSide: BorderSide(
                   color: colorScheme.outlineVariant.withValues(alpha: 0.5),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppShape.largeRadius,
                 borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
               ),
             ),
@@ -268,9 +268,7 @@ class _OnboardingJoinTeamPageState extends State<OnboardingJoinTeamPage> {
             label: const Text('Create a new team'),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
+              shape: const StadiumBorder(),
               side: BorderSide(color: colorScheme.primary),
               foregroundColor: colorScheme.primary,
             ),
@@ -308,18 +306,18 @@ class _SuggestedTeamTile extends StatelessWidget {
     final joinLabel = isJoined
         ? 'Created'
         : isRequested
-            ? 'Requested'
-            : 'Join';
+        ? 'Requested'
+        : 'Join';
 
     return Material(
       color: colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppShape.largeRadius,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppShape.mediumRadius,
               child: buildTeamLogo(
                 team.logoPath,
                 size: 52,
@@ -352,7 +350,9 @@ class _SuggestedTeamTile extends StatelessWidget {
                   Text(
                     'Active squad · $memberLabel',
                     style: textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.85,
+                      ),
                     ),
                   ),
                 ],
@@ -362,13 +362,18 @@ class _SuggestedTeamTile extends StatelessWidget {
             SizedBox(
               width: 92,
               child: OutlinedButton(
-                onPressed: (isJoining || isRequested || isJoined) ? null : onJoin,
+                onPressed: (isJoining || isRequested || isJoined)
+                    ? null
+                    : onJoin,
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: AppShape.largeIncreasedRadius,
                   ),
                   side: BorderSide(
                     color: isRequested || isJoined

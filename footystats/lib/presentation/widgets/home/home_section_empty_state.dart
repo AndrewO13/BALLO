@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_shape.dart';
 
 /// Compact empty state for a single section on scrollable pages (e.g. Home).
 ///
@@ -60,10 +61,8 @@ class HomeSectionEmptyState extends StatelessWidget {
         Text(
           message,
           textAlign: TextAlign.center,
-          style: (compact ? textTheme.bodySmall : textTheme.bodyMedium)?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            height: 1.45,
-          ),
+          style: (compact ? textTheme.bodySmall : textTheme.bodyMedium)
+              ?.copyWith(color: colorScheme.onSurfaceVariant, height: 1.45),
         ),
         if (actionLabel != null && onAction != null) ...[
           SizedBox(height: compact ? 12 : 20),
@@ -73,9 +72,7 @@ class HomeSectionEmptyState extends StatelessWidget {
             label: Text(actionLabel!),
             style: FilledButton.styleFrom(
               minimumSize: Size.fromHeight(compact ? 40 : 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
+              shape: const StadiumBorder(),
             ),
           ),
         ],
@@ -85,9 +82,7 @@ class HomeSectionEmptyState extends StatelessWidget {
             onPressed: onSecondaryAction,
             style: OutlinedButton.styleFrom(
               minimumSize: Size.fromHeight(compact ? 40 : 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
+              shape: const StadiumBorder(),
             ),
             child: Text(secondaryActionLabel!),
           ),
@@ -113,7 +108,7 @@ class HomeSectionEmptyState extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: content,
     );

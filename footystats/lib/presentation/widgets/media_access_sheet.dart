@@ -3,13 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Device permission needed before camera / library access.
-enum MediaAccessKind {
-  camera,
-  photos,
-  videos,
-}
+enum MediaAccessKind { camera, photos, videos }
 
 extension MediaAccessKindX on MediaAccessKind {
   String get title {
@@ -55,7 +52,8 @@ extension MediaAccessKindX on MediaAccessKind {
       case MediaAccessKind.photos:
         return Permission.photos;
       case MediaAccessKind.videos:
-        final bool isCupertino = !kIsWeb &&
+        final bool isCupertino =
+            !kIsWeb &&
             (defaultTargetPlatform == TargetPlatform.iOS ||
                 defaultTargetPlatform == TargetPlatform.macOS);
         return isCupertino ? Permission.photos : Permission.videos;
@@ -149,7 +147,9 @@ Future<void> showMediaAccessSheet(
     context: context,
     showDragHandle: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(AppShape.extraLarge),
+      ),
     ),
     builder: (sheetContext) {
       return SafeArea(
@@ -159,11 +159,7 @@ Future<void> showMediaAccessSheet(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(
-                kind.icon,
-                size: 40,
-                color: colorScheme.primary,
-              ),
+              Icon(kind.icon, size: 40, color: colorScheme.primary),
               const SizedBox(height: 12),
               Text(
                 kind.title,
@@ -189,9 +185,7 @@ Future<void> showMediaAccessSheet(
                 },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 child: const Text('Open settings'),
               ),

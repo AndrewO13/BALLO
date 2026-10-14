@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/app_shimmer.dart';
+import '../../../core/theme/app_shape.dart';
 
 /// Hero header skeleton shown while profile data loads.
 class ProfileHeaderShimmer extends StatelessWidget {
@@ -11,8 +12,8 @@ class ProfileHeaderShimmer extends StatelessWidget {
     return const AppShimmer(
       child: ClipRRect(
         borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
+          topLeft: Radius.circular(AppShape.medium),
+          topRight: Radius.circular(AppShape.medium),
         ),
         child: ColoredBox(
           color: Colors.white,
@@ -23,7 +24,11 @@ class ProfileHeaderShimmer extends StatelessWidget {
                 padding: EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    ShimmerBox(width: 72, height: 72, borderRadius: 999),
+                    ShimmerBox(
+                      width: 72,
+                      height: 72,
+                      borderRadius: AppShape.full,
+                    ),
                     SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -32,15 +37,23 @@ class ProfileHeaderShimmer extends StatelessWidget {
                           ShimmerBox(
                             width: double.infinity,
                             height: 28,
-                            borderRadius: 8,
+                            borderRadius: AppShape.small,
                           ),
                           SizedBox(height: 8),
-                          ShimmerBox(width: 120, height: 16, borderRadius: 6),
+                          ShimmerBox(
+                            width: 120,
+                            height: 16,
+                            borderRadius: AppShape.small,
+                          ),
                         ],
                       ),
                     ),
                     SizedBox(width: 12),
-                    ShimmerBox(width: 60, height: 40, borderRadius: 999),
+                    ShimmerBox(
+                      width: 60,
+                      height: 40,
+                      borderRadius: AppShape.full,
+                    ),
                   ],
                 ),
               ),
@@ -48,13 +61,29 @@ class ProfileHeaderShimmer extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
                   children: [
-                    ShimmerBox(width: 88, height: 32, borderRadius: 16),
+                    ShimmerBox(
+                      width: 88,
+                      height: 32,
+                      borderRadius: AppShape.large,
+                    ),
                     SizedBox(width: 8),
-                    ShimmerBox(width: 88, height: 32, borderRadius: 16),
+                    ShimmerBox(
+                      width: 88,
+                      height: 32,
+                      borderRadius: AppShape.large,
+                    ),
                     SizedBox(width: 8),
-                    ShimmerBox(width: 88, height: 32, borderRadius: 16),
+                    ShimmerBox(
+                      width: 88,
+                      height: 32,
+                      borderRadius: AppShape.large,
+                    ),
                     SizedBox(width: 8),
-                    ShimmerBox(width: 88, height: 32, borderRadius: 16),
+                    ShimmerBox(
+                      width: 88,
+                      height: 32,
+                      borderRadius: AppShape.large,
+                    ),
                   ],
                 ),
               ),
@@ -87,20 +116,24 @@ class ProfileSectionCardShimmer extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (showTitle) ...[
-              const ShimmerBox(width: 120, height: 18, borderRadius: 6),
+              const ShimmerBox(
+                width: 120,
+                height: 18,
+                borderRadius: AppShape.small,
+              ),
               const SizedBox(height: 16),
             ],
             const Expanded(
               child: ShimmerBox(
                 width: double.infinity,
                 height: double.infinity,
-                borderRadius: 12,
+                borderRadius: AppShape.medium,
               ),
             ),
           ],
@@ -169,16 +202,24 @@ class _MatchDateGroupShimmer extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ShimmerBox(width: 100, height: 16, borderRadius: 6),
+          ShimmerBox(width: 100, height: 16, borderRadius: AppShape.small),
           SizedBox(height: 12),
-          ShimmerBox(width: double.infinity, height: 72, borderRadius: 16),
+          ShimmerBox(
+            width: double.infinity,
+            height: 72,
+            borderRadius: AppShape.large,
+          ),
           SizedBox(height: 8),
-          ShimmerBox(width: double.infinity, height: 72, borderRadius: 16),
+          ShimmerBox(
+            width: double.infinity,
+            height: 72,
+            borderRadius: AppShape.large,
+          ),
         ],
       ),
     );
@@ -199,9 +240,17 @@ class ProfileVideosTabShimmer extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                ShimmerBox(width: 120, height: 20, borderRadius: 6),
+                ShimmerBox(
+                  width: 120,
+                  height: 20,
+                  borderRadius: AppShape.small,
+                ),
                 Spacer(),
-                ShimmerBox(width: 40, height: 40, borderRadius: 20),
+                ShimmerBox(
+                  width: 40,
+                  height: 40,
+                  borderRadius: AppShape.largeIncreased,
+                ),
               ],
             ),
           ),
@@ -232,11 +281,11 @@ class _VideoThumbnailRowShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Row(
       children: [
-        Expanded(child: ShimmerBox(borderRadius: 12)),
+        Expanded(child: ShimmerBox(borderRadius: AppShape.medium)),
         SizedBox(width: 8),
-        Expanded(child: ShimmerBox(borderRadius: 12)),
+        Expanded(child: ShimmerBox(borderRadius: AppShape.medium)),
         SizedBox(width: 8),
-        Expanded(child: ShimmerBox(borderRadius: 12)),
+        Expanded(child: ShimmerBox(borderRadius: AppShape.medium)),
       ],
     );
   }

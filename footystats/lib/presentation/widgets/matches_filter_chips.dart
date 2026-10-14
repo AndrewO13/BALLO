@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_shape.dart';
 
 class MatchesFilterOption {
   const MatchesFilterOption({required this.value, required this.label});
@@ -9,11 +10,7 @@ class MatchesFilterOption {
 
 /// Equal-width outlined filter chips with 8dp gaps, matching the main Matches page.
 class MatchesFilterChipRow extends StatelessWidget {
-  const MatchesFilterChipRow({
-    super.key,
-    required this.chips,
-    this.leading,
-  });
+  const MatchesFilterChipRow({super.key, required this.chips, this.leading});
 
   final List<Widget> chips;
   final Widget? leading;
@@ -22,10 +19,7 @@ class MatchesFilterChipRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        if (leading != null) ...[
-          leading!,
-          const SizedBox(width: 8),
-        ],
+        if (leading != null) ...[leading!, const SizedBox(width: 8)],
         for (var i = 0; i < chips.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
           Expanded(child: chips[i]),
@@ -69,17 +63,18 @@ class MatchesFilterMenuChip extends StatelessWidget {
         return Material(
           color: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppShape.mediumRadius,
             side: BorderSide(color: colorScheme.outlineVariant),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: !enabled
                 ? null
-                : () =>
-                      controller.isOpen ? controller.close() : controller.open(),
+                : () => controller.isOpen
+                      ? controller.close()
+                      : controller.open(),
             customBorder: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppShape.mediumRadius,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
@@ -111,11 +106,7 @@ class MatchesFilterMenuChip extends StatelessWidget {
           MenuItemButton(
             onPressed: () => onSelected(option.value),
             trailingIcon: option.value == selectedValue
-                ? Icon(
-                    Icons.check,
-                    size: 18,
-                    color: colorScheme.primary,
-                  )
+                ? Icon(Icons.check, size: 18, color: colorScheme.primary)
                 : const SizedBox(width: 18),
             child: Text(option.label),
           ),

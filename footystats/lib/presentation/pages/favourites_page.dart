@@ -19,6 +19,7 @@ import 'league_detail_page.dart';
 import 'fixture.dart';
 import 'player_profile_page.dart';
 import 'team_detail_page.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Favourites tab with category tabs for matches, teams, leagues and players.
 class FavouritesPage extends ConsumerStatefulWidget {
@@ -75,10 +76,7 @@ class _FavouritesPageState extends ConsumerState<FavouritesPage>
           child: DecoratedBox(
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                  color: colorScheme.outlineVariant,
-                  width: 1,
-                ),
+                bottom: BorderSide(color: colorScheme.outlineVariant, width: 1),
               ),
             ),
             child: TabBar(
@@ -93,9 +91,9 @@ class _FavouritesPageState extends ConsumerState<FavouritesPage>
               indicatorColor: colorScheme.primary,
               indicatorWeight: 3,
               dividerColor: Colors.transparent,
-              labelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              labelStyle: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
               tabs: const [
                 Tab(text: 'Matches'),
@@ -110,18 +108,12 @@ class _FavouritesPageState extends ConsumerState<FavouritesPage>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _FavouritedMatchesTab(
-                scrollController: _tabScrollControllers[0],
-              ),
-              _FavouritedTeamsTab(
-                scrollController: _tabScrollControllers[1],
-              ),
+              _FavouritedMatchesTab(scrollController: _tabScrollControllers[0]),
+              _FavouritedTeamsTab(scrollController: _tabScrollControllers[1]),
               _FavouritedCompetitionsTab(
                 scrollController: _tabScrollControllers[2],
               ),
-              _FavouritedPlayersTab(
-                scrollController: _tabScrollControllers[3],
-              ),
+              _FavouritedPlayersTab(scrollController: _tabScrollControllers[3]),
             ],
           ),
         ),
@@ -130,11 +122,7 @@ class _FavouritesPageState extends ConsumerState<FavouritesPage>
   }
 }
 
-void _reorderItem(
-  int oldIndex,
-  int newIndex,
-  void Function(int, int) reorder,
-) {
+void _reorderItem(int oldIndex, int newIndex, void Function(int, int) reorder) {
   reorder(oldIndex, newIndex);
 }
 
@@ -159,8 +147,7 @@ class _FavouritedMatchesTab extends ConsumerWidget {
               child: AppEmptyState(
                 imageAsset: AppAssets.searchEmpty,
                 title: 'No favourite matches yet',
-                subtitle:
-                    'Tap the star on a match to save it here.',
+                subtitle: 'Tap the star on a match to save it here.',
               ),
             ),
           ),
@@ -203,11 +190,7 @@ class _FavouritedMatchesTab extends ConsumerWidget {
 }
 
 class _FavouritedMatchCard extends ConsumerWidget {
-  const _FavouritedMatchCard({
-    super.key,
-    required this.match,
-    this.index,
-  });
+  const _FavouritedMatchCard({super.key, required this.match, this.index});
 
   final FavouritedMatch match;
   final int? index;
@@ -220,9 +203,7 @@ class _FavouritedMatchCard extends ConsumerWidget {
     void openMatch() {
       if (isEditMode) return;
       Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => FixturePage(matchId: match.id),
-        ),
+        MaterialPageRoute<void>(builder: (_) => FixturePage(matchId: match.id)),
       );
     }
 
@@ -291,11 +272,7 @@ class _FavouritedTeamsTab extends ConsumerWidget {
 }
 
 class _FavouritedTeamCard extends ConsumerWidget {
-  const _FavouritedTeamCard({
-    super.key,
-    required this.team,
-    this.index,
-  });
+  const _FavouritedTeamCard({super.key, required this.team, this.index});
 
   final FavouritedTeam team;
   final int? index;
@@ -381,11 +358,7 @@ class _FavouritedCompetitionsTab extends ConsumerWidget {
 }
 
 class _FavouritedLeagueCard extends ConsumerWidget {
-  const _FavouritedLeagueCard({
-    super.key,
-    required this.league,
-    this.index,
-  });
+  const _FavouritedLeagueCard({super.key, required this.league, this.index});
 
   final FavouritedLeague league;
   final int? index;
@@ -521,10 +494,7 @@ class _FavouritesDiscoveryEmptyState extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 36),
-              SizedBox(
-                height: _DiscoveryShowcaseCard.size,
-                child: marquee,
-              ),
+              SizedBox(height: _DiscoveryShowcaseCard.size, child: marquee),
             ],
           ),
         ),
@@ -672,10 +642,7 @@ class _FavouritedCompetitionsEmptyState extends ConsumerWidget {
 }
 
 class _DiscoveryMarquee extends StatefulWidget {
-  const _DiscoveryMarquee({
-    required this.itemCount,
-    required this.itemBuilder,
-  });
+  const _DiscoveryMarquee({required this.itemCount, required this.itemBuilder});
 
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
@@ -759,10 +726,7 @@ class _DiscoveryMarqueeState extends State<_DiscoveryMarquee>
             width: trackWidth,
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                ...cards,
-                ...cards,
-              ],
+              children: [...cards, ...cards],
             ),
           ),
         ),
@@ -824,7 +788,7 @@ class _DiscoveryShowcaseCardState extends State<_DiscoveryShowcaseCard> {
         height: _DiscoveryShowcaseCard.size,
         decoration: BoxDecoration(
           color: cardColor,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: AppShape.largeIncreasedRadius,
         ),
         child: Center(child: widget.child),
       ),
@@ -833,10 +797,7 @@ class _DiscoveryShowcaseCardState extends State<_DiscoveryShowcaseCard> {
 }
 
 class _PopularPlayerShowcaseCard extends StatelessWidget {
-  const _PopularPlayerShowcaseCard({
-    required this.player,
-    this.onTap,
-  });
+  const _PopularPlayerShowcaseCard({required this.player, this.onTap});
 
   final PlayerSearchModel player;
   final VoidCallback? onTap;
@@ -874,10 +835,7 @@ class _PopularPlayerShowcaseCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: colorScheme.surface,
-                    border: Border.all(
-                      color: colorScheme.surface,
-                      width: 2,
-                    ),
+                    border: Border.all(color: colorScheme.surface, width: 2),
                   ),
                   child: ClipOval(
                     child: buildTeamLogo(teamLogoPath, size: badgeSize),
@@ -892,10 +850,7 @@ class _PopularPlayerShowcaseCard extends StatelessWidget {
 }
 
 class _PopularTeamShowcaseCard extends StatelessWidget {
-  const _PopularTeamShowcaseCard({
-    required this.team,
-    this.onTap,
-  });
+  const _PopularTeamShowcaseCard({required this.team, this.onTap});
 
   final TeamModel team;
   final VoidCallback? onTap;
@@ -908,18 +863,13 @@ class _PopularTeamShowcaseCard extends StatelessWidget {
     return _DiscoveryShowcaseCard(
       colorImagePath: logoPath,
       onTap: onTap,
-      child: ClipOval(
-        child: buildTeamLogo(logoPath, size: logoSize),
-      ),
+      child: ClipOval(child: buildTeamLogo(logoPath, size: logoSize)),
     );
   }
 }
 
 class _PopularLeagueShowcaseCard extends StatelessWidget {
-  const _PopularLeagueShowcaseCard({
-    required this.league,
-    this.onTap,
-  });
+  const _PopularLeagueShowcaseCard({required this.league, this.onTap});
 
   final LeagueModel league;
   final VoidCallback? onTap;
@@ -933,7 +883,7 @@ class _PopularLeagueShowcaseCard extends StatelessWidget {
       colorImagePath: logoPath,
       onTap: onTap,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppShape.mediumRadius,
         child: buildTeamLogo(logoPath, size: logoSize),
       ),
     );
@@ -941,11 +891,7 @@ class _PopularLeagueShowcaseCard extends StatelessWidget {
 }
 
 class _FavouritedPlayerCard extends ConsumerWidget {
-  const _FavouritedPlayerCard({
-    super.key,
-    required this.player,
-    this.index,
-  });
+  const _FavouritedPlayerCard({super.key, required this.player, this.index});
 
   final FavouritedPlayer player;
   final int? index;
@@ -1051,16 +997,21 @@ class _FavouriteListTileState extends State<_FavouriteListTile> {
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: cardColor,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppShape.mediumRadius,
           child: InkWell(
             onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppShape.mediumRadius,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(widget.isEditMode ? 4 : 16, 12, 8, 12),
+              padding: EdgeInsets.fromLTRB(
+                widget.isEditMode ? 4 : 16,
+                12,
+                8,
+                12,
+              ),
               child: Row(
                 children: [
                   if (widget.isEditMode && widget.index != null) ...[
@@ -1167,10 +1118,7 @@ class _FavouriteThumbnail extends StatelessWidget {
     if (shape == _FavouriteImageShape.circle) {
       return ClipOval(child: image);
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: image,
-    );
+    return ClipRRect(borderRadius: AppShape.smallRadius, child: image);
   }
 }
 

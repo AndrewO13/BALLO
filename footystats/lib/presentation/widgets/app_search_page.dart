@@ -16,6 +16,7 @@ import '../pages/team_detail_page.dart';
 import '../providers/favourited_leagues_provider.dart';
 import '../providers/favourited_players_provider.dart';
 import '../providers/favourited_teams_provider.dart';
+import '../../core/theme/app_shape.dart';
 
 enum _SearchCategory { all, teams, competitions, players }
 
@@ -74,8 +75,7 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
 
   bool get _showPopularTeams =>
       _controller.text.trim().isEmpty &&
-      (_category == _SearchCategory.all ||
-          _category == _SearchCategory.teams);
+      (_category == _SearchCategory.all || _category == _SearchCategory.teams);
 
   bool get _showPopularCompetitions =>
       _controller.text.trim().isEmpty &&
@@ -95,10 +95,12 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
     });
     try {
       final teams = await ref.read(teamsRepositoryProvider).getPopularTeams();
-      final leagues =
-          await ref.read(leaguesRepositoryProvider).getPopularLeagues();
-      final players =
-          await ref.read(playersRepositoryProvider).getPopularPlayers();
+      final leagues = await ref
+          .read(leaguesRepositoryProvider)
+          .getPopularLeagues();
+      final players = await ref
+          .read(playersRepositoryProvider)
+          .getPopularPlayers();
       if (!mounted) return;
       setState(() {
         _popularTeams = teams;
@@ -237,20 +239,22 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
             .isFilter('deleted_at', null)
             .limit(10);
         players.addAll(
-          (playersRes as List).map((e) {
-            final model = PlayerSearchModel.fromJson(
-              Map<String, dynamic>.from(e as Map),
-            );
-            return _SearchItem(
-              id: model.id,
-              label: model.displayName,
-              type: 'Player',
-              avatarUrl: model.imageUrl,
-              position: model.position,
-              subtitle: model.subtitle,
-              favouriteCount: model.favouriteCount,
-            );
-          }).where((item) => item.id.isNotEmpty),
+          (playersRes as List)
+              .map((e) {
+                final model = PlayerSearchModel.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                );
+                return _SearchItem(
+                  id: model.id,
+                  label: model.displayName,
+                  type: 'Player',
+                  avatarUrl: model.imageUrl,
+                  position: model.position,
+                  subtitle: model.subtitle,
+                  favouriteCount: model.favouriteCount,
+                );
+              })
+              .where((item) => item.id.isNotEmpty),
         );
       }
 
@@ -296,29 +300,23 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
     dismissKeyboard();
     if (item.type == 'League') {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => LeagueDetailPage(leagueId: item.id),
-        ),
+        MaterialPageRoute(builder: (_) => LeagueDetailPage(leagueId: item.id)),
       );
     } else if (item.type == 'Player') {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => PlayerProfilePage(playerId: item.id),
-        ),
+        MaterialPageRoute(builder: (_) => PlayerProfilePage(playerId: item.id)),
       );
     } else {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TeamDetailPage(teamId: item.id),
-        ),
+        MaterialPageRoute(builder: (_) => TeamDetailPage(teamId: item.id)),
       );
     }
   }
 
   Future<void> _toggleLeagueFavourite(LeagueModel league) async {
-    await ref.read(favouritedLeaguesProvider.notifier).toggle(
-      FavouritedLeague.fromLeagueModel(league),
-    );
+    await ref
+        .read(favouritedLeaguesProvider.notifier)
+        .toggle(FavouritedLeague.fromLeagueModel(league));
   }
 
   Future<void> _togglePlayerFavourite(PlayerSearchModel player) async {
@@ -343,9 +341,11 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
               bannerId: entry.bannerId,
               shortForm: entry.shortForm,
               teamName: entry.teamName,
-              favouriteCount: (entry.favouriteCount +
-                      (isNowFavourited ? 1 : -1))
-                  .clamp(0, 1 << 30),
+              favouriteCount:
+                  (entry.favouriteCount + (isNowFavourited ? 1 : -1)).clamp(
+                    0,
+                    1 << 30,
+                  ),
             )
           else
             entry,
@@ -374,12 +374,8 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Back',
-        ),
-        titleSpacing: 0,
+        automaticallyImplyLeading: false,
+        titleSpacing: 16,
         title: TextField(
           controller: _controller,
           focusNode: _focusNode,
@@ -393,8 +389,13 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
               horizontal: 16,
               vertical: 10,
             ),
+            prefixIcon: IconButton(
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.chevron_left, size: 32),
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppShape.fullRadius,
               borderSide: BorderSide.none,
             ),
             suffixIcon: _controller.text.isNotEmpty
@@ -483,43 +484,43 @@ class _AppSearchPageState extends ConsumerState<AppSearchPage> {
                     onTap: () => _openResult(item),
                     onStarTap: switch (item.type) {
                       'League' => () async {
-                          await ref
-                              .read(favouritedLeaguesProvider.notifier)
-                              .toggle(
-                                FavouritedLeague(
-                                  id: item.id,
-                                  name: item.label,
-                                  country: item.country,
-                                  logoId: item.logoId,
-                                ),
-                              );
-                        },
+                        await ref
+                            .read(favouritedLeaguesProvider.notifier)
+                            .toggle(
+                              FavouritedLeague(
+                                id: item.id,
+                                name: item.label,
+                                country: item.country,
+                                logoId: item.logoId,
+                              ),
+                            );
+                      },
                       'Player' => () async {
-                          await ref
-                              .read(favouritedPlayersProvider.notifier)
-                              .toggle(
-                                FavouritedPlayer(
-                                  id: item.id,
-                                  name: item.label,
-                                  imageUrl: item.avatarUrl,
-                                  position: item.position,
-                                  favouriteCount: item.favouriteCount ?? 0,
-                                ),
-                              );
-                        },
+                        await ref
+                            .read(favouritedPlayersProvider.notifier)
+                            .toggle(
+                              FavouritedPlayer(
+                                id: item.id,
+                                name: item.label,
+                                imageUrl: item.avatarUrl,
+                                position: item.position,
+                                favouriteCount: item.favouriteCount ?? 0,
+                              ),
+                            );
+                      },
                       _ => () async {
-                          await ref
-                              .read(favouritedTeamsProvider.notifier)
-                              .toggle(
-                                FavouritedTeam(
-                                  id: item.id,
-                                  name: item.label,
-                                  shortForm: item.shortForm,
-                                  logoId: item.logoId,
-                                  favouriteCount: item.favouriteCount ?? 0,
-                                ),
-                              );
-                        },
+                        await ref
+                            .read(favouritedTeamsProvider.notifier)
+                            .toggle(
+                              FavouritedTeam(
+                                id: item.id,
+                                name: item.label,
+                                shortForm: item.shortForm,
+                                logoId: item.logoId,
+                                favouriteCount: item.favouriteCount ?? 0,
+                              ),
+                            );
+                      },
                     },
                   ),
                 ),
@@ -661,11 +662,13 @@ class _CategoryChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? colorScheme.onSurface : colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(999),
+      color: selected
+          ? colorScheme.onSurface
+          : colorScheme.surfaceContainerHigh,
+      borderRadius: AppShape.fullRadius,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: AppShape.fullRadius,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text(
@@ -789,7 +792,9 @@ class _PopularTeamCard extends StatelessWidget {
     final shortForm = team.shortForm.trim();
     return _EntityCard(
       title: team.displayName,
-      subtitle: shortForm.isNotEmpty ? '$shortForm | Football' : 'Team | Football',
+      subtitle: shortForm.isNotEmpty
+          ? '$shortForm | Football'
+          : 'Team | Football',
       logoPath: resolveTeamLogoPath(team.logoId),
       logoShape: _SearchImageShape.circular,
       fallbackIcon: Icons.groups,
@@ -830,10 +835,10 @@ class _EntityCard extends StatelessWidget {
 
     return Material(
       color: colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: AppShape.mediumRadius,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
           child: Row(
@@ -974,25 +979,14 @@ class _SearchLogo extends StatelessWidget {
     final placeholder = SizedBox(
       width: 36,
       height: 36,
-      child: Icon(
-        fallbackIcon,
-        color: colorScheme.onSurfaceVariant,
-        size: 22,
-      ),
+      child: Icon(fallbackIcon, color: colorScheme.onSurfaceVariant, size: 22),
     );
     final content = path == null || path.isEmpty
         ? placeholder
-        : SizedBox(
-            width: 36,
-            height: 36,
-            child: buildTeamLogo(path, size: 36),
-          );
+        : SizedBox(width: 36, height: 36, child: buildTeamLogo(path, size: 36));
 
     if (shape == _SearchImageShape.roundedSquare) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: content,
-      );
+      return ClipRRect(borderRadius: AppShape.smallRadius, child: content);
     }
     return ClipOval(child: content);
   }

@@ -22,9 +22,7 @@ class SocialSignInButton extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
-        ),
+        shape: const StadiumBorder(),
         side: BorderSide(
           color: colorScheme.outlineVariant.withValues(alpha: 0.85),
         ),

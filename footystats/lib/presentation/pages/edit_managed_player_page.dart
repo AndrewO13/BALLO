@@ -122,9 +122,9 @@ class _EditManagedPlayerPageState extends State<EditManagedPlayerPage> {
       )) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error uploading: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error uploading: $error')));
     }
   }
 
@@ -182,13 +182,15 @@ class _EditManagedPlayerPageState extends State<EditManagedPlayerPage> {
     final username = UsernameRules.normalize(_usernameController.text);
     final nameBlock = UsernameRules.offensiveContentError(name);
     if (nameBlock != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(nameBlock)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(nameBlock)));
       return;
     }
     if (_position == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a position')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Select a position')));
       return;
     }
     final imageUrl = _imageUrl?.trim() ?? '';
@@ -230,7 +232,9 @@ class _EditManagedPlayerPageState extends State<EditManagedPlayerPage> {
       if (!mounted) return;
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))),
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+        ),
       );
     }
   }
@@ -400,9 +404,7 @@ class _EditManagedPlayerPageState extends State<EditManagedPlayerPage> {
                 onPressed: _isSaving ? null : _onSave,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
+                  shape: const StadiumBorder(),
                 ),
                 child: _isSaving
                     ? const SizedBox(

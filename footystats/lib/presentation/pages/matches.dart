@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import '../../core/adaptive/adaptive.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_assets.dart';
@@ -20,11 +21,14 @@ import '../providers/match_video_seen_provider.dart';
 import '../widgets/home/home_page_shimmer.dart';
 import '../widgets/match_list_score_pill.dart';
 import '../widgets/match_live_status.dart';
+import '../widgets/match_date_picker_dialog.dart';
+import '../widgets/collapsing_page_header.dart';
 import '../widgets/matches_filter_chips.dart';
 import 'create_match_entry_page.dart';
 import 'fixture.dart';
 import 'league_detail_page.dart';
 import 'match_videos_player_page.dart';
+import '../../core/theme/app_shape.dart';
 
 class MatchesPage extends ConsumerStatefulWidget {
   const MatchesPage({
@@ -33,6 +37,7 @@ class MatchesPage extends ConsumerStatefulWidget {
     this.mainNavTabIndex = MainNavTab.secondary,
     this.header,
     this.useDateNavigation = false,
+    this.materialAppBar = false,
   });
 
   final int activationNonce;
@@ -43,6 +48,9 @@ class MatchesPage extends ConsumerStatefulWidget {
 
   /// Guest home: show a calendar day header (Today) instead of gameweeks.
   final bool useDateNavigation;
+
+  /// Collapsing MATCHES header. Used by the Matches tab, not embedded lists.
+  final bool materialAppBar;
 
   @override
   ConsumerState<MatchesPage> createState() => _MatchesPageState();
@@ -66,6 +74,31 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
         setState(() => _filtersVisible = true);
       }
     }
+  }
+
+  Future<void> _pickMatchDate() async {
+    final matchDates = <DateTime>{};
+    try {
+      final matches = await ref.read(matchesProvider.future);
+      for (final match in matches) {
+        matchDates.add(
+          DateTime(
+            match.matchDate.year,
+            match.matchDate.month,
+            match.matchDate.day,
+          ),
+        );
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    final picked = await showMatchAwareDatePicker(
+      context,
+      matchDates: matchDates,
+    );
+    if (picked == null || !mounted) return;
+    ref
+        .read(matchesJumpToDateProvider.notifier)
+        .set(DateTime(picked.year, picked.month, picked.day));
   }
 
   bool _onUserScroll(UserScrollNotification notification) {
@@ -179,21 +212,17 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
           key: _dateGroupKeys.putIfAbsent(group.scrollKey, () => GlobalKey()),
           child: _buildMatchListGroup(
             context,
-            dateLabel: group.leagueHeaderMatch == null
-                ? group.dateLabel
-                : null,
+            dateLabel: group.leagueHeaderMatch == null ? group.dateLabel : null,
             leagueHeaderMatch: group.leagueHeaderMatch,
-            matches: group.matches
-                .map(
-                  (m) => _buildMatchCardFromModel(
-                    context,
-                    m,
-                    group.dateLabel,
-                  ),
-                )
-                .expand((w) => [w, const SizedBox(height: 2)])
-                .toList()
-              ..removeLast(),
+            matches:
+                group.matches
+                    .map(
+                      (m) =>
+                          _buildMatchCardFromModel(context, m, group.dateLabel),
+                    )
+                    .expand((w) => [w, const SizedBox(height: 2)])
+                    .toList()
+                  ..removeLast(),
             firstMatchId: group.matches.isNotEmpty
                 ? group.matches.first.id
                 : null,
@@ -320,7 +349,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                 );
               }
             : null,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.mediumRadius,
         child: Container(
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -339,9 +368,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                       children: [
                         Text(homeName, style: textTheme.bodySmall),
                         const SizedBox(width: 8),
-                        ClipOval(
-                          child: _TeamLogo(path: homeLogo, size: 28),
-                        ),
+                        ClipOval(child: _TeamLogo(path: homeLogo, size: 28)),
                       ],
                     ),
                     const SizedBox(width: 16),
@@ -382,10 +409,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                                     padding: EdgeInsets.only(right: 6.0),
                                     child: MatchLivePulseIndicator(size: 8),
                                   ),
-                                Text(
-                                  statusText,
-                                  style: textTheme.labelSmall,
-                                ),
+                                Text(statusText, style: textTheme.labelSmall),
                               ],
                             ),
                           ],
@@ -395,9 +419,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ClipOval(
-                          child: _TeamLogo(path: awayLogo, size: 28),
-                        ),
+                        ClipOval(child: _TeamLogo(path: awayLogo, size: 28)),
                         const SizedBox(width: 8),
                         Text(awayName, style: textTheme.bodySmall),
                       ],
@@ -430,7 +452,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.mediumRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,11 +467,12 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => FixturePage(matchId: firstMatchId),
+                        builder: (context) =>
+                            FixturePage(matchId: firstMatchId),
                       ),
                     );
                   },
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppShape.smallRadius,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: Text(
@@ -506,7 +529,10 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
 
     final videosLookup = ref
         .watch(matchesVideosLookupProvider)
-        .maybeWhen(data: (lookup) => lookup, orElse: () => const MatchVideosLookup());
+        .maybeWhen(
+          data: (lookup) => lookup,
+          orElse: () => const MatchVideosLookup(),
+        );
     final seenIds = ref.watch(matchVideoSeenProvider);
     final hasVideo = videosLookup.matchIds.contains(match.id);
     final videoWatched = matchVideoWatchedSegments(
@@ -540,9 +566,7 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
   @override
   Widget build(BuildContext context) {
     ref.listen<int>(
-      mainNavScrollToTopProvider.select(
-        (m) => m[widget.mainNavTabIndex] ?? 0,
-      ),
+      mainNavScrollToTopProvider.select((m) => m[widget.mainNavTabIndex] ?? 0),
       (previous, next) {
         if (previous == next) return;
         if (!_filtersVisible) setState(() => _filtersVisible = true);
@@ -573,196 +597,231 @@ class _MatchesPageState extends ConsumerState<MatchesPage> {
         (!widget.useDateNavigation && selectedGw != null) ||
         selectedTeam != null;
 
-    return Column(
-      children: [
-        ClipRect(
-          child: AnimatedAlign(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            heightFactor: _filtersVisible ? 1 : 0,
-            child: Material(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _MatchesFilterRow(
-                      hideGameweekFilter: widget.useDateNavigation,
-                    ),
-                    const SizedBox(height: 12),
-                    if (widget.useDateNavigation)
-                      const _DateMatchesHeader()
-                    else
-                      const _GameweekHeader(),
-                  ],
-                ),
-              ),
+    final filterHeader = ClipRect(
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        heightFactor: _filtersVisible ? 1 : 0,
+        child: Material(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              widget.materialAppBar ? 0 : 12,
+              16,
+              8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _MatchesFilterRow(hideGameweekFilter: widget.useDateNavigation),
+                const SizedBox(height: 12),
+                if (widget.useDateNavigation)
+                  const _DateMatchesHeader()
+                else
+                  const _GameweekHeader(),
+              ],
             ),
           ),
         ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(matchesProvider);
-              await ref.read(matchesProvider.future);
-            },
-            child: NotificationListener<UserScrollNotification>(
-              onNotification: _onUserScroll,
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  if (widget.header != null)
-                    SliverToBoxAdapter(child: widget.header!),
-                  asyncMatches.when(
-            data: (_) {
-              final List<({
-                String scrollKey,
-                String dateLabel,
-                List<MatchModel> matches,
-                MatchModel? leagueHeaderMatch,
-              })>
-              groups;
+      ),
+    );
 
-              if (widget.useDateNavigation) {
-                final dateKey = _dateToKey(selectedCalendarDate);
-                groups = _leagueGroupsOnDate(
-                  dateKey: dateKey,
-                  dayMatches: grouped[dateKey] ?? [],
-                  dateLabel: formatMatchDateKey(dateKey),
-                );
-              } else {
-                final dateKeys = grouped.keys.toList()..sort();
-                groups = [
-                  for (final key in dateKeys)
-                    (
-                      scrollKey: key,
-                      dateLabel: formatMatchDateKey(key),
-                      matches: grouped[key]!,
-                      leagueHeaderMatch: null,
-                    ),
-                ];
-                _scrollToLatestDateIfNeeded(dateKeys);
-                _scrollToRequestedDateIfNeeded(dateKeys, requestedJumpDate);
-              }
+    final scrollView = RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(matchesProvider);
+        await ref.read(matchesProvider.future);
+      },
+      child: NotificationListener<UserScrollNotification>(
+        onNotification: _onUserScroll,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            if (widget.header != null)
+              SliverToBoxAdapter(child: widget.header!),
+            asyncMatches.when(
+              data: (_) {
+                final List<
+                  ({
+                    String scrollKey,
+                    String dateLabel,
+                    List<MatchModel> matches,
+                    MatchModel? leagueHeaderMatch,
+                  })
+                >
+                groups;
 
-              if (groups.isEmpty && !showRecentResults) {
                 if (widget.useDateNavigation) {
+                  final dateKey = _dateToKey(selectedCalendarDate);
+                  groups = _leagueGroupsOnDate(
+                    dateKey: dateKey,
+                    dayMatches: grouped[dateKey] ?? [],
+                    dateLabel: formatMatchDateKey(dateKey),
+                  );
+                } else {
+                  final dateKeys = grouped.keys.toList()..sort();
+                  groups = [
+                    for (final key in dateKeys)
+                      (
+                        scrollKey: key,
+                        dateLabel: formatMatchDateKey(key),
+                        matches: grouped[key]!,
+                        leagueHeaderMatch: null,
+                      ),
+                  ];
+                  _scrollToLatestDateIfNeeded(dateKeys);
+                  _scrollToRequestedDateIfNeeded(dateKeys, requestedJumpDate);
+                }
+
+                if (groups.isEmpty && !showRecentResults) {
+                  if (widget.useDateNavigation) {
+                    return SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: AppEmptyState(
+                          imageAsset: AppAssets.noMatchesEmpty,
+                          title: 'No matches on this date',
+                          subtitle: hasActiveFilters
+                              ? 'Nothing scheduled for this day with your '
+                                    'current filters. Try clearing filters or '
+                                    'pick another date.'
+                              : 'No matches scheduled for this day. Use the '
+                                    'arrows to check another date.',
+                        ),
+                      ),
+                    );
+                  }
                   return SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: AppEmptyState(
-                        imageAsset: AppAssets.noMatchesEmpty,
-                        title: 'No matches on this date',
-                        subtitle: hasActiveFilters
-                            ? 'Nothing scheduled for this day with your '
-                                'current filters. Try clearing filters or '
-                                'pick another date.'
-                            : 'No matches scheduled for this day. Use the '
-                                'arrows to check another date.',
+                      child: NoMatchesEmptyState(
+                        hasActiveFilters: hasActiveFilters,
+                        // Guests can't organize matches.
+                        showCreateMatchCta: !GuestMode.isGuest,
+                        onClearFilters: () {
+                          ref
+                              .read(selectedMatchesLeagueProvider.notifier)
+                              .set(null);
+                          ref
+                              .read(selectedMatchesSeasonProvider.notifier)
+                              .set(null);
+                          ref.read(selectedGameweekProvider.notifier).set(null);
+                          ref
+                              .read(selectedMatchesTeamProvider.notifier)
+                              .set(null);
+                        },
+                        onCreateMatch: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const CreateMatchEntryPage(),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   );
                 }
-                return SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: NoMatchesEmptyState(
-                      hasActiveFilters: hasActiveFilters,
-                      // Guests can't organize matches.
-                      showCreateMatchCta: !GuestMode.isGuest,
-                      onClearFilters: () {
-                        ref
-                            .read(selectedMatchesLeagueProvider.notifier)
-                            .set(null);
-                        ref
-                            .read(selectedMatchesSeasonProvider.notifier)
-                            .set(null);
-                        ref.read(selectedGameweekProvider.notifier).set(null);
-                        ref.read(selectedMatchesTeamProvider.notifier).set(null);
-                      },
-                      onCreateMatch: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const CreateMatchEntryPage(),
+                return SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppResponsive.horizontalInset(context),
+                    2,
+                    AppResponsive.horizontalInset(context),
+                    16 * AppResponsive.layoutScaleOf(context),
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (groups.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 4),
+                            child: Text(
+                              hasActiveFilters
+                                  ? 'No matches today for these filters'
+                                  : 'No matches today',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          )
+                        else
+                          ..._matchGroupWidgets(context, groups),
+                        if (showRecentResults)
+                          _recentResultsSection(
+                            context,
+                            recent: recentCompleted,
                           ),
-                        );
-                      },
+                      ],
                     ),
                   ),
                 );
-              }
-              return SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  AppResponsive.horizontalInset(context),
-                  2,
-                  AppResponsive.horizontalInset(context),
-                  16 * AppResponsive.layoutScaleOf(context),
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (groups.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8, bottom: 4),
-                          child: Text(
-                            hasActiveFilters
-                                ? 'No matches today for these filters'
-                                : 'No matches today',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        )
-                      else
-                        ..._matchGroupWidgets(context, groups),
-                      if (showRecentResults)
-                        _recentResultsSection(
-                          context,
-                          recent: recentCompleted,
-                        ),
-                    ],
+              },
+              loading: () => widget.useDateNavigation
+                  ? const SliverToBoxAdapter(child: GuestHomeMatchListShimmer())
+                  : const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+              error: (err, _) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: AppConnectionErrorState(
+                    title: isConnectionError(err)
+                        ? 'No connection'
+                        : 'Could not load matches',
+                    subtitle: isConnectionError(err)
+                        ? 'Check your internet connection and try again.'
+                        : 'Something went wrong while loading your matches.',
+                    onRetry: () {
+                      ref.invalidate(matchesProvider);
+                    },
                   ),
-                ),
-              );
-            },
-            loading: () => widget.useDateNavigation
-                ? const SliverToBoxAdapter(
-                    child: GuestHomeMatchListShimmer(),
-                  )
-                : const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-            error: (err, _) => SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: AppConnectionErrorState(
-                  title: isConnectionError(err)
-                      ? 'No connection'
-                      : 'Could not load matches',
-                  subtitle: isConnectionError(err)
-                      ? 'Check your internet connection and try again.'
-                      : 'Something went wrong while loading your matches.',
-                  onRetry: () {
-                    ref.invalidate(matchesProvider);
-                  },
                 ),
               ),
             ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          ],
         ),
+      ),
+    );
+
+    if (widget.materialAppBar) {
+      final dark = Theme.of(context).brightness == Brightness.dark;
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+        ),
+        child: Column(
+          children: [
+            CollapsingPageHeader.bar(
+              context: context,
+              title: 'MATCHES',
+              shrinkOffset: 0,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  tooltip: 'Go to date',
+                  onPressed: _pickMatchDate,
+                ),
+              ],
+            ),
+            filterHeader,
+            Expanded(child: scrollView),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: [
+        filterHeader,
+        Expanded(child: scrollView),
       ],
     );
   }
@@ -774,8 +833,7 @@ class _LeagueGroupHeader extends ConsumerStatefulWidget {
   final MatchModel match;
 
   @override
-  ConsumerState<_LeagueGroupHeader> createState() =>
-      _LeagueGroupHeaderState();
+  ConsumerState<_LeagueGroupHeader> createState() => _LeagueGroupHeaderState();
 }
 
 class _LeagueGroupHeaderState extends ConsumerState<_LeagueGroupHeader> {
@@ -785,9 +843,9 @@ class _LeagueGroupHeaderState extends ConsumerState<_LeagueGroupHeader> {
     final textTheme = Theme.of(context).textTheme;
     final match = widget.match;
     final leagueId = match.leagueId ?? '';
-    final isStarred = ref.watch(favouritedLeaguesProvider).any(
-      (league) => league.id == leagueId,
-    );
+    final isStarred = ref
+        .watch(favouritedLeaguesProvider)
+        .any((league) => league.id == leagueId);
     final leagueName = match.leagueName?.trim();
     final countryCode = match.leagueCountry?.trim();
     final countryLabel = (countryCode == null || countryCode.isEmpty)
@@ -807,7 +865,7 @@ class _LeagueGroupHeaderState extends ConsumerState<_LeagueGroupHeader> {
     return Row(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppShape.smallRadius,
           child: SizedBox(
             width: 36,
             height: 36,
@@ -818,7 +876,7 @@ class _LeagueGroupHeaderState extends ConsumerState<_LeagueGroupHeader> {
         Expanded(
           child: InkWell(
             onTap: openLeague,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppShape.smallRadius,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Column(
@@ -860,16 +918,18 @@ class _LeagueGroupHeaderState extends ConsumerState<_LeagueGroupHeader> {
           onPressed: leagueId.isEmpty
               ? null
               : () {
-                  ref.read(favouritedLeaguesProvider.notifier).toggle(
-                    FavouritedLeague(
-                      id: leagueId,
-                      name: leagueName != null && leagueName.isNotEmpty
-                          ? leagueName
-                          : '—',
-                      country: match.leagueCountry,
-                      logoId: match.leagueLogoId,
-                    ),
-                  );
+                  ref
+                      .read(favouritedLeaguesProvider.notifier)
+                      .toggle(
+                        FavouritedLeague(
+                          id: leagueId,
+                          name: leagueName != null && leagueName.isNotEmpty
+                              ? leagueName
+                              : '—',
+                          country: match.leagueCountry,
+                          logoId: match.leagueLogoId,
+                        ),
+                      );
                 },
           tooltip: isStarred ? 'Remove from favourites' : 'Add to favourites',
         ),
@@ -917,10 +977,7 @@ class _DateMatchesHeader extends ConsumerWidget {
             ),
           ),
           Center(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            child: Text(label, style: Theme.of(context).textTheme.titleLarge),
           ),
         ],
       ),

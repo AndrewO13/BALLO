@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/widgets/app_empty_state.dart';
 import '../../core/widgets/media_placeholders.dart';
+import '../../core/theme/app_shape.dart';
 
 class TeamManageApplicationsPage extends StatefulWidget {
   const TeamManageApplicationsPage({super.key, required this.teamId});
@@ -138,9 +139,7 @@ class _TeamManageApplicationsPageState
               decoration: InputDecoration(
                 hintText: 'Search by name or username',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                border: OutlineInputBorder(borderRadius: AppShape.fullRadius),
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -176,7 +175,7 @@ class _TeamManageApplicationsPageState
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: colorScheme.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: AppShape.mediumRadius,
                         ),
                         child: Row(
                           children: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/countries.dart';
+import '../../core/theme/app_shape.dart';
 
 /// Country search + scrollable list, matching edit profile location UX.
 class CountryPickerSection extends StatefulWidget {
@@ -33,9 +34,11 @@ class _CountryPickerSectionState extends State<CountryPickerSection> {
     }
     final q = _searchQuery!.toLowerCase();
     return countries
-        .where((c) =>
-            c['name']!.toLowerCase().contains(q) ||
-            c['code']!.toLowerCase().contains(q))
+        .where(
+          (c) =>
+              c['name']!.toLowerCase().contains(q) ||
+              c['code']!.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -75,15 +78,13 @@ class _CountryPickerSectionState extends State<CountryPickerSection> {
       if (!mounted || !_listScrollController.hasClients) return;
 
       final viewportHeight = _listScrollController.position.viewportDimension;
-      final targetOffset = (index * _estimatedTileHeight) -
+      final targetOffset =
+          (index * _estimatedTileHeight) -
           (viewportHeight / 2) +
           (_estimatedTileHeight / 2);
 
       _listScrollController.animateTo(
-        targetOffset.clamp(
-          0.0,
-          _listScrollController.position.maxScrollExtent,
-        ),
+        targetOffset.clamp(0.0, _listScrollController.position.maxScrollExtent),
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
@@ -116,16 +117,12 @@ class _CountryPickerSectionState extends State<CountryPickerSection> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             border: Border.all(color: colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppShape.mediumRadius,
             color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.public,
-                size: 18,
-                color: colorScheme.onSurfaceVariant,
-              ),
+              Icon(Icons.public, size: 18, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -160,7 +157,7 @@ class _CountryPickerSectionState extends State<CountryPickerSection> {
           constraints: BoxConstraints(maxHeight: widget.maxListHeight),
           child: Material(
             color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppShape.mediumRadius,
             clipBehavior: Clip.antiAlias,
             child: Scrollbar(
               controller: _listScrollController,
